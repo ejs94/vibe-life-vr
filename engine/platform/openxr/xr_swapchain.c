@@ -277,6 +277,23 @@ void XR_EndFrame( void )
 {
     if (!g_xrSessionRunning || !g_xrSwapchainsReady) return;
 
+    // Khronos OpenXR Specification §10.1: Maintain continuous frame loop pacing.
+    // If runtime signals shouldRender == XR_FALSE (e.g. headset in standby or system dialog active)
+    // or if swapchain buffers were not acquired for this frame, submit xrEndFrame with layerCount = 0.
+    if (!g_currentFrameState.shouldRender || !g_xrEyesAcquired)
+    {
+        XrFrameEndInfo endInfo = {0};
+        endInfo.type = XR_TYPE_FRAME_END_INFO;
+        endInfo.displayTime = g_currentFrameState.predictedDisplayTime;
+        endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+        endInfo.layerCount = 0;
+        endInfo.layers = NULL;
+
+        xrEndFrame(g_xrSession, &endInfo);
+        g_xrEyesAcquired = false;
+        return;
+    }
+
     // Locate eye views at predicted display time
     XrViewLocateInfo locateInfo = {0};
     locateInfo.type = XR_TYPE_VIEW_LOCATE_INFO;
@@ -332,10 +349,7 @@ void XR_EndFrame( void )
     const XrCompositionLayerBaseHeader *layers[2];
     uint32_t activeLayers = 0;
 
-    if (g_currentFrameState.shouldRender && g_xrEyesAcquired)
-    {
-        layers[activeLayers++] = (const XrCompositionLayerBaseHeader*)&projLayer;
-    }
+    layers[activeLayers++] = (const XrCompositionLayerBaseHeader*)&projLayer;
     g_xrEyesAcquired = false;
 
     if (g_quadHudEnabled)
