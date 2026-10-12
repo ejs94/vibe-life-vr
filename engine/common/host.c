@@ -681,7 +681,7 @@ void Host_Frame( double time )
 		}
 	}
 	if (xr_init_stage == 1) {
-		// Tenta criar a sessao todo frame ate que host.hWnd e glw_state estejam prontos
+		// Attempt to create session every frame until host.hWnd and glw_state are ready
 		if (XR_CreateSession()) xr_init_stage = 2;
 	}
 	if (xr_init_stage >= 1) {

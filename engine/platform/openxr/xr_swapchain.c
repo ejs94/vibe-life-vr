@@ -38,26 +38,26 @@ qboolean XR_CreateSwapchains( void )
 
     if (g_xrSession == XR_NULL_HANDLE)
     {
-        Con_Printf("XR_CreateSwapchains: XrSession inválida!\n");
+        Con_Printf("XR_CreateSwapchains: Invalid XrSession!\n");
         return false;
     }
 
     XR_EnsureCurrent();
 
-    Con_Printf("XR_CreateSwapchains: Configurando swapchains estéreo...\n");
+    Con_Printf("XR_CreateSwapchains: Configuring stereo swapchains...\n");
 
-    // 1. Obter formatos de swapchain suportados
+    // 1. Enumerate supported swapchain formats
     uint32_t formatCount = 0;
     if (XR_FAILED(xrEnumerateSwapchainFormats(g_xrSession, 0, &formatCount, NULL)) || formatCount == 0)
     {
-        Con_Printf("XR_CreateSwapchains: Falha ao enumerar formatos de swapchain!\n");
+        Con_Printf("XR_CreateSwapchains: Failed to enumerate swapchain formats!\n");
         return false;
     }
 
     int64_t *formats = (int64_t*)malloc(sizeof(int64_t) * formatCount);
     xrEnumerateSwapchainFormats(g_xrSession, formatCount, &formatCount, formats);
 
-    Con_Printf("XR_CreateSwapchains: Formatos suportados pelo runtime (%u):\n", formatCount);
+    Con_Printf("XR_CreateSwapchains: Supported runtime swapchain formats (%u):\n", formatCount);
     for (uint32_t i = 0; i < formatCount; i++)
     {
         Con_Printf("  Format [%u]: 0x%llx\n", i, (unsigned long long)formats[i]);
@@ -76,15 +76,15 @@ qboolean XR_CreateSwapchains( void )
             break;
         }
     }
-    Con_Printf("XR_CreateSwapchains: Formato selecionado: 0x%llx\n", (unsigned long long)selectedFormat);
+    Con_Printf("XR_CreateSwapchains: Selected format: 0x%llx\n", (unsigned long long)selectedFormat);
     free(formats);
 
-    // 2. Obter configurações de resolução recomendada para cada olho
+    // 2. Query recommended eye resolutions
     uint32_t viewCount = 0;
     xrEnumerateViewConfigurationViews(g_xrInstance, g_xrSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &viewCount, NULL);
     if (viewCount != 2)
     {
-        Con_Printf("XR_CreateSwapchains: Esperado 2 views para estéreo, obtido %d!\n", viewCount);
+        Con_Printf("XR_CreateSwapchains: Expected 2 views for stereo, got %d!\n", viewCount);
         return false;
     }
 
@@ -96,7 +96,7 @@ qboolean XR_CreateSwapchains( void )
     }
     xrEnumerateViewConfigurationViews(g_xrInstance, g_xrSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, configViews);
 
-    // 3. Criar swapchain para cada olho
+    // 3. Create swapchain for each eye
     for (int eye = 0; eye < 2; eye++)
     {
         g_xrEyeSwapchains[eye].width = configViews[eye].recommendedImageRectWidth;
@@ -116,11 +116,11 @@ qboolean XR_CreateSwapchains( void )
         XrResult res = xrCreateSwapchain(g_xrSession, &createInfo, &g_xrEyeSwapchains[eye].swapchain);
         if (XR_FAILED(res))
         {
-            Con_Printf("XR_CreateSwapchains: Falha ao criar swapchain para o olho %d (res = %d)\n", eye, res);
+            Con_Printf("XR_CreateSwapchains: Failed to create swapchain for eye %d (res = %d)\n", eye, res);
             return false;
         }
 
-        // 4. Enumerar texturas do swapchain
+        // 4. Enumerate swapchain images
         uint32_t imageCount = 0;
         xrEnumerateSwapchainImages(g_xrEyeSwapchains[eye].swapchain, 0, &imageCount, NULL);
         g_xrEyeSwapchains[eye].imageCount = imageCount;
@@ -159,7 +159,7 @@ qboolean XR_CreateSwapchains( void )
         free(xrImages);
 #endif
 
-        Con_Printf("XR_CreateSwapchains: Olho %d configurado! Resolução: %dx%d, Buffers: %d\n",
+        Con_Printf("XR_CreateSwapchains: Eye %d configured! Resolution: %dx%d, Buffers: %d\n",
             eye, g_xrEyeSwapchains[eye].width, g_xrEyeSwapchains[eye].height, imageCount);
     }
 

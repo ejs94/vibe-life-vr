@@ -36,6 +36,7 @@ EXPORT convar_t *vr_worldscale = NULL;
 EXPORT convar_t *vr_haptics_enabled = NULL;
 EXPORT convar_t *vr_haptics_intensity = NULL;
 EXPORT convar_t *vr_pointer_hud = NULL;
+static XrDebugUtilsMessengerEXT g_xrDebugMessenger = XR_NULL_HANDLE;
 
 #define OXR_CHECK(func, msg) \
     do { \
@@ -45,6 +46,31 @@ EXPORT convar_t *vr_pointer_hud = NULL;
             return false; \
         } \
     } while(0)
+
+static XRAPI_ATTR XrBool32 XRAPI_CALL XR_DebugUtilsCallback(
+    XrDebugUtilsMessageSeverityFlagsEXT severity,
+    XrDebugUtilsMessageTypeFlagsEXT type,
+    const XrDebugUtilsMessengerCallbackDataEXT *callbackData,
+    void *userData)
+{
+    (void)type;
+    (void)userData;
+    const char *sevPrefix = "DEBUG";
+    if (severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        sevPrefix = "ERROR";
+    } else if (severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        sevPrefix = "WARN";
+    } else if (severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        sevPrefix = "INFO";
+    }
+
+    Con_Printf("[OpenXR %s] [%s] %s\n",
+        sevPrefix,
+        callbackData && callbackData->functionName ? callbackData->functionName : "unknown",
+        callbackData && callbackData->message ? callbackData->message : "");
+
+    return XR_FALSE;
+}
 
 qboolean XR_Init( void )
 {
@@ -130,12 +156,14 @@ qboolean XR_Init( void )
 
 #if !defined(__ANDROID__)
     const char *desiredExts[] = {
-        "XR_KHR_opengl_enable"
+        "XR_KHR_opengl_enable",
+        "XR_EXT_debug_utils"
     };
 #else
     const char *desiredExts[] = {
         "XR_KHR_opengl_es_enable",
-        "XR_KHR_android_create_instance"
+        "XR_KHR_android_create_instance",
+        "XR_EXT_debug_utils"
     };
 #endif
 
@@ -204,6 +232,36 @@ qboolean XR_Init( void )
 
     OXR_CHECK(xrCreateInstance(&createInfo, &g_xrInstance), "xrCreateInstance");
     Con_Printf("OpenXR: Khronos instance created successfully!\n");
+
+    // Initialize XR_EXT_debug_utils messenger if available
+    PFN_xrCreateDebugUtilsMessengerEXT pfnCreateDebugUtilsMessenger = NULL;
+    xrGetInstanceProcAddr(g_xrInstance, "xrCreateDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&pfnCreateDebugUtilsMessenger);
+    if (pfnCreateDebugUtilsMessenger)
+    {
+        XrDebugUtilsMessengerCreateInfoEXT dbgInfo = {0};
+        dbgInfo.type = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        dbgInfo.messageSeverities =
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        dbgInfo.messageTypes =
+            XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
+        dbgInfo.userCallback = XR_DebugUtilsCallback;
+
+        XrResult dbgRes = pfnCreateDebugUtilsMessenger(g_xrInstance, &dbgInfo, &g_xrDebugMessenger);
+        if (dbgRes == XR_SUCCESS)
+        {
+            Con_Printf("OpenXR: XR_EXT_debug_utils messenger attached successfully!\n");
+        }
+        else
+        {
+            Con_Printf("OpenXR: Failed to attach XR_EXT_debug_utils messenger: %d\n", dbgRes);
+        }
+    }
 
     XrSystemGetInfo systemInfo = {0};
     systemInfo.type = XR_TYPE_SYSTEM_GET_INFO;
@@ -323,6 +381,14 @@ void XR_Shutdown( void )
         }
         xrDestroySession(g_xrSession);
         g_xrSession = XR_NULL_HANDLE;
+    }
+    if (g_xrDebugMessenger != XR_NULL_HANDLE) {
+        PFN_xrDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessenger = NULL;
+        xrGetInstanceProcAddr(g_xrInstance, "xrDestroyDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&pfnDestroyDebugUtilsMessenger);
+        if (pfnDestroyDebugUtilsMessenger) {
+            pfnDestroyDebugUtilsMessenger(g_xrDebugMessenger);
+        }
+        g_xrDebugMessenger = XR_NULL_HANDLE;
     }
     if (g_xrInstance != XR_NULL_HANDLE) {
         xrDestroyInstance(g_xrInstance);
