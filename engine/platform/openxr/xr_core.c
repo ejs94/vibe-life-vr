@@ -243,14 +243,56 @@ qboolean XR_CreateSession( void )
     OXR_CHECK(xrCreateSession(g_xrInstance, &sessionCreateInfo, &g_xrSession), "xrCreateSession");
     Con_Printf("OpenXR: XrSession created successfully!\n");
 
-    // Create Local Reference Space for Head Tracking
+    // Enumerate supported reference spaces to detect STAGE (Roomscale/Guardian bounds)
+    // Inspired by Team Beef (Lambda1VR): prefer STAGE reference space when available to align
+    // player tracking with physical floor and Guardian bounds, while providing graceful LOCAL fallback.
+    uint32_t spaceCount = 0;
+    qboolean stageSupported = false;
+    if (XR_SUCCEEDED(xrEnumerateReferenceSpaces(g_xrSession, 0, &spaceCount, NULL)) && spaceCount > 0)
+    {
+        XrReferenceSpaceType *spaces = (XrReferenceSpaceType*)malloc(sizeof(XrReferenceSpaceType) * spaceCount);
+        if (spaces)
+        {
+            if (XR_SUCCEEDED(xrEnumerateReferenceSpaces(g_xrSession, spaceCount, &spaceCount, spaces)))
+            {
+                for (uint32_t i = 0; i < spaceCount; i++)
+                {
+                    if (spaces[i] == XR_REFERENCE_SPACE_TYPE_STAGE)
+                    {
+                        stageSupported = true;
+                        break;
+                    }
+                }
+            }
+            free(spaces);
+        }
+    }
+
     XrReferenceSpaceCreateInfo spaceInfo = {0};
     spaceInfo.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
-    spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
     spaceInfo.poseInReferenceSpace.orientation.w = 1.0f;
 
-    OXR_CHECK(xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrLocalSpace), "xrCreateReferenceSpace");
-    Con_Printf("OpenXR: Local Reference Space created successfully!\n");
+    if (stageSupported)
+    {
+        spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
+        XrResult res = xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrLocalSpace);
+        if (XR_SUCCEEDED(res))
+        {
+            Con_Printf("OpenXR: Stage Reference Space (Roomscale/Guardian) created successfully!\n");
+        }
+        else
+        {
+            Con_Printf("OpenXR: Failed to create Stage space (res=%d), falling back to Local space.\n", res);
+            stageSupported = false;
+        }
+    }
+
+    if (!stageSupported)
+    {
+        spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+        OXR_CHECK(xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrLocalSpace), "xrCreateReferenceSpace");
+        Con_Printf("OpenXR: Local Reference Space created successfully!\n");
+    }
 
     XR_InitInput();
 
