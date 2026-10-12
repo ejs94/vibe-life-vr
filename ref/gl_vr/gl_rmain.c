@@ -1392,6 +1392,17 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 
 			R_RenderScene();
 
+#ifdef XASH_OPENXR
+			// Harden swapchain alpha channel to 1.0f before presentation.
+			// Legacy GoldSrc passes write alpha=0.0 across opaque surfaces;
+			// forcing alpha=1.0 prevents the OpenXR TimeWarp compositor from blending to black.
+			// Credit to Team Beef (Lambda1VR) for this battle-tested pattern.
+			pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
+			pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+			pglClear( GL_COLOR_BUFFER_BIT );
+			pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+#endif
+
 			XR_EndEye( eye );
 		}
 
