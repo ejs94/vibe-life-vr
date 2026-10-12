@@ -1,41 +1,36 @@
-# 🌌 Xash3D VR: Why This Project Exists
-> **The Manifesto of Independence, Universality, and Modernization for Half-Life in Virtual Reality**
+# 🌌 Xash3D VR: Motivation & Architecture Goals
+> **Building on Team Beef's Foundations: A Clean OpenXR Port for the Modern Xash3D FWGS Engine**
 
 ---
 
-## 🎯 1. Vision & Purpose: Why Was This Project Born?
+## 🎯 1. Vision & Purpose
 
-The **Xash3D VR** project was born from a fundamental demand within the Virtual Reality and open-source gaming communities: **to emancipate the classic Half-Life (1998) from proprietary shackles and single-vendor platforms**.
+The **Xash3D VR** project is deeply inspired by the groundbreaking work of **Team Beef** (*Dr. Beef, BaggyG, Bummser*), whose *Lambda1VR* port proved that classic Half-Life (1998) could deliver an extraordinary Virtual Reality experience on standalone hardware. Their work established the gameplay benchmarks and VR interaction standards that define how Half-Life feels in VR today.
 
-The pioneering work of *Team Beef* with *Lambda1VR* was a landmark milestone that proved Half-Life could run on standalone mobile hardware (the original Oculus Quest in 2019). However, because it was developed under the technical constraints of that era, it accumulated severe architectural debt:
+While *Lambda1VR* was originally built for the first Oculus Quest in 2019 using the legacy *VrApi* and engine modifications tailored specifically to that era, modern VR runtimes and the Xash3D FWGS engine have both evolved substantially:
 
-1. **Vendor Lock-in and Legacy APIs:** Lambda1VR was originally built atop Oculus's proprietary *VrApi* (developed for the Gear VR and Oculus Go), subsequently wrapped in ad-hoc OpenXR glue tied to Java Native Interface (JNI).
-2. **Absence of Native PCVR Support:** It cannot run natively on Desktop PCVR setups—particularly on the open Linux VR ecosystem (**Monado**, **WiVRn**, **Envision**, and **SteamVR**).
-3. **Invasive Engine Modifications:** The original codebase altered dozens of engine core files with invasive macros (e.g., `OVR_MODE`), custom JNI method tables, and fragile Android-specific workarounds that broke desktop builds.
+1. **Khronos OpenXR Standard:** Modern headsets (Meta Quest, Pico) and desktop PCVR runtimes (Monado, WiVRn, SteamVR) now standardize on the official Khronos OpenXR 1.0/1.1 specification.
+2. **Current Xash3D FWGS Compatibility:** Keeping the engine codebase clean and closely aligned with upstream [FWGS/xash3d-fwgs](https://github.com/FWGS/xash3d-fwgs) ensures maximum compatibility with existing GoldSrc mods, multiplayer crossplay, and modern rendering backends.
+3. **Unified Tri-Platform Target:** Providing a single C99 codebase that runs smoothly on **Desktop PCVR**, **Meta Quest Standalone**, and preserves standard **Flat (2D)** mobile and desktop play.
 
-### 💡 The Core Mission
-To build a **Universal, Clean, Modular, and Canonical** Virtual Reality port powered by pure **Khronos OpenXR (C99)** that integrates natively into the modern **Xash3D FWGS** engine architecture. 
-
-A single codebase, built with the standard Waf/Gradle pipelines, executing with zero compromise on both:
-- **Desktop PCVR:** Linux (x86_64 / aarch64) and Windows via Monado, SteamVR, WiVRn, and ALVR.
-- **Standalone Mobile VR:** Meta Quest Standalone (Quest 1, 2, Pro, 3, 3S) and Pico headsets via Android (arm64-v8a).
+### 💡 The Core Goal
+To develop a clean, modern implementation **strongly inspired by Team Beef's proven VR design solutions**, while rewriting key subsystems to adhere strictly to the Khronos OpenXR specification and the latest Xash3D FWGS architecture. This achieves:
+- **Maximum Mod & Expansion Compatibility:** Out-of-the-box support for *Opposing Force*, *Blue Shift*, and classic single-player total conversions.
+- **Crossplay:** Seamless multiplayer interoperability between VR and Flat players across PC and standalone devices.
+- **Direct Ref API Rendering:** Rendering directly through the engine's modular `ref_gl_vr` backend rather than external translation layers.
 
 ---
 
-## ⚔️ 2. Architectural Comparison: Team Beef (Lambda1VR) vs. Xash3D VR Universal
+## 🤝 2. Technical Comparison & Architectural Approach
 
-| Architectural Domain | 🥊 Lambda1VR (Team Beef) | 🚀 Xash3D VR Universal (This Project) |
-| :--- | :--- | :--- |
-| **VR API Standard** | Proprietary VrApi legacy; OpenXR layered over JNI | **Pure Khronos OpenXR 1.0/1.1 (C99)** |
-| **Operating Systems** | Android exclusively | **Universal**: Linux (x86_64, aarch64) and Android (arm64-v8a) |
-| **PCVR Support** | Non-existent / Broken on Desktop | **First-Class Native PCVR** (Monado, SteamVR, WiVRn, ALVR) |
-| **Standalone Support** | Android Quest 1/2 | **Native Meta Quest Standalone Platform (Quest 1/2/Pro/3/3S) & Pico** |
-| **Engine Coupling** | Highly invasive (`OVR_MODE`, JNI calls throughout engine) | **Clean and Modular** (`engine/platform/openxr/` subsystem) |
-| **Renderer Pipeline** | Dependent on `gl4es` translation layer | **Native `ref_gl_vr`**: Direct render to OpenXR OpenGL/GLES swapchains |
-| **Developer Test Loop** | Requires physical headset, APK packaging, and sideloading | **Desktop Fake-Stereo Mode**: Instant test-drive in a desktop window |
-| **2D HUD & Menus** | Rendered directly on screen plane (eye strain / diplopia) | **Spatial `XrCompositionLayerQuad`**: Floating virtual canvas with alpha blend |
-| **Aiming Systems** | 2D HUD reticle / basic laser | **Real-Time 3D Physical Laser Sight** emitted from weapon barrel |
-| **Build Systems** | Legacy Android NDK Makefiles | **Waf (Desktop) & Gradle NDK (Android)** unified build systems |
+| Architectural Domain | Team Beef (*Lambda1VR*) | Xash3D VR (Current Implementation) | Rationale & Objective |
+| :--- | :--- | :--- | :--- |
+| **VR API Standard** | VrApi baseline; custom OpenXR bridge | **Khronos OpenXR 1.0/1.1 (C99)** | Canonical industry standard supported across Quest, Pico, and PCVR runtimes |
+| **Platform Target** | Android (Oculus Quest) | **Desktop PCVR & Quest Standalone** | Shared codebase running on Linux (Monado/WiVRn/SteamVR) and Android |
+| **Engine Integration** | Dedicated Quest fork with `OVR_MODE` | **Modular `engine/platform/openxr/`** | Minimizes diff against upstream FWGS to preserve mod compatibility and crossplay |
+| **Renderer Pipeline** | `gl4es` OpenGL 1.4 to GLES translation | **Native `ref_gl_vr` (GLES 3.x / OpenGL)** | Direct engine renderer for optimal frame pacing and lowest latency |
+| **Android Lifecycle** | Custom native `SurfaceView` | **`XashActivity` (`SDLActivity` subclass)** | Reuses FWGS touch UI, mod launchers, and Android lifecycle with VR focus fixes |
+| **Gameplay Mechanics** | 6DoF Aim, Flashlight, Two-Handing, Gestures | **Faithful recreation of Team Beef's mechanics** | Preserves the gold-standard gameplay experience pioneered by Team Beef |
 
 ---
 

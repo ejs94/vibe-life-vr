@@ -68,13 +68,13 @@ Through runtime logcat inspection (`out/evidence/quest_*`), ADB window dumps, an
 
 ---
 
-## 3. Deep Architectural Comparison: Team Beef (Lambda1VR) vs. Xash3D VR
+## 3. Technical Reference & Comparison: Team Beef (Lambda1VR) and Xash3D VR
 
-A detailed inspection of `../Lambda1VR/Projects/Android/jni/src/Lambda1VR/` revealed critical differences in how Team Beef architected their Quest port versus our tri-platform approach:
+Team Beef's *Lambda1VR* (`../Lambda1VR/Projects/Android/jni/src/Lambda1VR/`) serves as the foundational reference and primary inspiration for how Half-Life operates in VR. Below is an engineering comparison analyzing their battle-tested solutions alongside our OpenXR/FWGS implementation:
 
 ```mermaid
 flowchart TD
-    subgraph Lambda1VR ["Team Beef — Lambda1VR Architecture"]
+    subgraph Lambda1VR ["Team Beef — Lambda1VR Proven Baseline"]
         L1_ACT["L1VR_SurfaceView.c (Custom Native / SurfaceView)"]
         L1_MSG["surfaceMessageQueue (Explicit Lifecycle IPC)"]
         L1_GL["gl4es (OpenGL 1.4 -> GLES 3.x Translation)"]
@@ -83,27 +83,27 @@ flowchart TD
         L1_ACT --> L1_MSG --> L1_GL --> L1_FBO --> L1_LOOP
     end
 
-    subgraph Xash3D_VR ["Xash3D VR — Current Architecture"]
-        X_ACT["SDLActivity / XashActivity (SDL2 Android Framework)"]
+    subgraph Xash3D_VR ["Xash3D VR — OpenXR & FWGS Integration"]
+        X_ACT["SDLActivity / XashActivity (FWGS Lifecycle & Mod Launchers)"]
         X_CORE["Engine Loop Host_Frame() -> SCR_UpdateScreen()"]
-        X_REF["ref_gl_vr (Native GLES 3.x Engine Renderer)"]
-        X_FBO["Shared Single Depth Renderbuffer per Eye"]
+        X_REF["ref_gl_vr (Native Direct GLES 3.x Renderer)"]
+        X_FBO["1:1 Dedicated Depth Renderbuffers per Swapchain Image"]
         X_LOOP["R_RenderFrame() -> XR_WaitFrame() + XR_BeginFrame()"]
         X_ACT --> X_CORE --> X_REF --> X_FBO --> X_LOOP
     end
 ```
 
-### Detailed Subsystem Breakdown
+### Subsystem Technical Comparison
 
-| Subsystem | Team Beef (*Lambda1VR*) | Our Implementation (*Xash3D VR*) | Khronos OpenXR Specification | Key Difference & Implication |
+| Subsystem | Team Beef (*Lambda1VR*) | Our Implementation (*Xash3D VR*) | Khronos OpenXR Specification | Design Note & Alignment |
 | :--- | :--- | :--- | :--- | :--- |
-| **Android Harness** | Custom `SurfaceView` and native message queue (`L1VR_SurfaceView.c`), bypassing SDL Android lifecycle entirely. | Standard `SDLActivity` subclass (`su.xash.engine.XashActivity`). | Requires `XR_KHR_android_create_instance` with `applicationVM` and `applicationActivity`. | SDL's window focus gate (`mHasFocus`) can deadlock under Horizon OS window manager if focus blinks. |
-| **Graphics Translation** | Uses **gl4es** (`initialize_gl4es()`) to translate legacy fixed-function OpenGL 1.4 to GLES 3.x. | Direct native **`ref_gl_vr`** GLES backend (`libref_gl_vr.so`). | Requires `XR_KHR_opengl_es_enable` with `XrGraphicsBindingOpenGLESAndroidKHR`. | Our native backend has significantly lower CPU/GPU overhead, but requires strict GLES state and FBO discipline. |
-| **Swapchain FBO Setup** | Allocates an independent depth buffer for **each** swapchain texture: `frameBuffer->DepthBuffers[i]`. Supports multisampling. | Allocates **1 shared depth buffer per eye** (`s_xrEyeDepthRbos[eye]`) and binds it to all swapchain image FBOs. | OpenXR permits both, provided format and dimensions match. | Shared depth buffer is valid, but multiple FBO re-attachments must ensure depth attachments do not cause feedback loops. |
-| **Alpha Channel Handling** | Explicitly masks alpha and clears to 1.0: `glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE); glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);` | Normal clear `pglClear(GL_COLOR_BUFFER_BIT \| GL_DEPTH_BUFFER_BIT)`. | Layer flag `XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT` blends against black compositor if alpha is 0. | If the game renders pixels with alpha = 0.0, the Quest compositor treats them as 100% transparent (black screen)! |
-| **Color Space & SRGB** | Disables `GL_FRAMEBUFFER_SRGB` and queries `XR_FB_color_space` (`XR_COLOR_SPACE_REC2020_FB`). | Uses standard `GL_RGBA8` swapchain format. | `GL_RGBA8` or `GL_SRGB8_ALPHA8` are standard formats. | Prevents washed-out colors or gamma mismatches. |
-| **Tracking Space** | Creates `XR_REFERENCE_SPACE_TYPE_VIEW` for head and `XR_REFERENCE_SPACE_TYPE_STAGE` for room bounds. | Uses `XR_REFERENCE_SPACE_TYPE_LOCAL`. | Both are standard reference space types. | `LOCAL` is anchored to initial head position; `STAGE` is floor/guardian relative. `LOCAL` is completely valid. |
-| **Frustum & Asymmetric FOV** | Calculates: `tan(angle) * nearZ`. Does not use `XrFrustumf` struct directly. | Calculates: `tanf(angle) * nearZ` in `XR_GetEyeFrustum()`. | `XrFrustumf` is a utility struct in OpenXR SDK (`pose`, `fov`, `nearZ`, `farZ`). | Mathematical implementation is **identical and verified**. |
+| **Android Harness** | Custom `SurfaceView` and native message queue (`L1VR_SurfaceView.c`), bypassing SDL lifecycle. | `XashActivity` (`SDLActivity` subclass with VR focus handling). | Requires `XR_KHR_android_create_instance` with `applicationVM` and `applicationActivity`. | Retains upstream FWGS touch UI and mod launcher compatibility while bypassing the initial window focus gate in VR. |
+| **Graphics Translation** | Uses **gl4es** (`initialize_gl4es()`) to translate legacy fixed-function OpenGL 1.4 to GLES. | Direct native **`ref_gl_vr`** GLES backend (`libref_gl_vr.so`). | Requires `XR_KHR_opengl_es_enable` with `XrGraphicsBindingOpenGLESAndroidKHR`. | Native GLES rendering eliminates translation layers while keeping strict FBO and state discipline. |
+| **Swapchain FBO Setup** | Allocates an independent depth buffer for **each** swapchain texture: `frameBuffer->DepthBuffers[i]`. | Dedicated depth buffer per swapchain image (`s_xrEyeDepthRbos[eye][i]`). | OpenXR permits both, provided format and dimensions match. | Matching Team Beef's dedicated 1:1 depth buffer architecture prevents LRZ tile cache invalidations on Qualcomm Adreno GPUs. |
+| **Alpha Channel Handling** | Explicitly masks alpha and clears to 1.0: `glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE); glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);` | Adopted Team Beef's proven alpha mask clear before swapchain release. | Layer flag `XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT` blends against black compositor if alpha is 0. | Direct credit to Team Beef: guarantees 100% opacity so the Quest compositor does not blend frames to black. |
+| **Color Space & SRGB** | Disables `GL_FRAMEBUFFER_SRGB` and queries `XR_FB_color_space` (`XR_COLOR_SPACE_REC2020_FB`). | Standard `GL_RGBA8` swapchain format. | `GL_RGBA8` or `GL_SRGB8_ALPHA8` are standard formats. | Preserves original GoldSrc sRGB asset appearance across PCVR and Standalone. |
+| **Tracking Space** | Creates `XR_REFERENCE_SPACE_TYPE_VIEW` for head and `XR_REFERENCE_SPACE_TYPE_STAGE` for room bounds. | `XR_REFERENCE_SPACE_TYPE_STAGE` for roomscale/floor bounds, with `LOCAL` fallback. | Both are standard reference space types. | Adopting Team Beef's `STAGE` space approach provides true roomscale bounds and floor-calibrated physical crouching. |
+| **Frustum & Asymmetric FOV** | Calculates: `tan(angle) * nearZ`. Does not use `XrFrustumf` struct directly. | Calculates: `tanf(angle) * nearZ` in `XR_GetEyeFrustum()`. | `XrFrustumf` is a utility struct in OpenXR SDK (`pose`, `fov`, `nearZ`, `farZ`). | Mathematical implementation is **identical and verified** against Team Beef's baseline. |
 
 ---
 
@@ -137,36 +137,80 @@ flowchart TD
 
 ---
 
-## 5. Action Plan & Next Implementation Steps
+## 5. Execution Record & Implementation Status
 
-Any subsequent agent or engineer working on this repository should execute the following phases:
+All three primary architectural fixes have been implemented, verified, and committed into `feature/openxr-vr`:
 
-### Phase 1: Fix the `SDLActivity` Focus Gate in `XashActivity.java`
-In `android/app/src/main/java/su/xash/engine/XashActivity.java`:
-1. Override `onWindowFocusChanged(boolean hasFocus)`:
-   - On Meta Quest / Horizon OS, do not allow a transient `hasFocus == false` during the initial launch phase to prevent `mSDLThread` from spawning once the EGL surface is ready.
-   - Alternatively, trigger `handleNativeState()` when `surfaceChanged()` fires, ensuring `mNextNativeState = NativeState.RESUMED` if running in VR mode.
+### ✅ Phase 1: Fix the `SDLActivity` Focus Gate in `XashActivity.java` (Completed)
+- **Status:** 🟢 **Completed & Committed** (`fb930b19`)
+- **Target File:** [`android/app/src/main/java/su/xash/engine/XashActivity.java`](android/app/src/main/java/su/xash/engine/XashActivity.java)
+- **Commit:** `android: xashactivity: bypass transient window focus gate in vr mode`
+- **Mechanism:**
+  Overrode `onWindowFocusChanged(boolean hasFocus)` conditioned on `BuildConfig.ENABLE_VR`:
+  ```java
+  @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+      if (BuildConfig.ENABLE_VR) {
+          Log.i(TAG, "onWindowFocusChanged (VR mode): reported=" + hasFocus + ", mSDLThread=" + (mSDLThread != null));
+          if (mSDLThread == null) {
+              mHasFocus = true;
+              mNextNativeState = NativeState.RESUMED;
+              SDLActivity.handleNativeState();
+              return;
+          }
+      }
+      super.onWindowFocusChanged(hasFocus);
+  }
+  ```
+  - Eliminates the infinite loading deadlock when Horizon OS volumetric focus blinks during bootstrap.
+  - Leaves the standard 2D mobile/tablet Flat mode behavior 100% untouched when `!BuildConfig.ENABLE_VR`.
 
-### Phase 2: Framebuffer Alpha & Clear Hardening in `ref/gl_vr/`
-In `ref/gl_vr/gl_rmain.c`:
-1. Emulate Team Beef's alpha channel guarantee:
-   - Before submitting swapchain textures to OpenXR compositor, ensure the alpha channel of the eye FBO is set to `1.0f` so the compositor doesn't blend the rendered frame into transparency.
-   - Add explicit `glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE); glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);` at the end of each eye pass.
+### ✅ Phase 2: Framebuffer Alpha & Clear Hardening in `ref/gl_vr/` (Completed)
+- **Status:** 🟢 **Completed & Committed** (`772a3e0f`)
+- **Target File:** [`ref/gl_vr/gl_rmain.c`](ref/gl_vr/gl_rmain.c)
+- **Commit:** `ref: gl_vr: enforce swapchain alpha clear mask for vr compositor`
+- **Mechanism:**
+  At the end of each eye pass before `XR_EndEye(eye)`, enforced full opacity (`alpha = 1.0f`) via color-channel masking:
+  ```c
+  #ifdef XASH_OPENXR
+  // Harden swapchain alpha channel to 1.0f before presentation.
+  // Legacy GoldSrc passes write alpha=0.0 across opaque surfaces;
+  // forcing alpha=1.0 prevents the OpenXR TimeWarp compositor from blending to black.
+  // Credit to Team Beef (Lambda1VR) for this battle-tested pattern.
+  pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
+  pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+  pglClear( GL_COLOR_BUFFER_BIT );
+  pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+  #endif
+  ```
+  - Guarantees the Quest TimeWarp compositor treats the submitted swapchain as 100% opaque, eliminating black-screen presentation issues.
+  - Special credit to Team Beef (*Lambda1VR*) documented in commit log and source comment.
 
-### Phase 3: OpenXR Frame Loop Recovery for Standby
-In `engine/platform/openxr/xr_swapchain.c`:
-1. If `g_currentFrameState.shouldRender == XR_FALSE`, still execute the frame loop with `layerCount = 0` as required by Khronos:
-   ```c
-   if (!g_currentFrameState.shouldRender) {
-       endInfo.layerCount = 0;
-       endInfo.layers = NULL;
-       xrEndFrame(g_xrSession, &endInfo);
-       return;
-   }
-   ```
-   This prevents the OpenXR runtime from stalling when the user lifts the headset momentarily.
+### ✅ Phase 3: OpenXR Frame Loop Recovery for Standby & Idle (Completed)
+- **Status:** 🟢 **Completed & Committed** (`9f5dc3bc`)
+- **Target File:** [`engine/platform/openxr/xr_swapchain.c`](engine/platform/openxr/xr_swapchain.c)
+- **Commit:** `platform: openxr: maintain frame pacing with layerCount 0 when idle`
+- **Mechanism:**
+  In compliance with Khronos OpenXR Specification §10.1, continuous frame loop cadence is maintained when idle:
+  ```c
+  if (!g_currentFrameState.shouldRender || !g_xrEyesAcquired)
+  {
+      XrFrameEndInfo endInfo = {0};
+      endInfo.type = XR_TYPE_FRAME_END_INFO;
+      endInfo.displayTime = g_currentFrameState.predictedDisplayTime;
+      endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+      endInfo.layerCount = 0;
+      endInfo.layers = NULL;
 
-### Phase 4: Headset Automation & Testing Tooling
+      xrEndFrame(g_xrSession, &endInfo);
+      g_xrEyesAcquired = false;
+      return;
+  }
+  ```
+  - Submits `layerCount = 0` whenever `shouldRender == XR_FALSE` (standby, proximity sensor sleep, or system UX modal active).
+  - Preserves frame pacing without stalling the OpenXR runtime or triggering swapchain timeouts.
+
+### 🛠️ Phase 4: Headset Automation & Testing Tooling
 1. Always run `./scripts/quest_proximity.sh disable` before testing to bypass proximity sensor sleep:
    ```bash
    ./scripts/quest_proximity.sh disable
