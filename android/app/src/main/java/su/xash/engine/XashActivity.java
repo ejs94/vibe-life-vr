@@ -54,20 +54,92 @@ public class XashActivity extends SDLActivity {
 		}
 	}
 
+	private static android.view.Surface mFallbackSurface;
+	private static android.graphics.SurfaceTexture mFallbackSurfaceTexture;
+
+	public static android.view.Surface getNativeSurface() {
+		if (BuildConfig.ENABLE_VR) {
+			if (mSurface != null && mSurface.getHolder().getSurface() != null && mSurface.getHolder().getSurface().isValid()) {
+				return mSurface.getHolder().getSurface();
+			}
+			if (mFallbackSurface == null || !mFallbackSurface.isValid()) {
+				Log.i(TAG, "getNativeSurface (VR mode): creating offscreen fallback SurfaceTexture");
+				mFallbackSurfaceTexture = new android.graphics.SurfaceTexture(1001);
+				mFallbackSurfaceTexture.setDefaultBufferSize(1920, 1080);
+				mFallbackSurface = new android.view.Surface(mFallbackSurfaceTexture);
+			}
+			return mFallbackSurface;
+		}
+		return SDLActivity.getNativeSurface();
+	}
+
+	@Override
+	protected org.libsdl.app.SDLSurface createSDLSurface(android.content.Context context) {
+		if (BuildConfig.ENABLE_VR) {
+			return new org.libsdl.app.SDLSurface(context) {
+				@Override
+				public void surfaceDestroyed(android.view.SurfaceHolder holder) {
+					Log.i(TAG, "VR SDLSurface.surfaceDestroyed(): ignoring 2D surface destruction to prevent VR deadlock");
+					mIsSurfaceReady = false;
+					// Do not trigger NativeState.PAUSED or onNativeSurfaceDestroyed() in VR mode.
+					// Horizon OS destroys the 2D window surface upon switching to the OpenXR immersive session.
+				}
+
+				@Override
+				public android.view.Surface getNativeSurface() {
+					android.view.Surface s = getHolder().getSurface();
+					if (s != null && s.isValid()) {
+						return s;
+					}
+					return XashActivity.getNativeSurface();
+				}
+			};
+		}
+		return super.createSDLSurface(context);
+	}
+
+	@Override
+	protected void pauseNativeThread() {
+		if (BuildConfig.ENABLE_VR) {
+			Log.i(TAG, "pauseNativeThread (VR mode): suppressed nativePause");
+			return;
+		}
+		super.pauseNativeThread();
+	}
+
+	@Override
+	protected void onPause() {
+		if (BuildConfig.ENABLE_VR) {
+			Log.i(TAG, "onPause (VR mode)");
+			// Let super.onPause() run, but ensure native thread is not paused
+			super.onPause();
+			return;
+		}
+		super.onPause();
+	}
+
+	@Override
+	protected void onStop() {
+		if (BuildConfig.ENABLE_VR) {
+			Log.i(TAG, "onStop (VR mode): maintaining VR execution without nativePause");
+			// SDLActivity onStop() calls pauseNativeThread() if mHasMultiWindow is true.
+			// Since pauseNativeThread() is overridden to no-op in VR mode, nativePause is suppressed.
+			super.onStop();
+			return;
+		}
+		super.onStop();
+	}
+
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		if (BuildConfig.ENABLE_VR) {
 			Log.i(TAG, "onWindowFocusChanged (VR mode): reported=" + hasFocus + ", mSDLThread=" + (mSDLThread != null));
-			// In Meta Horizon OS (Quest Standalone), immersive volumetric window negotiation
-			// causes transient focus blinks (true -> false) during launch before surfaceChanged() fires.
-			// If mSDLThread hasn't started yet, force mHasFocus = true and trigger handleNativeState()
-			// so the native engine thread can start as soon as the EGL/Android surface is ready.
+			mHasFocus = true;
+			mNextNativeState = NativeState.RESUMED;
 			if (mSDLThread == null) {
-				mHasFocus = true;
-				mNextNativeState = NativeState.RESUMED;
 				SDLActivity.handleNativeState();
-				return;
 			}
+			return;
 		}
 		super.onWindowFocusChanged(hasFocus);
 	}
