@@ -1249,7 +1249,7 @@ void R_SetupRefParams( const ref_viewpass_t *rvp )
 
 #ifdef XASH_OPENXR
 static GLuint s_xrEyeFbos[2][8] = {{0}};
-static GLuint s_xrEyeDepthRbos[2] = {0};
+static GLuint s_xrEyeDepthRbos[2][8] = {{0}};
 static uint32_t s_xrEyeFbosWidth[2] = {0};
 static uint32_t s_xrEyeFbosHeight[2] = {0};
 
@@ -1264,17 +1264,16 @@ static void R_SetupXREyeFbos( void )
 		if( count == 0 || w == 0 || h == 0 )
 			continue;
 
-		if( s_xrEyeFbosWidth[eye] == w && s_xrEyeFbosHeight[eye] == h && s_xrEyeDepthRbos[eye] != 0 )
+		if( s_xrEyeFbosWidth[eye] == w && s_xrEyeFbosHeight[eye] == h && s_xrEyeDepthRbos[eye][0] != 0 )
 			continue;
-
-		if( s_xrEyeDepthRbos[eye] )
-		{
-			pglDeleteRenderbuffers( 1, &s_xrEyeDepthRbos[eye] );
-			s_xrEyeDepthRbos[eye] = 0;
-		}
 
 		for( uint32_t j = 0; j < 8; j++ )
 		{
+			if( s_xrEyeDepthRbos[eye][j] )
+			{
+				pglDeleteRenderbuffers( 1, &s_xrEyeDepthRbos[eye][j] );
+				s_xrEyeDepthRbos[eye][j] = 0;
+			}
 			if( s_xrEyeFbos[eye][j] )
 			{
 				pglDeleteFramebuffers( 1, &s_xrEyeFbos[eye][j] );
@@ -1282,19 +1281,22 @@ static void R_SetupXREyeFbos( void )
 			}
 		}
 
-		pglGenRenderbuffers( 1, &s_xrEyeDepthRbos[eye] );
-		pglBindRenderbuffer( GL_RENDERBUFFER, s_xrEyeDepthRbos[eye] );
-		pglRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h );
-		pglBindRenderbuffer( GL_RENDERBUFFER, 0 );
-
 		if( count > 8 ) count = 8;
 		for( uint32_t j = 0; j < count; j++ )
 		{
+			// 1:1 Dedicated Depth/Stencil Renderbuffer for each swapchain image FBO.
+			// Inspired by Team Beef (Lambda1VR): eliminates shared depth buffer re-attachment,
+			// preserving tile-based GMEM LRZ caches on Qualcomm Adreno (Snapdragon XR2).
+			pglGenRenderbuffers( 1, &s_xrEyeDepthRbos[eye][j] );
+			pglBindRenderbuffer( GL_RENDERBUFFER, s_xrEyeDepthRbos[eye][j] );
+			pglRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h );
+			pglBindRenderbuffer( GL_RENDERBUFFER, 0 );
+
 			pglGenFramebuffers( 1, &s_xrEyeFbos[eye][j] );
 			pglBindFramebuffer( GL_FRAMEBUFFER, s_xrEyeFbos[eye][j] );
 			pglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_xrEyeSwapchains[eye].images[j], 0 );
-			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye] );
-			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye] );
+			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye][j] );
+			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye][j] );
 
 			GLenum status = pglCheckFramebufferStatus( GL_FRAMEBUFFER );
 			if( status != GL_FRAMEBUFFER_COMPLETE )
@@ -1306,7 +1308,7 @@ static void R_SetupXREyeFbos( void )
 
 		s_xrEyeFbosWidth[eye] = w;
 		s_xrEyeFbosHeight[eye] = h;
-		gEngfuncs.Con_Printf( "R_SetupXREyeFbos: Eye %d OpenXR FBOs initialized (%dx%d, %d buffers)\n", eye, w, h, count );
+		gEngfuncs.Con_Printf( "R_SetupXREyeFbos: Eye %d OpenXR FBOs initialized (%dx%d, %d dedicated buffers)\n", eye, w, h, count );
 	}
 }
 #endif
