@@ -6,7 +6,7 @@
 	android:layout_width="match_parent"
 	android:layout_height="match_parent">
 
-	<RelativeLayout
+	<FrameLayout
 		android:layout_width="match_parent"
 		android:layout_height="match_parent">
 
@@ -16,8 +16,152 @@
 			android:layout_height="match_parent"
 			android:clipToPadding="false"
 			android:paddingHorizontal="8dp"
+			android:paddingBottom="24dp"
 			app:layoutManager="LinearLayoutManager"
 			tools:listitem="@layout/card_game" />
-	</RelativeLayout>
+
+		<!-- Empty State / Setup Wizard for Quest Onboarding -->
+		<ScrollView
+			android:id="@+id/emptyStateContainer"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:visibility="gone"
+			android:fillViewport="true">
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:gravity="center"
+				android:padding="24dp">
+
+				<com.google.android.material.card.MaterialCardView
+					style="@style/Widget.Material3.CardView.Filled"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					app:cardBackgroundColor="@color/horizon_surface"
+					app:strokeColor="@color/horizon_border"
+					app:strokeWidth="1dp"
+					app:cardCornerRadius="16dp"
+					app:contentPadding="24dp">
+
+					<LinearLayout
+						android:layout_width="match_parent"
+						android:layout_height="wrap_content"
+						android:orientation="vertical"
+						android:gravity="center_horizontal">
+
+						<ImageView
+							android:layout_width="64dp"
+							android:layout_height="64dp"
+							android:src="@drawable/ic_baseline_folder_open_24"
+							app:tint="@color/horizon_primary" />
+
+						<TextView
+							android:id="@+id/emptyTitle"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginTop="16dp"
+							android:text="@string/onboarding_title"
+							android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+							android:textColor="@color/horizon_text_primary"
+							android:textStyle="bold" />
+
+						<TextView
+							android:id="@+id/emptyDescription"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginTop="8dp"
+							android:gravity="center"
+							android:text="@string/onboarding_desc"
+							android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+							android:textColor="@color/horizon_text_secondary" />
+
+						<com.google.android.material.card.MaterialCardView
+							style="@style/Widget.Material3.CardView.Filled"
+							android:layout_width="match_parent"
+							android:layout_height="wrap_content"
+							android:layout_marginTop="16dp"
+							app:cardBackgroundColor="@color/horizon_surface_variant"
+							app:cardCornerRadius="12dp"
+							app:contentPadding="12dp">
+
+							<LinearLayout
+								android:layout_width="match_parent"
+								android:layout_height="wrap_content"
+								android:orientation="vertical">
+
+								<TextView
+									android:layout_width="wrap_content"
+									android:layout_height="wrap_content"
+									android:text="@string/onboarding_path_label"
+									android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+									android:textColor="@color/horizon_text_secondary" />
+
+								<TextView
+									android:id="@+id/tvGamePath"
+									android:layout_width="wrap_content"
+									android:layout_height="wrap_content"
+									android:layout_marginTop="4dp"
+									android:text="/storage/emulated/0/xash/valve"
+									android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+									android:textColor="@color/horizon_primary"
+									android:textStyle="bold" />
+
+								<TextView
+									android:id="@+id/tvPermissionStatus"
+									android:layout_width="wrap_content"
+									android:layout_height="wrap_content"
+									android:layout_marginTop="6dp"
+									android:text="@string/onboarding_btn_permissions"
+									android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+									android:textColor="@color/horizon_warning" />
+							</LinearLayout>
+						</com.google.android.material.card.MaterialCardView>
+
+						<LinearLayout
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginTop="20dp"
+							android:orientation="horizontal"
+							android:gravity="center">
+
+							<com.google.android.material.button.MaterialButton
+								android:id="@+id/btnGrantPermissions"
+								style="@style/Widget.Material3.Button.TonalButton"
+								android:layout_width="wrap_content"
+								android:layout_height="48dp"
+								android:layout_marginEnd="8dp"
+								android:text="@string/open_settings"
+								app:backgroundTint="@color/horizon_surface_variant"
+								app:cornerRadius="12dp" />
+
+							<com.google.android.material.button.MaterialButton
+								android:id="@+id/btnCreateFolders"
+								style="@style/Widget.Material3.Button.TonalButton"
+								android:layout_width="wrap_content"
+								android:layout_height="48dp"
+								android:layout_marginEnd="8dp"
+								android:text="@string/onboarding_btn_create_folders"
+								app:backgroundTint="@color/horizon_surface_variant"
+								app:cornerRadius="12dp" />
+
+							<com.google.android.material.button.MaterialButton
+								android:id="@+id/btnRescan"
+								style="@style/Widget.Material3.Button"
+								android:layout_width="wrap_content"
+								android:layout_height="48dp"
+								android:text="@string/onboarding_refresh"
+								android:textColor="@color/horizon_bg"
+								app:backgroundTint="@color/horizon_primary"
+								app:cornerRadius="12dp"
+								app:icon="@drawable/ic_baseline_play_arrow_24"
+								app:iconTint="@color/horizon_bg" />
+						</LinearLayout>
+					</LinearLayout>
+				</com.google.android.material.card.MaterialCardView>
+			</LinearLayout>
+		</ScrollView>
+	</FrameLayout>
 
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

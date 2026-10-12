@@ -29,7 +29,7 @@ extensions.configure<ApplicationExtension> {
 
 		buildConfigField("String", "GIT_HASH", "\"${getGitHash()}\"")
 		buildConfigField("boolean", "ENABLE_VR", if (enableVr) "true" else "false")
-		manifestPlaceholders["vrHeadtrackingRequired"] = if (enableVr) "true" else "false"
+		manifestPlaceholders["vrHeadtrackingRequired"] = "false"
 
 		ndk {
 			abiFilters.clear()

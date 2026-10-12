@@ -5,5 +5,16 @@
 	<color name="black">#000000</color>
 	<color name="hl_dark_grey">#151515</color>
 	<color name="hl_grey">#292929</color>
+	<!-- Meta Horizon OS VR Palette -->
+	<color name="horizon_bg">#181A1D</color>
+	<color name="horizon_surface">#22262C</color>
+	<color name="horizon_surface_variant">#2C3139</color>
+	<color name="horizon_border">#363C46</color>
+	<color name="horizon_primary">#FF9800</color>
+	<color name="horizon_primary_dark">#E65100</color>
+	<color name="horizon_text_primary">#E6E9EE</color>
+	<color name="horizon_text_secondary">#9BA3AF</color>
+	<color name="horizon_success">#4CAF50</color>
+	<color name="horizon_warning">#FFA000</color>
 </resources>
 

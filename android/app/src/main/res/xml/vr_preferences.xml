@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto">
+
+	<PreferenceCategory
+		app:title="@string/vr_comfort_category">
+
+		<SwitchPreferenceCompat
+			app:defaultValue="true"
+			app:key="vr_snapturn"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_snapturn_summary"
+			app:title="@string/vr_snapturn_title" />
+
+		<ListPreference
+			app:defaultValue="45"
+			app:entries="@array/vr_snap_angle_entries"
+			app:entryValues="@array/vr_snap_angle_values"
+			app:key="vr_snapturn_angle"
+			app:layout="@layout/list_preference"
+			app:summary="@string/vr_snap_angle_summary"
+			app:title="@string/vr_snap_angle_title"
+			app:useSimpleSummaryProvider="true" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="false"
+			app:key="vr_vignette"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_vignette_summary"
+			app:title="@string/vr_vignette_title" />
+	</PreferenceCategory>
+
+	<PreferenceCategory
+		app:title="@string/vr_controllers_category">
+
+		<ListPreference
+			app:defaultValue="10"
+			app:entries="@array/vr_weapon_pitch_entries"
+			app:entryValues="@array/vr_weapon_pitch_values"
+			app:key="vr_weapon_pitch"
+			app:layout="@layout/list_preference"
+			app:summary="@string/vr_weapon_pitch_summary"
+			app:title="@string/vr_weapon_pitch_title"
+			app:useSimpleSummaryProvider="true" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="true"
+			app:key="vr_haptics"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_haptics_summary"
+			app:title="@string/vr_haptics_title" />
+	</PreferenceCategory>
+
+	<PreferenceCategory
+		app:title="@string/vr_performance_category">
+
+		<ListPreference
+			app:defaultValue="90"
+			app:entries="@array/vr_refresh_rate_entries"
+			app:entryValues="@array/vr_refresh_rate_values"
+			app:key="vr_refresh_rate"
+			app:layout="@layout/list_preference"
+			app:summary="@string/vr_refresh_rate_summary"
+			app:title="@string/vr_refresh_rate_title"
+			app:useSimpleSummaryProvider="true" />
+
+		<ListPreference
+			app:defaultValue="1.0"
+			app:entries="@array/vr_resolution_entries"
+			app:entryValues="@array/vr_resolution_values"
+			app:key="vr_resolution_scale"
+			app:layout="@layout/list_preference"
+			app:summary="@string/vr_resolution_scale_summary"
+			app:title="@string/vr_resolution_scale_title"
+			app:useSimpleSummaryProvider="true" />
+	</PreferenceCategory>
+
+</PreferenceScreen>

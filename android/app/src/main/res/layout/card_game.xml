@@ -5,11 +5,16 @@
 	style="@style/Widget.Material3.CardView.Filled"
 	android:layout_width="match_parent"
 	android:layout_height="wrap_content"
-	android:layout_marginTop="8dp">
+	android:layout_marginHorizontal="12dp"
+	android:layout_marginTop="12dp"
+	app:cardBackgroundColor="@color/horizon_surface"
+	app:strokeColor="@color/horizon_border"
+	app:strokeWidth="1dp"
+	app:cardCornerRadius="16dp">
 
 	<androidx.constraintlayout.widget.ConstraintLayout
 		android:layout_width="match_parent"
-		android:layout_height="128dp">
+		android:layout_height="160dp">
 
 		<ImageView
 			android:id="@+id/gameCover"
@@ -19,11 +24,19 @@
 			android:scaleType="centerCrop"
 			tools:src="@android:mipmap/sym_def_app_icon" />
 
+		<View
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:background="#99181A1D" />
+
 		<com.google.android.material.card.MaterialCardView
 			style="@style/Widget.Material3.CardView.Filled"
 			android:layout_width="wrap_content"
-			android:layout_height="48dp"
-			android:layout_margin="8dp"
+			android:layout_height="56dp"
+			android:layout_marginStart="16dp"
+			android:layout_marginBottom="16dp"
+			app:cardBackgroundColor="#CC22262C"
+			app:cardCornerRadius="12dp"
 			app:contentPadding="10dp"
 			app:layout_constrainedWidth="true"
 			app:layout_constraintBottom_toBottomOf="parent"
@@ -37,9 +50,9 @@
 
 				<ImageView
 					android:id="@+id/gameIcon"
-					android:layout_width="wrap_content"
-					android:layout_height="match_parent"
-					android:layout_marginRight="8dp"
+					android:layout_width="36dp"
+					android:layout_height="36dp"
+					android:layout_marginEnd="10dp"
 					android:adjustViewBounds="true"
 					app:layout_constraintBottom_toBottomOf="parent"
 					app:layout_constraintEnd_toStartOf="@id/gameTitle"
@@ -52,47 +65,61 @@
 					style="@style/TextAppearance.Material3.TitleMedium"
 					android:layout_width="wrap_content"
 					android:layout_height="match_parent"
-					android:gravity="center"
+					android:gravity="center_vertical"
 					android:singleLine="true"
+					android:textColor="@color/horizon_text_primary"
 					app:layout_constrainedWidth="true"
 					app:layout_constraintBottom_toBottomOf="parent"
 					app:layout_constraintEnd_toEndOf="parent"
 					app:layout_constraintStart_toEndOf="@id/gameIcon"
 					app:layout_constraintTop_toTopOf="parent"
-					tools:text="Game Title" />
+					tools:text="Half-Life" />
 			</androidx.constraintlayout.widget.ConstraintLayout>
 		</com.google.android.material.card.MaterialCardView>
 
-		<com.google.android.material.card.MaterialCardView
+		<LinearLayout
 			android:id="@+id/buttonsContainer"
-			style="@style/Widget.Material3.CardView.Filled"
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
-			android:layout_marginEnd="8dp"
-			android:layout_marginBottom="8dp"
+			android:layout_marginEnd="16dp"
+			android:layout_marginBottom="16dp"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
 			app:layout_constraintBottom_toBottomOf="parent"
 			app:layout_constraintEnd_toEndOf="parent">
 
-			<androidx.constraintlayout.widget.ConstraintLayout
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/settingsButton"
+				style="@style/Widget.Material3.Button.TonalButton"
+				android:layout_width="48dp"
+				android:layout_height="48dp"
+				android:layout_marginEnd="8dp"
+				android:contentDescription="@string/game_settings"
+				android:insetLeft="0dp"
+				android:insetTop="0dp"
+				android:insetRight="0dp"
+				android:insetBottom="0dp"
+				android:padding="0dp"
+				app:backgroundTint="@color/horizon_surface_variant"
+				app:cornerRadius="12dp"
+				app:icon="@drawable/ic_baseline_settings_24"
+				app:iconGravity="textStart"
+				app:iconPadding="0dp"
+				app:iconTint="@color/horizon_text_primary" />
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/launchButton"
+				style="@style/Widget.Material3.Button"
 				android:layout_width="wrap_content"
-				android:layout_height="wrap_content">
-
-				<com.google.android.material.button.MaterialButton
-					android:id="@+id/launchButton"
-					style="@style/Widget.Material3.Button.IconButton"
-					android:layout_width="wrap_content"
-					android:layout_height="match_parent"
-					app:icon="@drawable/ic_baseline_play_arrow_24"
-					app:layout_constraintEnd_toStartOf="@+id/settingsButton" />
-
-				<com.google.android.material.button.MaterialButton
-					android:id="@+id/settingsButton"
-					style="@style/Widget.Material3.Button.IconButton"
-					android:layout_width="wrap_content"
-					android:layout_height="match_parent"
-					app:icon="@drawable/ic_baseline_settings_24"
-					app:layout_constraintEnd_toEndOf="parent" />
-			</androidx.constraintlayout.widget.ConstraintLayout>
-		</com.google.android.material.card.MaterialCardView>
+				android:layout_height="48dp"
+				android:text="@string/play_in_vr"
+				android:textColor="@color/horizon_bg"
+				android:textStyle="bold"
+				app:backgroundTint="@color/horizon_primary"
+				app:cornerRadius="12dp"
+				app:icon="@drawable/ic_baseline_play_arrow_24"
+				app:iconGravity="textStart"
+				app:iconTint="@color/horizon_bg" />
+		</LinearLayout>
 	</androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

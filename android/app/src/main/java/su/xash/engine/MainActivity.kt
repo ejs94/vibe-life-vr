@@ -16,6 +16,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
+import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import su.xash.engine.databinding.ActivityMainBinding
@@ -45,8 +46,16 @@ class MainActivity : AppCompatActivity() {
 		val navHostFragment =
 			supportFragmentManager.findFragmentById(R.id.fragmentContainerView) as NavHostFragment
 		navController = navHostFragment.navController
-		appBarConfiguration = AppBarConfiguration(navController.graph)
+		appBarConfiguration = AppBarConfiguration(
+			setOf(
+				R.id.libraryFragment,
+				R.id.vrSettingsFragment,
+				R.id.appSettingsFragment,
+				R.id.diagnosticsFragment
+			)
+		)
 		setupActionBarWithNavController(navController, appBarConfiguration)
+		binding.navigationRail.setupWithNavController(navController)
 
 		CrashReports.prune(this)
 		showPendingCrashReport()

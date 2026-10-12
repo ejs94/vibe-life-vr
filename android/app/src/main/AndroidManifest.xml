@@ -72,12 +72,13 @@
 		<meta-data android:name="com.oculus.handtracking.version" android:value="V2.0" />
 		<activity
 			android:name=".MainActivity"
-			android:exported="true">
+			android:exported="true"
+			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+			android:allowEmbedded="true">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
-
 				<category android:name="android.intent.category.LAUNCHER" />
-				<category android:name="com.oculus.intent.category.VR" />
+				<category android:name="com.oculus.intent.category.2D" />
 			</intent-filter>
 		</activity>
 		<provider
@@ -108,6 +109,7 @@
 			android:windowSoftInputMode="adjustPan">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.DEFAULT" />
 				<category android:name="com.oculus.intent.category.VR" />
 			</intent-filter>
 			<intent-filter>

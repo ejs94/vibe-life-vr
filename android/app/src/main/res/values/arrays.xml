@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Snap Turn Angles -->
+	<string-array name="vr_snap_angle_entries">
+		<item>30°</item>
+		<item>45° (Recommended)</item>
+		<item>60°</item>
+		<item>90°</item>
+	</string-array>
+	<string-array name="vr_snap_angle_values">
+		<item>30</item>
+		<item>45</item>
+		<item>60</item>
+		<item>90</item>
+	</string-array>
+
+	<!-- Weapon Pitch Offset -->
+	<string-array name="vr_weapon_pitch_entries">
+		<item>-10°</item>
+		<item>0° (Flat)</item>
+		<item>+10° (Quest Touch Plus)</item>
+		<item>+15°</item>
+		<item>+20°</item>
+	</string-array>
+	<string-array name="vr_weapon_pitch_values">
+		<item>-10</item>
+		<item>0</item>
+		<item>10</item>
+		<item>15</item>
+		<item>20</item>
+	</string-array>
+
+	<!-- Refresh Rates -->
+	<string-array name="vr_refresh_rate_entries">
+		<item>72 Hz</item>
+		<item>80 Hz</item>
+		<item>90 Hz (Recommended)</item>
+		<item>120 Hz</item>
+	</string-array>
+	<string-array name="vr_refresh_rate_values">
+		<item>72</item>
+		<item>80</item>
+		<item>90</item>
+		<item>120</item>
+	</string-array>
+
+	<!-- Render Resolution Multipliers -->
+	<string-array name="vr_resolution_entries">
+		<item>0.8x (Battery Saver)</item>
+		<item>1.0x (Native)</item>
+		<item>1.25x (Crisp)</item>
+		<item>1.4x (Ultra)</item>
+	</string-array>
+	<string-array name="vr_resolution_values">
+		<item>0.8</item>
+		<item>1.0</item>
+		<item>1.25</item>
+		<item>1.4</item>
+	</string-array>
+</resources>

@@ -27,6 +27,9 @@ import su.xash.engine.BuildConfig
 import su.xash.engine.R
 import su.xash.engine.adapters.GameAdapter
 import su.xash.engine.databinding.FragmentLibraryBinding
+import su.xash.engine.util.Nomedia
+import java.io.File
+import android.widget.Toast
 
 
 class LibraryFragment : Fragment(), MenuProvider {
@@ -146,12 +149,66 @@ class LibraryFragment : Fragment(), MenuProvider {
 			binding.swipeRefresh.isRefreshing = it
 		}
 
-		libraryViewModel.installedGames.observe(viewLifecycleOwner) {
-			(binding.gamesList.adapter as GameAdapter).submitList(it)
+		libraryViewModel.installedGames.observe(viewLifecycleOwner) { games ->
+			(binding.gamesList.adapter as GameAdapter).submitList(games)
+			if (games.isNullOrEmpty()) {
+				binding.gamesList.visibility = View.GONE
+				binding.emptyStateContainer.visibility = View.VISIBLE
+				updateEmptyStateDetails()
+			} else {
+				binding.gamesList.visibility = View.VISIBLE
+				binding.emptyStateContainer.visibility = View.GONE
+			}
+		}
+
+		binding.btnRescan.setOnClickListener {
+			libraryViewModel.reloadGames(requireContext())
+		}
+
+		binding.btnGrantPermissions.setOnClickListener {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+				startActivityForResult.launch(
+					Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).setData(
+						Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+					)
+				)
+			} else {
+				val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+					data = Uri.fromParts("package", requireContext().packageName, null)
+				}
+				startActivity(intent)
+			}
+		}
+
+		binding.btnCreateFolders.setOnClickListener {
+			val xashDir = File(Environment.getExternalStorageDirectory(), "xash/valve")
+			xashDir.mkdirs()
+			Nomedia.ensureNomedia(File(Environment.getExternalStorageDirectory(), "xash"))
+			Toast.makeText(requireContext(), getString(R.string.onboarding_folders_created, Environment.getExternalStorageDirectory().absolutePath + "/xash"), Toast.LENGTH_LONG).show()
+			libraryViewModel.reloadGames(requireContext())
 		}
 
 		if (checkStoragePermissions()) {
 			libraryViewModel.reloadGames(requireContext())
+		}
+	}
+
+	private fun updateEmptyStateDetails() {
+		val path = "${Environment.getExternalStorageDirectory().absolutePath}/xash/valve"
+		binding.tvGamePath.text = path
+		val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			Environment.isExternalStorageManager()
+		} else {
+			true
+		}
+		if (hasPermission) {
+			binding.tvPermissionStatus.text = "All-Files Access: GRANTED"
+			binding.tvPermissionStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.horizon_success))
+			binding.btnGrantPermissions.visibility = View.GONE
+		} else {
+			binding.tvPermissionStatus.text = "All-Files Access: REQUIRED (Click button below)"
+			binding.tvPermissionStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.horizon_warning))
+			binding.btnGrantPermissions.visibility = View.VISIBLE
 		}
 	}
 

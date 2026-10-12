@@ -162,11 +162,33 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 		packageName: String? = null,
 		gameLibDir: String? = null
 	) {
+		val vrPref = ctx.getSharedPreferences("vr_preferences", Context.MODE_PRIVATE)
+		val snapTurn = vrPref.getBoolean("vr_snapturn", true)
+		val snapAngle = vrPref.getString("vr_snapturn_angle", "45") ?: "45"
+		val pitchOffset = vrPref.getString("vr_weapon_pitch", "10") ?: "10"
+		val haptics = vrPref.getBoolean("vr_haptics", true)
+		val refreshRate = vrPref.getString("vr_refresh_rate", "90") ?: "90"
+		val resScale = vrPref.getString("vr_resolution_scale", "1.0") ?: "1.0"
+		val vignette = vrPref.getBoolean("vr_vignette", false)
+
+		val vrArgs = buildString {
+			// vr_smoothturn: 0 = snap turn, 1 = smooth turn
+			append("+vr_smoothturn ").append(if (snapTurn) "0" else "1").append(" ")
+			append("+vr_snap_angle ").append(snapAngle).append(" ")
+			append("+vr_weapon_pitchadjust ").append(pitchOffset).append(" ")
+			append("+vr_haptics_enabled ").append(if (haptics) "1" else "0").append(" ")
+			append("+vr_refresh_rate ").append(refreshRate).append(" ")
+			append("+vr_resolution_scale ").append(resScale).append(" ")
+			append("+vr_vignette ").append(if (vignette) "1" else "0").append(" ")
+		}
+
+		val finalArgs = "$vrArgs$commandLineArgs".trim()
+
 		ctx.startActivity(Intent(ctx, XashActivity::class.java).apply {
 			flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
 
 			putExtra("gamedir", defaultGameDir)
-			putExtra("argv", commandLineArgs)
+			putExtra("argv", finalArgs)
 			putExtra("usevolume", pref.getBoolean("use_volume_buttons", false))
 			putExtra("basedir", basedir.parent)
 

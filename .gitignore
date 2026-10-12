@@ -367,6 +367,7 @@ cmake-build-*
 CLAUDE.md
 AGENTS.md
 GEMINI.md
+.agents/
 .claude/
 .gemini/
 .cursor*
