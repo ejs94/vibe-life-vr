@@ -556,7 +556,7 @@ static qboolean R_LoadProgs( const char *name )
 	if( !( ref.hInstance = COM_LoadLibrary( name, false, true )))
 	{
 		FS_AllowDirectPaths( false );
-		Con_Reportf( "%s: can't load renderer library %s: %s\n", __func__, name, COM_GetLibraryError() );
+		Con_Printf( S_ERROR "%s: can't load renderer library %s: %s\n", __func__, name, COM_GetLibraryError() );
 		return false;
 	}
 
@@ -564,7 +564,7 @@ static qboolean R_LoadProgs( const char *name )
 
 	if( !( GetRefAPI = (REFAPI)COM_GetProcAddress( ref.hInstance, GET_REF_API )))
 	{
-		Con_Reportf( "%s: can't find GetRefAPI entry point in %s\n", __func__, name );
+		Con_Printf( S_ERROR "%s: can't find GetRefAPI entry point in %s\n", __func__, name );
 		return false;
 	}
 
@@ -573,7 +573,7 @@ static qboolean R_LoadProgs( const char *name )
 
 	if( GetRefAPI( REF_API_VERSION, &ref.dllFuncs, &gpEngfuncs, &refState ) != REF_API_VERSION )
 	{
-		Con_Reportf( "%s: can't init renderer API: wrong version\n", __func__ );
+		Con_Printf( S_ERROR "%s: can't init renderer API: wrong version\n", __func__ );
 		return false;
 	}
 
@@ -581,7 +581,7 @@ static qboolean R_LoadProgs( const char *name )
 
 	if( !ref.dllFuncs.R_Init( ))
 	{
-		Con_Reportf( "%s: can't init renderer!\n", __func__ ); //, ref.dllFuncs.R_GetInitError() );
+		Con_Printf( S_ERROR "%s: can't init renderer %s!\n", __func__, name );
 		return false;
 	}
 
@@ -692,6 +692,9 @@ static void R_CollectRendererNames( void )
 	// ordering is important!
 	static const char *short_names[] =
 	{
+#if defined(XASH_OPENXR)
+		"gl_vr",
+#endif
 #if XASH_REF_GL_ENABLED
 		"gl",
 #endif
@@ -715,6 +718,9 @@ static void R_CollectRendererNames( void )
 	// ordering is important here too!
 	static const char *long_names[ARRAYSIZE( short_names )] =
 	{
+#if defined(XASH_OPENXR)
+		"OpenXR VR",
+#endif
 #if XASH_REF_GL_ENABLED
 		"OpenGL",
 #endif

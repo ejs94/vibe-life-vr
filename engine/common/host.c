@@ -14,6 +14,13 @@ GNU General Public License for more details.
 */
 
 #include "build.h"
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_swapchain.h"
+#include "../platform/openxr/xr_input.h"
+#endif
+
+
 #include <stdarg.h>  // va_args
 #if !XASH_WIN32
 #include <unistd.h> // fork
@@ -661,6 +668,30 @@ void Host_Frame( double time )
 		return;
 
 	double t1 = Platform_DoubleTime();
+#ifdef XASH_OPENXR
+	static int xr_init_stage = 0;
+	static double xr_next_retry = 0.0;
+	if (xr_init_stage == 0) {
+		if (Platform_DoubleTime() >= xr_next_retry) {
+			if (XR_Init()) {
+				xr_init_stage = 1;
+			} else {
+				xr_next_retry = Platform_DoubleTime() + 1.0;
+			}
+		}
+	}
+	if (xr_init_stage == 1) {
+		// Tenta criar a sessao todo frame ate que host.hWnd e glw_state estejam prontos
+		if (XR_CreateSession()) xr_init_stage = 2;
+	}
+	if (xr_init_stage >= 1) {
+		XR_PollEvents();
+		XR_SyncInputs();
+	}
+
+
+#endif
+
 
 	if( host.framecount == 0 )
 		Con_DPrintf( "Time to first frame: %.3f seconds\n", t1 - host.starttime );

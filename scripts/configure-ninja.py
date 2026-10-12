@@ -54,6 +54,8 @@ def main():
 	parser.add_argument("--ndk-version")
 	parser.add_argument("--min-sdk-version")
 	parser.add_argument("--ndk-root")
+	parser.add_argument("--enable-openxr", action="store_true", default=False)
+	parser.add_argument("--disable-openxr", action="store_true", default=False)
 
 	args, unknown = parser.parse_known_args()
 
@@ -103,6 +105,9 @@ def main():
 	waf_exec = [sys.executable, waf_path, "configure", "-t", args.wscript_path, "-o", out_path,
 				"-T", waf_build_type, "--android={},,{}".format(abi, args.min_sdk_version), "-s",
 				sdl_path, "--skip-sdl2-sanity-check", "--enable-bundled-deps"]
+
+	if not args.disable_openxr:
+		waf_exec += ["--enable-openxr"]
 
 	# optional prebuilt ffmpeg from FWGS/FFmpeg-Builds
 	ffmpeg_path = os.path.join(args.wscript_path, "3rdparty", "ffmpeg", abi)

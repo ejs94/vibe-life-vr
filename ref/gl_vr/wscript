@@ -1,0 +1,64 @@
+#! /usr/bin/env python
+# encoding: utf-8
+# mittorn, 2018
+
+from waflib import Logs
+import os
+
+top = '.'
+
+def options(opt):
+	grp = opt.add_option_group('ref_gl options')
+
+	grp.add_option('--enable-static-gl', action='store_true', dest='GL_STATIC', default=False,
+		help = 'enable direct linking to opengl [default: %(default)s]')
+
+	# stub
+	return
+
+def configure(conf):
+	conf.env.GL_STATIC = conf.options.GL_STATIC
+	if conf.env.GL_STATIC:
+		conf.check(lib='GL')
+
+	if conf.env.DEST_OS == 'android':
+		conf.check_cc(lib='log')
+
+def build(bld):
+	libs = [ 'ref_common', 'engine_includes', 'werror', 'yy_thunks' ]
+	# on PSVita do not link any libraries that are already in the main executable, but add the includes target
+	if bld.env.DEST_OS == 'psvita':
+		libs += [ 'sdk_includes', 'vgl_shim' ]
+	else:
+		libs += [ 'public', 'M' ]
+
+	source = bld.path.ant_glob(['*.c', 'gl2_shim/*.c'])
+	includes = ['.', '../../engine/platform/openxr', '../../3rdparty/openxr/include']
+
+	if bld.env.DEST_OS == 'android':
+		vr_libs = ['DL', 'gl4es', 'LOG']
+		vr_defines = ['XASH_GL_STATIC=1', 'XASH_GL4ES=1']
+	else:
+		vr_libs = ['GL'] if bld.env.GL_STATIC else []
+		vr_defines = ['XASH_GL_STATIC=1'] if bld.env.GL_STATIC else []
+
+	targets = {
+		'ref_gl_vr': {
+			'enable':  bld.env.GL_VR,
+			'libs':    vr_libs,
+			'defines': vr_defines,
+		},
+	}
+
+	for k,v in targets.items():
+		if not v['enable']:
+			continue
+
+		bld.shlib(source = source,
+			target = k,
+			includes = includes,
+			features = 'format',
+			use = libs + v['libs'] + ['xash'],
+			defines = v['defines'] + ['REF_DLL=1', 'XASH_OPENXR=1'],
+			linkflags = ['-L%s/3rdparty/openxr/libs/arm64-v8a' % bld.srcnode.abspath(), '-lopenxr_loader'] if bld.env.DEST_OS == 'android' else [],
+			install_path = bld.env.LIBDIR)

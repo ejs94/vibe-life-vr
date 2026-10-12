@@ -931,7 +931,7 @@ qboolean R_Init_Video( ref_graphic_apis_t type )
 
 		if( SDL_GL_LoadLibrary( EGL_LIB ) < 0 )
 		{
-			Con_Reportf( S_ERROR  "Couldn't initialize OpenGL: %s\n", SDL_GetError());
+			Con_Printf( S_ERROR  "Couldn't initialize OpenGL: %s\n", SDL_GetError());
 			return false;
 		}
 		break;
@@ -940,8 +940,13 @@ qboolean R_Init_Video( ref_graphic_apis_t type )
 		break;
 	}
 
+	Con_Printf( "R_Init_Video: calling VID_SetMode()...\n" );
 	if( !VID_SetMode( ))
+	{
+		Con_Printf( S_ERROR "R_Init_Video: VID_SetMode failed!\n" );
 		return false;
+	}
+	Con_Printf( "R_Init_Video: VID_SetMode succeeded.\n" );
 
 	switch( type )
 	{

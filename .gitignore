@@ -375,3 +375,11 @@ GEMINI.md
 .continue/
 .codeium/
 .github/copilot-instructions.md
+
+# Game data symlinks
+valve
+valve_hd
+
+# Build output
+out/
+*.ppm

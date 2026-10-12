@@ -21,6 +21,9 @@ GNU General Public License for more details.
 #include "sound.h"
 #include "input.h" // touch
 #include "platform/platform.h" // GL_UpdateSwapInterval
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#endif
 
 /*
 ===============

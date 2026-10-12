@@ -18,6 +18,8 @@ GNU General Public License for more details.
 #include "input.h"
 #include "client.h"
 #include "platform_sdl3.h"
+#include "../openxr/xr_core.h"
+#include "../openxr/xr_input.h"
 
 static const int g_button_mapping[] =
 {
@@ -325,6 +327,15 @@ void Platform_CalibrateGamepadGyro( void )
 
 void Platform_Vibrate2( float time, int val1, int val2, uint flags )
 {
+	if( XR_IsActive() )
+	{
+		int v1 = val1 < 0 ? 0xFFFF : val1;
+		int v2 = val2 < 0 ? 0xFFFF : val2;
+		float amp = (float)Q_max( v1, v2 ) / 65535.0f;
+		float dur = time > 0.0f ? (time / 1000.0f) : 0.0f;
+		XR_ApplyHapticFeedback( VR_HAND_BOTH, dur, 100.0f, amp );
+	}
+
 	SDL_Gamepad *gc = g_current_gamepad;
 
 	if( g_current_gamepad_id == 0 || !gc )

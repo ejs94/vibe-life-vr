@@ -18,6 +18,7 @@ GNU General Public License for more details.
 #include "event_flags.h"
 #include "net_encode.h"
 #include "con_nprint.h"
+#include "../platform/openxr/xr_input.h"
 
 /*
 ===============
@@ -228,6 +229,8 @@ static qboolean CL_FireEvent( event_info_t *ei, int slot )
 			if( ev->func )
 			{
 				CL_DescribeEvent( ei, slot );
+				if( ei->args.entindex == ( cl.playernum + 1 ))
+					XR_DispatchWeaponHaptic( name );
 				ev->func( &ei->args );
 				return true;
 			}

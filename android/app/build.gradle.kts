@@ -9,26 +9,37 @@ plugins {
 }
 
 extensions.configure<ApplicationExtension> {
+	val enableVr = (project.findProperty("enableVr") as? String)?.toBoolean() ?: true
+	val targetAbiProp = project.findProperty("targetAbi") as? String
+	val selectedAbis = when {
+		!targetAbiProp.isNullOrBlank() -> targetAbiProp.split(",").map { it.trim() }.toSet()
+		enableVr -> setOf("arm64-v8a")
+		else -> setOf("arm64-v8a", "x86_64")
+	}
 	namespace = "su.xash.engine"
-	ndkVersion = "29.0.14206865"
+	ndkVersion = "30.0.16248370"
 	compileSdk = 35
 
 	defaultConfig {
-		applicationId = "su.xash.engine"
+		applicationId = if (enableVr) "su.xash.engine.vr" else "su.xash.engine"
 		versionName = "0.21-" + getGitHash()
 		versionCode = getBuildNum()
 		minSdk = 21
 		targetSdk = 35
 
 		buildConfigField("String", "GIT_HASH", "\"${getGitHash()}\"")
+		buildConfigField("boolean", "ENABLE_VR", if (enableVr) "true" else "false")
+		manifestPlaceholders["vrHeadtrackingRequired"] = if (enableVr) "true" else "false"
+
+		ndk {
+			abiFilters.clear()
+			abiFilters.addAll(selectedAbis)
+		}
 
 		externalNativeBuild {
 			val engineRoot = projectDir.parentFile.parent
 
-			experimentalProperties["ninja.abiFilters"] = setOf("armeabi-v7a", "arm64-v8a", "x86")
-			experimentalProperties["ninja.path"] = File(engineRoot, "wscript").path
-			experimentalProperties["ninja.configure"] = "run-python"
-			experimentalProperties["ninja.arguments"] = setOf(
+			val ninjaArgs = mutableListOf(
 				File(engineRoot, "scripts/configure-ninja.py").path,
 				engineRoot,
 				"--variant=\${ndk.variantName}",
@@ -41,6 +52,16 @@ extensions.configure<ApplicationExtension> {
 				"-p:Configuration=\${ndk.variantName}",
 				"-p:Platform=\${ndk.abi}"
 			)
+			if (enableVr) {
+				ninjaArgs.add("--enable-openxr")
+			} else {
+				ninjaArgs.add("--disable-openxr")
+			}
+
+			experimentalProperties["ninja.abiFilters"] = selectedAbis
+			experimentalProperties["ninja.path"] = File(engineRoot, "wscript").path
+			experimentalProperties["ninja.configure"] = "run-python"
+			experimentalProperties["ninja.arguments"] = ninjaArgs.toSet()
 		}
 	}
 
@@ -83,6 +104,10 @@ extensions.configure<ApplicationExtension> {
 		jniLibs {
 			keepDebugSymbols.add("**/*.so")
 			useLegacyPackaging = true
+			if (!enableVr) {
+				excludes.add("**/libopenxr_loader.so")
+				excludes.add("**/libref_gl_vr.so")
+			}
 		}
 	}
 

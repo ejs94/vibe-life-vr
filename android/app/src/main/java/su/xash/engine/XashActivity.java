@@ -102,6 +102,9 @@ public class XashActivity extends SDLActivity {
 
 	@Override
 	protected String[] getLibraries() {
+		if (BuildConfig.ENABLE_VR) {
+			return new String[]{"SDL2", "openxr_loader", "xash"};
+		}
 		return new String[]{"SDL2", "xash"};
 	}
 
@@ -259,6 +262,6 @@ public class XashActivity extends SDLActivity {
 		String argv = getIntent().getStringExtra("argv");
 		if (argv == null) argv = "-console -log";
 
-		return argv.split(" ");
+		return ("xash3d " + argv).split(" ");
 	}
 }

@@ -119,6 +119,7 @@ SUBDIRS = [
 	Subproject('3rdparty/gl4es',        lambda x: x.env.CLIENT and x.env.GL4ES),
 	Subproject('ref/common',            lambda x: x.env.CLIENT),
 	Subproject('ref/gl',                lambda x: x.env.CLIENT and (x.env.GL or x.env.NANOGL or x.env.GLWES or x.env.GL4ES or x.env.GLES3COMPAT)),
+	Subproject('ref/gl_vr',             lambda x: x.env.CLIENT and x.env.GL_VR),
 	Subproject('ref/soft',              lambda x: x.env.CLIENT and x.env.SOFT),
 	Subproject('ref/null',              lambda x: x.env.CLIENT and x.env.NULL),
 	Subproject('3rdparty/bzip2',        lambda x: x.env.CLIENT and not x.env.HAVE_SYSTEM_BZ2),
@@ -152,6 +153,7 @@ SUBDIRS = [
 REFDLLS = [
 	RefDll('soft', False, all_renderers = False),
 	RefDll('gl', True),
+	RefDll('gl_vr', False),
 	RefDll('gles1', False, 'NANOGL'),
 	RefDll('gles2', False, 'GLWES'),
 	RefDll('gl4es', False),
@@ -172,6 +174,8 @@ def options(opt):
 
 	grp.add_option('--enable-tui', action = 'store_true', dest = 'ENABLE_TUI', default = False,
 		help = 'enable TUI main menu [default: %(default)s]')
+
+	grp.add_option('--enable-openxr', action = 'store_true', dest = 'ENABLE_OPENXR', default = False, help = 'enable OpenXR runtime support')
 
 	grp.add_option('--gamedir', action = 'store', dest = 'GAMEDIR', default = 'valve',
 		help = 'engine default (base) game directory [default: %(default)s]')
@@ -527,6 +531,11 @@ def configure(conf):
 		refdll.register_env(conf.env, conf.options, conf.options.ALL_RENDERERS)
 
 	conf.env.GAMEDIR = conf.options.GAMEDIR
+	conf.define_cond('XASH_OPENXR', conf.options.ENABLE_OPENXR)
+	if conf.options.ENABLE_OPENXR:
+		conf.env.GL_VR = True
+	else:
+		conf.env.GL_VR = False
 	conf.define('XASH_GAMEDIR', conf.options.GAMEDIR)
 
 	if conf.env.DEST_OS == 'nswitch':

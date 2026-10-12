@@ -23,6 +23,10 @@ GNU General Public License for more details.
 #include "studio.h"
 #include "wadfile.h"	// acess decal size
 #include "sound.h"
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
+#endif
 
 /*
 ==============================================================
@@ -2611,8 +2615,21 @@ static void CL_UpdateFlashlight( cl_entity_t *ent )
 	if( ent->index == ( cl.playernum + 1 ))
 	{
 		// local player case
-		AngleVectors( cl.viewangles, forward, NULL, NULL );
-		VectorCopy( cl.viewheight, view_ofs );
+#ifdef XASH_OPENXR
+		vec3_t handOrigin, handAngles;
+		if( XR_IsActive() && (!vr_headtorch || vr_headtorch->value == 0.0f) && XR_GetLeftHandTransform( handOrigin, handAngles ))
+		{
+			AngleVectors( handAngles, forward, NULL, NULL );
+			float scale = 40.0f;
+			VectorScale( handOrigin, scale, handOrigin );
+			VectorAdd( cl.viewheight, handOrigin, view_ofs );
+		}
+		else
+#endif
+		{
+			AngleVectors( cl.viewangles, forward, NULL, NULL );
+			VectorCopy( cl.viewheight, view_ofs );
+		}
 	}
 	else	// non-local player case
 	{

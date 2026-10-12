@@ -19,6 +19,10 @@ GNU General Public License for more details.
 #include "pm_local.h"
 #include "event_flags.h"
 #include "studio.h"
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
+#endif
 
 static qboolean has_update = false;
 static void SV_GetTrueOrigin( sv_client_t *cl, int edictnum, vec3_t origin );
@@ -933,6 +937,26 @@ void SV_RunCmd( sv_client_t *cl, usercmd_t *ucmd, int random_seed )
 
 	VectorCopy( clent->v.v_angle, svgame.pmove->oldangles ); // save oldangles
 	if( !clent->v.fixangle ) VectorCopy( ucmd->viewangles, clent->v.v_angle );
+
+#ifdef XASH_OPENXR
+	if( XR_IsActive() )
+	{
+		vec3_t muzzleOffset, aimAngles, handVel;
+		if( XR_GetRightHandMuzzleTransform( muzzleOffset, aimAngles ))
+		{
+			// vuser1: Muzzle offset relative to player origin (including view_ofs)
+			VectorAdd( clent->v.view_ofs, muzzleOffset, clent->v.vuser1 );
+			// vuser2: Controller 6DoF aim angles
+			VectorCopy( aimAngles, clent->v.vuser2 );
+			// vuser3: Physical controller throw velocity in world units/sec
+			if( XR_GetRightHandVelocity( handVel ))
+			{
+				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+				VectorScale( handVel, scale, clent->v.vuser3 );
+			}
+		}
+	}
+#endif
 
 	VectorClear( clent->v.clbasevelocity );
 

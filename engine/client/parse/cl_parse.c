@@ -21,6 +21,7 @@ GNU General Public License for more details.
 #include "shake.h"
 #include "input.h"
 #include "eiface.h"
+#include "../../platform/openxr/xr_input.h"
 
 #if XASH_LOW_MEMORY != 2
 int CL_UPDATE_BACKUP = SINGLEPLAYER_BACKUP;
@@ -2018,6 +2019,8 @@ static void CL_ParseScreenShake( sizebuf_t *msg )
 	clgame.shake.time = cl.time + clgame.shake.duration;
 	clgame.shake.frequency = frequency;
 	clgame.shake.next_shake = 0.0f; // apply immediately
+
+	XR_ApplyHapticFeedback( VR_HAND_BOTH, duration, bound( 10.0f, frequency, 300.0f ), bound( 0.0f, amplitude * 0.1f, 1.0f ) );
 }
 
 /*
@@ -2288,6 +2291,32 @@ void CL_ParseUserMessage( sizebuf_t *msg, int svc_num, connprotocol_t proto )
 	if( clgame.msg[i].func )
 	{
 		clgame.msg[i].func( clgame.msg[i].name, iSize, pbuf );
+
+		if( !Q_strcmp( clgame.msg[i].name, "Damage" ) && iSize >= 2 )
+		{
+			int dmg = (int)pbuf[0] + (int)pbuf[1];
+			if( dmg > 0 )
+			{
+				if( dmg < 15 )
+					XR_TriggerHapticEffect( VR_HAND_BOTH, VR_HAPTIC_DAMAGE_LIGHT, 1.0f );
+				else if( dmg < 40 )
+					XR_TriggerHapticEffect( VR_HAND_BOTH, VR_HAPTIC_DAMAGE_MEDIUM, 1.0f );
+				else
+					XR_TriggerHapticEffect( VR_HAND_BOTH, VR_HAPTIC_DAMAGE_HEAVY, 1.0f );
+			}
+		}
+		else if( !Q_strcmp( clgame.msg[i].name, "Geiger" ) && iSize >= 1 )
+		{
+			if( pbuf[0] > 0 )
+			{
+				float scale = bound( 0.2f, (float)pbuf[0] / 255.0f, 1.0f );
+				XR_TriggerHapticEffect( VR_HAND_BOTH, VR_HAPTIC_GEIGER, scale );
+			}
+		}
+		else if( !Q_strcmp( clgame.msg[i].name, "ItemPickup" ) || !Q_strcmp( clgame.msg[i].name, "WeapPickup" ) || !Q_strcmp( clgame.msg[i].name, "AmmoPickup" ))
+		{
+			XR_TriggerHapticEffect( VR_HAND_BOTH, VR_HAPTIC_SUIT_CHARGE, 0.7f );
+		}
 
 #ifdef HACKS_RELATED_HLMODS
 		// run final credits for Half-Life because hl1 doesn't have call END_SECTION

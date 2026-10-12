@@ -25,6 +25,7 @@ GNU General Public License for more details.
 #include "vgui_draw.h"
 #include "cursor_type.h"
 #include "platform/platform.h"
+#include "../../platform/openxr/xr_input.h"
 
 static qboolean	in_mouseactive;				// false when not focus app
 static qboolean	in_mouseinitialized;
@@ -641,16 +642,32 @@ void IN_EngineAppendMove( float frametime, usercmd_t *cmd, qboolean active )
 		IN_CollectInput( &forward, &side, &pitch, &yaw, false );
 
 		IN_JoyAppendMove( cmd, forward, side );
+#ifdef XASH_OPENXR
+		if( XR_IsActive( ))
+		{
+			vec3_t headAngles;
+			XR_GetHeadOrientation( headAngles );
+			cl.viewangles[0] = headAngles[0];
+			cl.viewangles[1] = anglemod( headAngles[1] + XR_GetPlayerTurnYaw() );
+			cl.viewangles[2] = headAngles[2];
+			VectorCopy( cl.viewangles, cmd->viewangles );
+		}
+		XR_InputAppendMove( cmd, frametime );
+#endif
 
 		if( pitch || yaw )
 		{
 			cmd->viewangles[YAW]   += yaw * sensitivity;
 			cmd->viewangles[PITCH] += pitch * sensitivity;
 			cmd->viewangles[PITCH] = bound( -90, cmd->viewangles[PITCH], 90 );
-			VectorCopy( cmd->viewangles, cl.viewangles );
+#ifdef XASH_OPENXR
+			if( !XR_IsActive( ))
+#endif
+				VectorCopy( cmd->viewangles, cl.viewangles );
 		}
 	}
 }
+
 
 static void IN_Commands( void )
 {
@@ -687,6 +704,8 @@ Called every frame, even if not generating commands
 void Host_InputFrame( void )
 {
 	IN_Commands();
+
+	XR_UpdatePointerCursor();
 
 	IN_MouseMove();
 }

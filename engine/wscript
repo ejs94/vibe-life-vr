@@ -174,13 +174,15 @@ def build(bld):
 	bld(name = 'engine_includes', export_includes = '. common common/imagelib', use = 'filesystem_includes')
 
 	libs = ['engine_includes', 'public', 'zlib', 'werror', 'backtrace_custom', 'library_suffix', 'build_vcs', 'mbedtls', 'yy_thunks']
-	includes = ['server', 'client', 'client/vgui', 'common/soundlib', 'platform']
+	includes = ['server', 'client', 'client/vgui', 'common/soundlib', 'platform', '../3rdparty/openxr/include']
 
 	# basic build: dedicated only
 	source = bld.path.ant_glob(['common/*.c', 'common/imagelib/*.c', 'common/soundlib/*.c', 'server/*.c', 'common/http/*.c'])
 
 	# include platform-specific sources, this shall not fail if directory doesn't exist
 	source += bld.path.ant_glob('platform/%s/*.c' % bld.env.DEST_OS)
+	if bld.get_define('XASH_OPENXR'):
+		source += bld.path.ant_glob('platform/openxr/*.c')
 
 	# Android _is_ Linux based, after all
 	if bld.env.DEST_OS == 'android':
@@ -297,6 +299,12 @@ def build(bld):
 			install_path = None
 
 		linkflags = []
+
+		if bld.get_define('XASH_OPENXR'):
+			if bld.env.DEST_OS == 'android':
+				linkflags += ['-L%s/3rdparty/openxr/libs/arm64-v8a' % bld.srcnode.abspath(), '-lopenxr_loader', '-lEGL']
+			else:
+				linkflags += ['-lopenxr_loader']
 
 		if bld.env.DEST_OS == 'emscripten':
 			linkflags = ['-sINITIAL_MEMORY=134217728', '-sALLOW_MEMORY_GROWTH=1', '-sSTACK_SIZE=16777216']

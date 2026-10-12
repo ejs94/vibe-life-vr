@@ -143,6 +143,9 @@ static void Linux_TimerHandler( int sig, siginfo_t *si, void *uc )
 
 void Linux_SetTimer( float tm )
 {
+#ifdef XASH_OPENXR
+	return; // Avoid SIGRTMIN interrupting OpenXR IPC socket recvmsg with EINTR
+#endif
 	static timer_t timerid;
 
 	if( !timerid && tm )
