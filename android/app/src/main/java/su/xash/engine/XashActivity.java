@@ -54,6 +54,24 @@ public class XashActivity extends SDLActivity {
 		}
 	}
 
+	@Override
+	public void onWindowFocusChanged(boolean hasFocus) {
+		if (BuildConfig.ENABLE_VR) {
+			Log.i(TAG, "onWindowFocusChanged (VR mode): reported=" + hasFocus + ", mSDLThread=" + (mSDLThread != null));
+			// In Meta Horizon OS (Quest Standalone), immersive volumetric window negotiation
+			// causes transient focus blinks (true -> false) during launch before surfaceChanged() fires.
+			// If mSDLThread hasn't started yet, force mHasFocus = true and trigger handleNativeState()
+			// so the native engine thread can start as soon as the EGL/Android surface is ready.
+			if (mSDLThread == null) {
+				mHasFocus = true;
+				mNextNativeState = NativeState.RESUMED;
+				SDLActivity.handleNativeState();
+				return;
+			}
+		}
+		super.onWindowFocusChanged(hasFocus);
+	}
+
 	// JNI reads a snapshot; all View access stays on Android's UI thread.
 	private float[] getWindowInsets() {
 		return mWindowInsets;
