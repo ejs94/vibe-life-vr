@@ -353,6 +353,7 @@ void GL_BindSceneTarget( void );
 void GL_BindScreenTarget( void );
 void GL_BindWindowTarget( void );
 void GL_PresentScreenTarget( void );
+void GL_BlitTarget( const gl_rendertarget_t *src, GLuint dst_fbo, int dst_width, int dst_height, GLenum filter );
 #else
 static inline void GL_CheckRenderTargets( void ) { }
 static inline void GL_FreeRenderTargets( void ) { }
@@ -360,6 +361,7 @@ static inline void GL_BindSceneTarget( void ) { }
 static inline void GL_BindScreenTarget( void ) { }
 static inline void GL_BindWindowTarget( void ) { }
 static inline void GL_PresentScreenTarget( void ) { }
+static inline void GL_BlitTarget( const gl_rendertarget_t *src, GLuint dst_fbo, int dst_width, int dst_height, GLenum filter ) { }
 static inline void GL_GetSceneTargetSize( int *width, int *height )
 {
 	*width = gpGlobals->width;

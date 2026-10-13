@@ -14,6 +14,7 @@ GNU General Public License for more details.
 */
 
 #include "gl_local.h"
+#include "xr_core.h"
 
 #if !XASH_GLES || !XASH_GL_STATIC
 static void GL_FreeRenderTarget( gl_rendertarget_t *target )
@@ -198,7 +199,11 @@ void GL_CheckRenderTargets( void )
 {
 	int width, height;
 	float scale = bound( 0.1f, r_scene_scale.value, 8.0f );
+#ifdef XASH_OPENXR
+	qboolean wanted = (scale != 1.0f) || XR_IsActive();
+#else
 	qboolean wanted = scale != 1.0f;
+#endif
 
 	GL_GetWindowSize( &width, &height );
 
@@ -306,7 +311,7 @@ static void GL_DrawTargetQuad( const gl_rendertarget_t *rt, int width, int heigh
 	pglTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
 }
 
-static void GL_BlitTarget( const gl_rendertarget_t *src, GLuint dst_fbo, int dst_width, int dst_height, GLenum filter )
+void GL_BlitTarget( const gl_rendertarget_t *src, GLuint dst_fbo, int dst_width, int dst_height, GLenum filter )
 {
 	pglBindFramebuffer( GL_READ_FRAMEBUFFER, src->fbo );
 	pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, dst_fbo );

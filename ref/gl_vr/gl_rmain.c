@@ -1458,6 +1458,60 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 	return;
 }
 
+#ifdef XASH_OPENXR
+/*
+===============
+R_RenderXRMenu
+
+Renders the 2D menu/console buffer into Eye 0 OpenXR swapchain
+and presents it as a floating Quad Layer in VR space.
+Inspired by Team Beef (Lambda1VR TBXR_submitFrame quad layer).
+===============
+*/
+static void R_RenderXRMenu( void )
+{
+	if( !XR_IsActive() )
+		return;
+
+	R_SetupXREyeFbos();
+
+	if( !XR_WaitFrame( NULL ) )
+		return;
+
+	if( !XR_BeginFrame() )
+		return;
+
+	XR_BeginEye( 0 );
+
+	uint32_t imgIdx = g_xrEyeSwapchains[0].currentImageIndex;
+	GLuint currentFbo = s_xrEyeFbos[0][imgIdx];
+
+	if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
+	{
+		GL_BlitTarget( &tr.targets.screen, currentFbo, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height, GL_LINEAR );
+	}
+	else
+	{
+		pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
+		pglViewport( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height );
+		pglClearColor( 0.05f, 0.05f, 0.05f, 1.0f );
+		pglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	}
+
+	// Harden alpha channel to 1.0f before presentation to prevent OpenXR TimeWarp compositor blending to black.
+	// Credit to Team Beef (Lambda1VR) for this battle-tested pattern.
+	pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
+	pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
+	pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+	pglClear( GL_COLOR_BUFFER_BIT );
+	pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+
+	XR_EndEye( 0 );
+
+	XR_EndMenuFrame();
+}
+#endif
+
 /*
 ===============
 R_EndFrame
@@ -1470,9 +1524,19 @@ void R_EndFrame( void )
 	{
 		if( !s_xrSceneRendered )
 		{
-			XR_RunMenuFrame();
+			R_RenderXRMenu();
 		}
 		s_xrSceneRendered = false;
+
+#if defined(__ANDROID__)
+		// In Android standalone VR (Meta Horizon OS), frames are submitted to OpenXR
+		// compositor swapchains via xrEndFrame. The Android window surface is detached
+		// in immersive VR mode; calling eglSwapBuffers/GL_SwapBuffers on it leads to
+		// "BufferQueue has been abandoned" dequeue failures and pipeline stalls.
+		// Pattern inspired by Team Beef (Lambda1VR android_nosdl.c).
+		R_Set2DMode( false );
+		return;
+#endif
 	}
 	else
 #endif

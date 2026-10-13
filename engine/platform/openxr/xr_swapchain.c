@@ -367,13 +367,66 @@ void XR_EndFrame( void )
     xrEndFrame(g_xrSession, &endInfo);
 }
 
+EXPORT void XR_EndMenuFrame( void )
+{
+    if (!g_xrSessionRunning || !g_xrSwapchainsReady) return;
+
+    if (!g_currentFrameState.shouldRender || !g_xrEyesAcquired)
+    {
+        XrFrameEndInfo endInfo = {0};
+        endInfo.type = XR_TYPE_FRAME_END_INFO;
+        endInfo.displayTime = g_currentFrameState.predictedDisplayTime;
+        endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+        endInfo.layerCount = 0;
+        endInfo.layers = NULL;
+
+        xrEndFrame(g_xrSession, &endInfo);
+        g_xrEyesAcquired = false;
+        return;
+    }
+
+    // Build quad layer displaying Eye 0 swapchain to both eyes in VR space.
+    // Floating comfortably 1.5m in front of the headset origin.
+    // Pattern inspired by Team Beef (Lambda1VR TBXR_submitFrame quad layer).
+    XrCompositionLayerQuad quadLayer = {0};
+    quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    quadLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    quadLayer.space = g_xrLocalSpace;
+    quadLayer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+    quadLayer.subImage.swapchain = g_xrEyeSwapchains[0].swapchain;
+    quadLayer.subImage.imageRect.offset.x = 0;
+    quadLayer.subImage.imageRect.offset.y = 0;
+    quadLayer.subImage.imageRect.extent.width = g_xrEyeSwapchains[0].width;
+    quadLayer.subImage.imageRect.extent.height = g_xrEyeSwapchains[0].height;
+    quadLayer.subImage.imageArrayIndex = 0;
+    quadLayer.pose.position.x = 0.0f;
+    quadLayer.pose.position.y = 0.0f;
+    quadLayer.pose.position.z = -1.5f;
+    quadLayer.pose.orientation.w = 1.0f;
+    quadLayer.size.width = 1.8f;
+    quadLayer.size.height = 1.8f * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
+
+    const XrCompositionLayerBaseHeader *layers[1];
+    layers[0] = (const XrCompositionLayerBaseHeader*)&quadLayer;
+
+    XrFrameEndInfo endInfo = {0};
+    endInfo.type = XR_TYPE_FRAME_END_INFO;
+    endInfo.displayTime = g_currentFrameState.predictedDisplayTime;
+    endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+    endInfo.layerCount = 1;
+    endInfo.layers = layers;
+
+    xrEndFrame(g_xrSession, &endInfo);
+    g_xrEyesAcquired = false;
+}
+
 EXPORT void XR_RunMenuFrame( void )
 {
     if (!g_xrSessionRunning) return;
 
     XR_WaitFrame( NULL );
     XR_BeginFrame();
-    XR_EndFrame();
+    XR_EndMenuFrame();
 }
 
 qboolean XR_IsQuadHudActive( void )

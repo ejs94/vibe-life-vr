@@ -40,6 +40,7 @@ EXPORT void XR_PollEvents( void );
 EXPORT void XR_SyncInputs( void );
 EXPORT qboolean XR_BeginFrame( void );
 EXPORT void XR_EndFrame( void );
+EXPORT void XR_EndMenuFrame( void );
 EXPORT void XR_RunMenuFrame( void );
 
 EXPORT void XR_GetHeadOrientation( vec3_t out_angles );
@@ -60,6 +61,7 @@ static inline void XR_PollEvents( void ) {}
 static inline void XR_SyncInputs( void ) {}
 static inline qboolean XR_BeginFrame( void ) { return false; }
 static inline void XR_EndFrame( void ) {}
+static inline void XR_EndMenuFrame( void ) {}
 static inline void XR_RunMenuFrame( void ) {}
 static inline void XR_GetHeadOrientation( vec3_t out_angles ) { if( out_angles ) VectorClear( out_angles ); }
 static inline void XR_GetEyePosition( int eye, vec3_t out_origin ) { if( out_origin ) VectorClear( out_origin ); }
