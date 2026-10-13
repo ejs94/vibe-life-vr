@@ -184,8 +184,8 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 
 		val finalArgs = "$vrArgs$commandLineArgs".trim()
 
-		ctx.startActivity(Intent(ctx, XashActivity::class.java).apply {
-			flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+		val intent = Intent(ctx, XashActivity::class.java).apply {
+			flags = Intent.FLAG_ACTIVITY_NEW_TASK
 
 			putExtra("gamedir", defaultGameDir)
 			putExtra("argv", finalArgs)
@@ -194,7 +194,9 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 
 			if (gameLibDir != null) putExtra("gamelibdir", gameLibDir)
 			if (packageName != null) putExtra("package", packageName)
-		})
+		}
+		ctx.startActivity(intent)
+		(ctx as? android.app.Activity)?.finish()
 	}
 
 	private fun parseGameInfo(file: File) {
