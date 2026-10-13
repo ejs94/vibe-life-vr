@@ -32,7 +32,7 @@ import java.io.File
 import android.widget.Toast
 
 
-class LibraryFragment : Fragment(), MenuProvider {
+class LibraryFragment : Fragment() {
 	private var _binding: FragmentLibraryBinding? = null
 	private val binding get() = _binding!!
 
@@ -136,9 +136,6 @@ class LibraryFragment : Fragment(), MenuProvider {
 
 		val adapter = GameAdapter(libraryViewModel)
 		binding.gamesList.adapter = adapter
-
-		requireActivity().addMenuProvider(this, viewLifecycleOwner, Lifecycle.State.RESUMED)
-
 		return binding.root
 	}
 
@@ -215,20 +212,6 @@ class LibraryFragment : Fragment(), MenuProvider {
 	override fun onDestroyView() {
 		super.onDestroyView()
 		_binding = null
-	}
-
-	override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-		menuInflater.inflate(R.menu.menu_library, menu)
-	}
-
-	override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-		when (menuItem.itemId) {
-			R.id.action_settings -> {
-				findNavController().navigate(R.id.action_libraryFragment_to_appSettingsFragment)
-			}
-		}
-
-		return false
 	}
 
 	override fun onResume() {

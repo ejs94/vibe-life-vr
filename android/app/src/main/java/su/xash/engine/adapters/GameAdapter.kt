@@ -54,12 +54,6 @@ class GameAdapter(private val libraryViewModel: LibraryViewModel) :
 					gameCover.visibility = View.GONE
 				}
 
-				settingsButton.setOnClickListener {
-					libraryViewModel.setSelectedGame(game)
-					it.findNavController()
-						.navigate(R.id.action_libraryFragment_to_gameSettingsFragment)
-				}
-
 				root.setOnClickListener { libraryViewModel.startEngine(it.context, game) }
 				launchButton.setOnClickListener {
 					libraryViewModel.startEngine(it.context, game)
