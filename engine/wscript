@@ -304,7 +304,7 @@ def build(bld):
 			if bld.env.DEST_OS == 'android':
 				linkflags += ['-L%s/3rdparty/openxr/libs/arm64-v8a' % bld.srcnode.abspath(), '-lopenxr_loader', '-lEGL']
 			else:
-				linkflags += ['-lopenxr_loader']
+				linkflags += ['-lopenxr_loader', '-lGL', '-lX11']
 
 		if bld.env.DEST_OS == 'emscripten':
 			linkflags = ['-sINITIAL_MEMORY=134217728', '-sALLOW_MEMORY_GROWTH=1', '-sSTACK_SIZE=16777216']

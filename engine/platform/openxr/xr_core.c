@@ -21,6 +21,7 @@ XrInstance g_xrInstance = XR_NULL_HANDLE;
 XrSystemId g_xrSystemId = XR_NULL_SYSTEM_ID;
 XrSession g_xrSession = XR_NULL_HANDLE;
 XrSpace g_xrLocalSpace = XR_NULL_HANDLE;
+XrSpace g_xrViewSpace = XR_NULL_HANDLE;
 XrSessionState g_xrSessionState = XR_SESSION_STATE_UNKNOWN;
 qboolean g_xrSessionRunning = false;
 
@@ -352,6 +353,23 @@ qboolean XR_CreateSession( void )
         Con_Printf("OpenXR: Local Reference Space created successfully!\n");
     }
 
+    // Issue #2: Create VIEW reference space (Headset-relative space).
+    // An identity pose in VIEW space represents looking directly forward from the headset display/eyes.
+    // Quad layers placed in this space (e.g. z = -1.5m) comfortably float directly in front of the player's
+    // field of view, regardless of room floor calibration (STAGE) or sitting position.
+    XrReferenceSpaceCreateInfo viewSpaceInfo = {0};
+    viewSpaceInfo.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
+    viewSpaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
+    viewSpaceInfo.poseInReferenceSpace.orientation.w = 1.0f;
+    if (XR_SUCCEEDED(xrCreateReferenceSpace(g_xrSession, &viewSpaceInfo, &g_xrViewSpace)))
+    {
+        Con_Printf("OpenXR: View Reference Space (Head-relative) created successfully!\n");
+    }
+    else
+    {
+        Con_Printf("OpenXR: Failed to create View space, will fallback to Local/Stage space.\n");
+    }
+
     XR_InitInput();
 
     // Create swapchains right away while graphics context is guaranteed active and current
@@ -373,6 +391,10 @@ void XR_Shutdown( void )
     if (g_xrLocalSpace != XR_NULL_HANDLE) {
         xrDestroySpace(g_xrLocalSpace);
         g_xrLocalSpace = XR_NULL_HANDLE;
+    }
+    if (g_xrViewSpace != XR_NULL_HANDLE) {
+        xrDestroySpace(g_xrViewSpace);
+        g_xrViewSpace = XR_NULL_HANDLE;
     }
     if (g_xrSession != XR_NULL_HANDLE) {
         if (g_xrSessionRunning) {

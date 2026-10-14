@@ -893,7 +893,16 @@ static void GL_InitExtensionsGLES( void )
 			else
 				GL_SetExtension( extid, false );
 			break;
-
+#else
+		case GL_FRAMEBUFFER_OBJECT_EXT:
+			GL_SetExtension( extid, true );
+			break;
+		case GL_FRAMEBUFFER_BLIT_EXT:
+			GL_SetExtension( extid, true );
+			break;
+		case GL_FRAMEBUFFER_MULTISAMPLE_EXT:
+			GL_SetExtension( extid, false );
+			break;
 #endif
 		case GL_DEBUG_OUTPUT:
 			if( glw_state.extended )
@@ -1020,6 +1029,9 @@ static void GL_InitExtensionsBigGL( void )
 	GL_CheckExtension( "GL_ARB_buffer_storage", bufferstoragefuncs, ARRAYSIZE( bufferstoragefuncs ), "gl_buffer_storage", GL_BUFFER_STORAGE_EXT, 4.4);
 	GL_CheckExtension( "GL_ARB_map_buffer_range", mapbufferrangefuncs, ARRAYSIZE( mapbufferrangefuncs ), "gl_map_buffer_range", GL_MAP_BUFFER_RANGE_EXT , 3.0);
 	GL_CheckExtension( "GL_ARB_draw_elements_base_vertex", drawrangeelementsbasevertexfuncs, ARRAYSIZE( drawrangeelementsbasevertexfuncs ), "gl_drawrangeelementsbasevertex", GL_DRAW_RANGE_ELEMENTS_BASE_VERTEX_EXT, 3.2 );
+#endif
+#if !XASH_GL_STATIC
+	// Dynamic build: resolve FBO functions dynamically
 	if( GL_CheckExtension( "GL_ARB_framebuffer_object", framebufferarbfuncs, ARRAYSIZE( framebufferarbfuncs ), "gl_framebuffer_object", GL_FRAMEBUFFER_OBJECT_EXT, 3.0 ))
 	{
 		GL_SetExtension( GL_FRAMEBUFFER_BLIT_EXT, true );
@@ -1031,6 +1043,10 @@ static void GL_InitExtensionsBigGL( void )
 		GL_CheckExtension( "GL_EXT_framebuffer_blit", framebufferblitfuncs, ARRAYSIZE( framebufferblitfuncs ), "gl_framebuffer_object", GL_FRAMEBUFFER_BLIT_EXT, 0 );
 		GL_CheckExtension( "GL_EXT_framebuffer_multisample", framebuffermultisamplefuncs, ARRAYSIZE( framebuffermultisamplefuncs ), "gl_framebuffer_object", GL_FRAMEBUFFER_MULTISAMPLE_EXT, 0 );
 	}
+#else
+	// Static build (GL4ES / Android Meta Quest): FBO and BlitFramebuffer are natively linked
+	GL_SetExtension( GL_FRAMEBUFFER_OBJECT_EXT, true );
+	GL_SetExtension( GL_FRAMEBUFFER_BLIT_EXT, true );
 #endif
 	if( GL_CheckExtension( "GL_ARB_shading_language_100", NULL, 0, NULL, GL_SHADER_GLSL100_EXT, 2.0 ))
 	{

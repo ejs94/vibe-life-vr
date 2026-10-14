@@ -81,13 +81,79 @@ qboolean XR_InitGraphics( void )
     GLXContext glxContext = (GLXContext)glw_state.context;
     GLXDrawable glxDrawable = (GLXDrawable)wmInfo.info.x11.window;
 
+    GLXContext curCtx = glXGetCurrentContext();
+    GLXDrawable curDraw = glXGetCurrentDrawable();
+    Display *curDpy = glXGetCurrentDisplay();
+
+    Con_Printf("XR_InitGraphics: wmInfo dpy=%p win=%lx; current dpy=%p ctx=%p draw=%lx (glw ctx=%p)\n",
+        (void*)xDisplay, (unsigned long)glxDrawable, (void*)curDpy, (void*)curCtx, (unsigned long)curDraw, (void*)glxContext);
+
+    if (curCtx) glxContext = curCtx;
+    if (curDraw) glxDrawable = curDraw;
+    if (curDpy) xDisplay = curDpy;
+
     memset(&g_graphicsBindingGLX, 0, sizeof(g_graphicsBindingGLX));
     g_graphicsBindingGLX.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR;
     g_graphicsBindingGLX.xDisplay = xDisplay;
     g_graphicsBindingGLX.glxContext = glxContext;
     g_graphicsBindingGLX.glxDrawable = glxDrawable;
 
-    Con_Printf("XR_InitGraphics: OpenGL Xlib PCVR Graphics Binding initialized successfully!\n");
+    // Issue #6: OpenXR Xlib binding strictly requires valid glxFBConfig and visualid
+    int fbconfig_id = 0;
+    int screen = DefaultScreen(xDisplay);
+    glXQueryContext(xDisplay, glxContext, GLX_SCREEN, &screen);
+    if (glXQueryContext(xDisplay, glxContext, GLX_FBCONFIG_ID, &fbconfig_id) == 0 && fbconfig_id > 0)
+    {
+        int attribs[] = {
+            GLX_FBCONFIG_ID, fbconfig_id,
+            None
+        };
+        int nconfigs = 0;
+        GLXFBConfig *configs = glXChooseFBConfig(xDisplay, screen, attribs, &nconfigs);
+        if (configs && nconfigs > 0)
+        {
+            g_graphicsBindingGLX.glxFBConfig = configs[0];
+            int vid = 0;
+            glXGetFBConfigAttrib(xDisplay, configs[0], GLX_VISUAL_ID, &vid);
+            g_graphicsBindingGLX.visualid = (uint32_t)vid;
+            XFree(configs);
+        }
+    }
+
+    if (!g_graphicsBindingGLX.glxFBConfig)
+    {
+        int fb_attribs[] = {
+            GLX_RENDER_TYPE, GLX_RGBA_BIT,
+            GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+            GLX_DOUBLEBUFFER, True,
+            GLX_RED_SIZE, 8,
+            GLX_GREEN_SIZE, 8,
+            GLX_BLUE_SIZE, 8,
+            None
+        };
+        int nconfigs = 0;
+        GLXFBConfig *configs = glXChooseFBConfig(xDisplay, screen, fb_attribs, &nconfigs);
+        if (configs && nconfigs > 0)
+        {
+            g_graphicsBindingGLX.glxFBConfig = configs[0];
+            int vid = 0;
+            glXGetFBConfigAttrib(xDisplay, configs[0], GLX_VISUAL_ID, &vid);
+            g_graphicsBindingGLX.visualid = (uint32_t)vid;
+            XFree(configs);
+        }
+    }
+
+    if (g_graphicsBindingGLX.visualid == 0)
+    {
+        XWindowAttributes winAttr;
+        if (XGetWindowAttributes(xDisplay, (Window)glxDrawable, &winAttr) && winAttr.visual)
+        {
+            g_graphicsBindingGLX.visualid = (uint32_t)XVisualIDFromVisual(winAttr.visual);
+        }
+    }
+
+    Con_Printf("XR_InitGraphics: OpenGL Xlib PCVR Graphics Binding initialized (fbConfig=%p, visualid=0x%x)\n",
+        (void*)g_graphicsBindingGLX.glxFBConfig, g_graphicsBindingGLX.visualid);
     return true;
 #else
     XrResult res = xrGetInstanceProcAddr(

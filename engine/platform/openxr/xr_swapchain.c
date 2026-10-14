@@ -12,6 +12,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <GL/glx.h>
+#include <GL/gl.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #else
@@ -66,11 +67,7 @@ qboolean XR_CreateSwapchains( void )
     int64_t selectedFormat = formats[0]; // fallback
     for (uint32_t i = 0; i < formatCount; i++)
     {
-#if !defined(__ANDROID__)
-        if (formats[i] == GL_RGBA8 || formats[i] == GL_SRGB8_ALPHA8_EXT)
-#else
         if (formats[i] == GL_RGBA8)
-#endif
         {
             selectedFormat = formats[i];
             break;
@@ -99,12 +96,12 @@ qboolean XR_CreateSwapchains( void )
     // 3. Create swapchain for each eye
     for (int eye = 0; eye < 2; eye++)
     {
-        g_xrEyeSwapchains[eye].width = configViews[eye].recommendedImageRectWidth;
-        g_xrEyeSwapchains[eye].height = configViews[eye].recommendedImageRectHeight;
+        g_xrEyeSwapchains[eye].width = (configViews[eye].recommendedImageRectWidth + 3) & ~3;
+        g_xrEyeSwapchains[eye].height = (configViews[eye].recommendedImageRectHeight + 3) & ~3;
 
         XrSwapchainCreateInfo createInfo = {0};
         createInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-        createInfo.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT;
+        createInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
         createInfo.format = selectedFormat;
         createInfo.sampleCount = 1;
         createInfo.width = g_xrEyeSwapchains[eye].width;
@@ -112,6 +109,9 @@ qboolean XR_CreateSwapchains( void )
         createInfo.faceCount = 1;
         createInfo.arraySize = 1;
         createInfo.mipCount = 1;
+
+        Con_Printf("XR_CreateSwapchains: Eye %d createInfo: w=%u h=%u format=0x%llx usage=0x%llx\n",
+            eye, createInfo.width, createInfo.height, (unsigned long long)createInfo.format, (unsigned long long)createInfo.usageFlags);
 
         XrResult res = xrCreateSwapchain(g_xrSession, &createInfo, &g_xrEyeSwapchains[eye].swapchain);
         if (XR_FAILED(res))
@@ -265,6 +265,21 @@ void XR_EndEye( int eye )
 {
     if (!g_xrSessionRunning || !g_xrSwapchainsReady || eye < 0 || eye > 1) return;
 
+    // Issue #4: Khronos OpenXR Specification §10.3 requires all graphics commands
+    // affecting the swapchain image to be committed before calling xrReleaseSwapchainImage.
+    // In asynchronous GL/GLES drivers (e.g. GL4ES on Quest), glFlush() ensures commands
+    // are dispatched to the GPU immediately.
+    typedef void (*pfn_glFlush_t)(void);
+    static pfn_glFlush_t s_glFlush = NULL;
+    static qboolean s_glFlushResolved = false;
+    if( !s_glFlushResolved )
+    {
+        s_glFlush = (pfn_glFlush_t)GL_GetProcAddress("glFlush");
+        s_glFlushResolved = true;
+    }
+    if( s_glFlush )
+        s_glFlush();
+
     XrSwapchainImageReleaseInfo releaseInfo = {0};
     releaseInfo.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
 
@@ -333,7 +348,7 @@ void XR_EndFrame( void )
     XrCompositionLayerQuad quadLayer = {0};
     quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     quadLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    quadLayer.space = g_xrLocalSpace;
+    quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
     quadLayer.subImage.swapchain = g_xrEyeSwapchains[0].swapchain;
     quadLayer.subImage.imageRect.offset.x = 0;
     quadLayer.subImage.imageRect.offset.y = 0;
@@ -386,12 +401,12 @@ EXPORT void XR_EndMenuFrame( void )
     }
 
     // Build quad layer displaying Eye 0 swapchain to both eyes in VR space.
-    // Floating comfortably 1.5m in front of the headset origin.
+    // Floating comfortably 1.5m in front of the headset origin in VIEW space (Issue #2).
     // Pattern inspired by Team Beef (Lambda1VR TBXR_submitFrame quad layer).
     XrCompositionLayerQuad quadLayer = {0};
     quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     quadLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    quadLayer.space = g_xrLocalSpace;
+    quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
     quadLayer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
     quadLayer.subImage.swapchain = g_xrEyeSwapchains[0].swapchain;
     quadLayer.subImage.imageRect.offset.x = 0;

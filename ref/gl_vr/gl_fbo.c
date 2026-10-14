@@ -318,6 +318,52 @@ void GL_BlitTarget( const gl_rendertarget_t *src, GLuint dst_fbo, int dst_width,
 	pglBlitFramebuffer( 0, 0, src->width, src->height, 0, 0, dst_width, dst_height, GL_COLOR_BUFFER_BIT, filter );
 }
 
+void GL_BlendTargetQuad( const gl_rendertarget_t *rt, int width, int height, GLenum filter )
+{
+	matrix4x4 m;
+
+	if( !rt->texnum )
+		return;
+
+	pglViewport( 0, 0, width, height );
+	Matrix4x4_CreateOrtho( m, 0, width, height, 0, -99999, 99999 );
+	pglMatrixMode( GL_PROJECTION );
+	GL_LoadMatrix( m );
+
+	Matrix4x4_LoadIdentity( m );
+	pglMatrixMode( GL_MODELVIEW );
+	GL_LoadMatrix( m );
+
+	GL_Cull( GL_NONE );
+	pglDisable( GL_DEPTH_TEST );
+	pglDepthMask( GL_FALSE );
+	pglEnable( GL_BLEND );
+	pglBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	pglDisable( GL_ALPHA_TEST );
+	pglDisable( GL_FOG );
+	pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+
+	GL_Bind( XASH_TEXTURE0, rt->texnum );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter );
+	pglTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
+
+	pglBegin( GL_QUADS );
+		pglTexCoord2f( 0.0f, 1.0f );
+		pglVertex2f( 0.0f, 0.0f );
+		pglTexCoord2f( 1.0f, 1.0f );
+		pglVertex2f( width, 0.0f );
+		pglTexCoord2f( 1.0f, 0.0f );
+		pglVertex2f( width, height );
+		pglTexCoord2f( 0.0f, 0.0f );
+		pglVertex2f( 0.0f, height );
+	pglEnd();
+
+	pglDisable( GL_BLEND );
+	pglEnable( GL_DEPTH_TEST );
+	pglDepthMask( GL_TRUE );
+}
+
 /*
 ================
 GL_BindSceneTarget

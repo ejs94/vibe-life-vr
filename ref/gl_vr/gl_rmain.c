@@ -348,18 +348,98 @@ static float R_GetFarClip( void )
 }
 
 /*
+=============
+R_ComputeEyeTransform
+
+Computes the 6DoF world-space origin and viewangles for the active eye.
+=============
+*/
+static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
+{
+	VectorCopy( RI.rvp.vieworigin, outOrigin );
+	VectorCopy( RI.rvp.viewangles, outAngles );
+
+#ifdef XASH_OPENXR
+	if( eye >= 0 && XR_IsActive() )
+	{
+		float worldscale = gl_vr_worldscale ? gl_vr_worldscale->value : 40.0f;
+		static float s_standingEyeHeight = 1.65f;
+		static qboolean s_heightCalibrated = false;
+		static cvar_t *gl_vr_height_adjust = NULL;
+
+		if( !gl_vr_height_adjust )
+			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
+
+		// Issue #3: Protect standing height with default 1.65m fallback to prevent
+		// head colliding into low-ceiling brushes (e.g. tram in c1a0) on initial frames
+		if( !s_heightCalibrated && g_xrViews[0].pose.position.y > 0.5f )
+		{
+			s_standingEyeHeight = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
+			s_heightCalibrated = true;
+		}
+
+		float turn_yaw = XR_GetPlayerTurnYaw();
+		float yaw_rad = DEG2RAD( turn_yaw );
+		float cy = cosf( yaw_rad );
+		float sy = sinf( yaw_rad );
+
+		// OpenXR LOCAL room coordinates: +X = Right, +Y = Up, -Z = Forward
+		float room_forward = -g_xrViews[eye].pose.position.z;
+		float room_right   =  g_xrViews[eye].pose.position.x;
+		float room_up      =  (g_xrViews[eye].pose.position.y - s_standingEyeHeight);
+
+		if( gl_vr_height_adjust )
+			room_up += gl_vr_height_adjust->value / worldscale;
+
+		// Rotate room displacement by player in-game locomotion turning yaw:
+		// GoldSrc world coordinates: +X = East (Forward at yaw 0), +Y = North (Left at yaw 0), +Z = Up
+		float world_dx = (room_forward * cy + room_right * sy) * worldscale;
+		float world_dy = (room_forward * sy - room_right * cy) * worldscale;
+		float world_dz = room_up * worldscale;
+
+		outOrigin[0] += world_dx;
+		outOrigin[1] += world_dy;
+		outOrigin[2] += world_dz;
+
+		// Extract exact per-eye orientation
+		vec3_t eyeAngles;
+		XR_QuatToEuler( &g_xrViews[eye].pose.orientation, eyeAngles );
+		outAngles[0] = eyeAngles[0];
+		outAngles[1] = anglemod( eyeAngles[1] + turn_yaw );
+		outAngles[2] = eyeAngles[2];
+	}
+	else
+#endif
+	if( eye >= 0 && vr_ipd )
+	{
+		vec3_t forward, right, up;
+		AngleVectors( RI.rvp.viewangles, forward, right, up );
+
+		float worldscale = gl_vr_worldscale ? gl_vr_worldscale->value : 40.0f;
+		float ipd = vr_ipd->value;
+		float offset = (ipd / 2.0f) * worldscale;
+		float offsetX = (eye == 0) ? -offset : offset;
+
+		VectorMA( outOrigin, offsetX, right, outOrigin );
+	}
+}
+
+/*
 ===============
 R_SetupFrustum
 ===============
 */
 void R_SetupFrustum( void )
 {
-	// build the transformation matrix for the given view angles
-	AngleVectors( RI.rvp.viewangles, RI.vforward, RI.vright, RI.vup );
+	vec3_t eyeOrigin, eyeAngles;
+	R_ComputeEyeTransform( g_vr_eye, eyeOrigin, eyeAngles );
+
+	// build the transformation vectors for the active eye angles
+	AngleVectors( eyeAngles, RI.vforward, RI.vright, RI.vup );
 
 	if( !r_lockfrustum.value )
 	{
-		VectorCopy( RI.rvp.vieworigin, RI.cullorigin );
+		VectorCopy( eyeOrigin, RI.cullorigin );
 		VectorCopy( RI.vforward, RI.cull_vforward );
 		VectorCopy( RI.vright, RI.cull_vright );
 		VectorCopy( RI.vup, RI.cull_vup );
@@ -370,6 +450,17 @@ void R_SetupFrustum( void )
 		const ref_overview_t	*ov = gEngfuncs.GetOverviewParms();
 		GL_FrustumInitOrtho( &RI.frustum, ov->xLeft, ov->xRight, ov->yTop, ov->yBottom, ov->zNear, ov->zFar );
 	}
+#ifdef XASH_OPENXR
+	else if( g_vr_eye >= 0 && XR_IsActive() )
+	{
+		float leftAngle = g_xrViews[g_vr_eye].fov.angleLeft;
+		float rightAngle = g_xrViews[g_vr_eye].fov.angleRight;
+		float downAngle = g_xrViews[g_vr_eye].fov.angleDown;
+		float upAngle = g_xrViews[g_vr_eye].fov.angleUp;
+
+		GL_FrustumInitVR( &RI.frustum, 0.0f, R_GetFarClip(), leftAngle, rightAngle, downAngle, upAngle );
+	}
+#endif
 	else
 	{
 		GL_FrustumInitProj( &RI.frustum, 0.0f, R_GetFarClip(), RI.rvp.fov_x, RI.rvp.fov_y ); // NOTE: we ignore nearplane here (mirrors only)
@@ -433,68 +524,7 @@ static void R_SetupModelviewMatrix( matrix4x4 m )
 {
 	vec3_t eyeOrigin;
 	vec3_t viewangles;
-	VectorCopy( RI.rvp.vieworigin, eyeOrigin );
-	VectorCopy( RI.rvp.viewangles, viewangles );
-
-#ifdef XASH_OPENXR
-	if( g_vr_eye >= 0 && XR_IsActive() )
-	{
-		float worldscale = gl_vr_worldscale ? gl_vr_worldscale->value : 40.0f;
-		static float s_standingEyeHeight = 0.0f;
-		static cvar_t *gl_vr_height_adjust = NULL;
-
-		if( !gl_vr_height_adjust )
-			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
-
-		if( s_standingEyeHeight <= 0.0f && g_xrViews[0].pose.position.y > 0.5f )
-		{
-			s_standingEyeHeight = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
-		}
-
-		float turn_yaw = XR_GetPlayerTurnYaw();
-		float yaw_rad = DEG2RAD( turn_yaw );
-		float cy = cosf( yaw_rad );
-		float sy = sinf( yaw_rad );
-
-		// OpenXR LOCAL room coordinates: +X = Right, +Y = Up, -Z = Forward
-		float room_forward = -g_xrViews[g_vr_eye].pose.position.z;
-		float room_right   =  g_xrViews[g_vr_eye].pose.position.x;
-		float room_up      =  (g_xrViews[g_vr_eye].pose.position.y - s_standingEyeHeight);
-
-		if( gl_vr_height_adjust )
-			room_up += gl_vr_height_adjust->value / worldscale;
-
-		// Rotate room displacement by player in-game locomotion turning yaw:
-		// GoldSrc world coordinates: +X = East (Forward at yaw 0), +Y = North (Left at yaw 0), +Z = Up
-		float world_dx = (room_forward * cy + room_right * sy) * worldscale;
-		float world_dy = (room_forward * sy - room_right * cy) * worldscale;
-		float world_dz = room_up * worldscale;
-
-		eyeOrigin[0] += world_dx;
-		eyeOrigin[1] += world_dy;
-		eyeOrigin[2] += world_dz;
-
-		// Extract exact per-eye orientation
-		vec3_t eyeAngles;
-		XR_QuatToEuler( &g_xrViews[g_vr_eye].pose.orientation, eyeAngles );
-		viewangles[0] = eyeAngles[0];
-		viewangles[1] = anglemod( eyeAngles[1] + turn_yaw );
-		viewangles[2] = eyeAngles[2];
-	}
-	else
-#endif
-	if( g_vr_eye >= 0 && vr_ipd )
-	{
-		vec3_t forward, right, up;
-		AngleVectors( RI.rvp.viewangles, forward, right, up );
-
-		float worldscale = gl_vr_worldscale ? gl_vr_worldscale->value : 40.0f;
-		float ipd = vr_ipd->value;
-		float offset = (ipd / 2.0f) * worldscale;
-		float offsetX = (g_vr_eye == 0) ? -offset : offset;
-
-		VectorMA( eyeOrigin, offsetX, right, eyeOrigin );
-	}
+	R_ComputeEyeTransform( g_vr_eye, eyeOrigin, viewangles );
 
 	Matrix4x4_CreateModelview( m );
 	if( tr.rotation & 1 )
@@ -590,7 +620,7 @@ R_FindViewLeaf
 void R_FindViewLeaf( void )
 {
 	RI.oldviewleaf = RI.viewleaf;
-	RI.viewleaf = gEngfuncs.Mod_PointInLeaf( RI.rvp.vieworigin, WORLDMODEL->nodes, WORLDMODEL );
+	RI.viewleaf = gEngfuncs.Mod_PointInLeaf( RI.cullorigin, WORLDMODEL->nodes, WORLDMODEL );
 }
 
 /*
@@ -601,7 +631,7 @@ R_SetupFrame
 static void R_SetupFrame( void )
 {
 	// setup viewplane dist
-	RI.viewplanedist = DotProduct( RI.rvp.vieworigin, RI.vforward );
+	RI.viewplanedist = DotProduct( RI.cullorigin, RI.vforward );
 
 	// NOTE: this request is the fps-killer on some NVidia drivers
 	glState.isFogEnabled = pglIsEnabled( GL_FOG );
@@ -1369,8 +1399,6 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 		int orig_y = RI.rvp.viewport[1];
 		int orig_w = RI.rvp.viewport[2];
 		int orig_h = RI.rvp.viewport[3];
-		GLuint leftEyeFbo = 0;
-
 		for (int eye = 0; eye < 2; eye++) {
 			g_vr_eye = eye;
 			XR_BeginEye( eye );
@@ -1378,8 +1406,6 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 #ifdef XASH_OPENXR
 			uint32_t imgIdx = g_xrEyeSwapchains[eye].currentImageIndex;
 			GLuint currentFbo = s_xrEyeFbos[eye][imgIdx];
-			if( eye == 0 )
-				leftEyeFbo = currentFbo;
 
 			pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
 			pglViewport( 0, 0, g_xrEyeSwapchains[eye].width, g_xrEyeSwapchains[eye].height );
@@ -1394,32 +1420,9 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 
 			R_RenderScene();
 
-#ifdef XASH_OPENXR
-			// Harden swapchain alpha channel to 1.0f before presentation.
-			// Legacy GoldSrc passes write alpha=0.0 across opaque surfaces;
-			// forcing alpha=1.0 prevents the OpenXR TimeWarp compositor from blending to black.
-			// Credit to Team Beef (Lambda1VR) for this battle-tested pattern.
-			pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
-			pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
-			pglClear( GL_COLOR_BUFFER_BIT );
-			pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
-#endif
-
-			XR_EndEye( eye );
+			// We keep the eye swapchain open so that R_EndFrame() can blend
+			// the 2D HUD (drawn by V_PostRender) onto both eyes before XR_EndEye!
 		}
-
-#if defined(XASH_OPENXR) && !defined(__ANDROID__)
-		// Mirror left eye to desktop PC window
-		if( leftEyeFbo )
-		{
-			pglBindFramebuffer( GL_READ_FRAMEBUFFER, leftEyeFbo );
-			pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
-			pglBlitFramebuffer( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height,
-			                    0, 0, orig_w, orig_h,
-			                    GL_COLOR_BUFFER_BIT, GL_LINEAR );
-			pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
-		}
-#endif
 
 		RI.rvp.viewport[0] = orig_x;
 		RI.rvp.viewport[1] = orig_y;
@@ -1427,7 +1430,22 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 		RI.rvp.viewport[3] = orig_h;
 		g_vr_eye = -1;
 
-		XR_EndFrame();
+		// Clear screen target FBO to transparent (0,0,0,0) so that 2D HUD elements
+		// drawn in V_PostRender() start with a clean transparent backdrop
+		if( !GL_RenderTargetsActive() || !tr.targets.screen.fbo )
+		{
+			GL_CheckRenderTargets();
+		}
+
+		if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
+		{
+			pglBindFramebuffer( GL_FRAMEBUFFER, tr.targets.screen.fbo );
+			pglViewport( 0, 0, tr.targets.screen.width, tr.targets.screen.height );
+			pglClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
+			pglClear( GL_COLOR_BUFFER_BIT );
+			pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+		}
+
 		s_xrSceneRendered = true;
 	}
 	else if( vr_fake_stereo && vr_fake_stereo->value > 0.0f ) {
@@ -1486,12 +1504,23 @@ static void R_RenderXRMenu( void )
 	uint32_t imgIdx = g_xrEyeSwapchains[0].currentImageIndex;
 	GLuint currentFbo = s_xrEyeFbos[0][imgIdx];
 
+	if( !GL_RenderTargetsActive() || !tr.targets.screen.fbo )
+	{
+		GL_CheckRenderTargets();
+	}
+
 	if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
 	{
 		GL_BlitTarget( &tr.targets.screen, currentFbo, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height, GL_LINEAR );
 	}
 	else
 	{
+		static qboolean s_warnedFbo = false;
+		if( !s_warnedFbo )
+		{
+			gEngfuncs.Con_Printf( S_WARN "R_RenderXRMenu: screen target FBO not active (fbo=%u), falling back to clear\n", tr.targets.screen.fbo );
+			s_warnedFbo = true;
+		}
 		pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
 		pglViewport( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height );
 		pglClearColor( 0.05f, 0.05f, 0.05f, 1.0f );
@@ -1505,6 +1534,7 @@ static void R_RenderXRMenu( void )
 	pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
 	pglClear( GL_COLOR_BUFFER_BIT );
 	pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+	pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
 
 	XR_EndEye( 0 );
 
@@ -1522,7 +1552,56 @@ void R_EndFrame( void )
 #ifdef XASH_OPENXR
 	if( XR_IsActive() )
 	{
-		if( !s_xrSceneRendered )
+		if( s_xrSceneRendered )
+		{
+			// Issue #5: Composite the 2D HUD (rendered into tr.targets.screen by V_PostRender)
+			// onto both eye swapchains with alpha blending before closing the OpenXR frame.
+			if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
+			{
+				for( int eye = 0; eye < 2; eye++ )
+				{
+					uint32_t imgIdx = g_xrEyeSwapchains[eye].currentImageIndex;
+					GLuint currentFbo = s_xrEyeFbos[eye][imgIdx];
+
+					pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
+					GL_BlendTargetQuad( &tr.targets.screen, g_xrEyeSwapchains[eye].width, g_xrEyeSwapchains[eye].height, GL_LINEAR );
+
+					// Harden swapchain alpha channel to 1.0f before presentation.
+					pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
+					pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+					pglClear( GL_COLOR_BUFFER_BIT );
+					pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+					pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+					XR_EndEye( eye );
+				}
+			}
+			else
+			{
+				for( int eye = 0; eye < 2; eye++ )
+				{
+					XR_EndEye( eye );
+				}
+			}
+
+#if !defined(__ANDROID__)
+			// Mirror left eye to desktop PC window
+			uint32_t imgIdx0 = g_xrEyeSwapchains[0].currentImageIndex;
+			GLuint leftEyeFbo = s_xrEyeFbos[0][imgIdx0];
+			if( leftEyeFbo )
+			{
+				pglBindFramebuffer( GL_READ_FRAMEBUFFER, leftEyeFbo );
+				pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
+				pglBlitFramebuffer( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height,
+				                    0, 0, gpGlobals->width, gpGlobals->height,
+				                    GL_COLOR_BUFFER_BIT, GL_LINEAR );
+				pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+			}
+#endif
+
+			XR_EndFrame();
+		}
+		else
 		{
 			R_RenderXRMenu();
 		}

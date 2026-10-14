@@ -70,6 +70,45 @@ void GL_FrustumInitProj( gl_frustum_t *out, float flZNear, float flZFar, float f
 	GL_FrustumSetPlane( out, FRUSTUM_NEAR, RI.cull_vforward, DotProduct( RI.cull_vforward, nearpoint ));
 }
 
+void GL_FrustumInitVR( gl_frustum_t *out, float flZNear, float flZFar, float angleLeft, float angleRight, float angleDown, float angleUp )
+{
+	vec3_t normal, iforward;
+	float theta_l = fabsf( angleLeft );
+	float theta_r = fabsf( angleRight );
+	float theta_d = fabsf( angleDown );
+	float theta_u = fabsf( angleUp );
+
+	// setup left plane (angleLeft is negative, rotated towards -RI.cull_vright)
+	VectorMAM( sinf( theta_l ), RI.cull_vforward, -cosf( theta_l ), RI.cull_vright, normal );
+	GL_FrustumSetPlane( out, FRUSTUM_LEFT, normal, DotProduct( RI.cullorigin, normal ));
+
+	// setup right plane (angleRight is positive, rotated towards +RI.cull_vright)
+	VectorMAM( sinf( theta_r ), RI.cull_vforward, cosf( theta_r ), RI.cull_vright, normal );
+	GL_FrustumSetPlane( out, FRUSTUM_RIGHT, normal, DotProduct( RI.cullorigin, normal ));
+
+	// setup bottom plane (angleDown is negative, rotated towards -RI.cull_vup)
+	VectorMAM( sinf( theta_d ), RI.cull_vforward, -cosf( theta_d ), RI.cull_vup, normal );
+	GL_FrustumSetPlane( out, FRUSTUM_BOTTOM, normal, DotProduct( RI.cullorigin, normal ));
+
+	// setup top plane (angleUp is positive, rotated towards +RI.cull_vup)
+	VectorMAM( sinf( theta_u ), RI.cull_vforward, cosf( theta_u ), RI.cull_vup, normal );
+	GL_FrustumSetPlane( out, FRUSTUM_TOP, normal, DotProduct( RI.cullorigin, normal ));
+
+	// setup far plane
+	vec3_t farpoint;
+	VectorNegate( RI.cull_vforward, iforward );
+	VectorMA( RI.cullorigin, flZFar, RI.cull_vforward, farpoint );
+	GL_FrustumSetPlane( out, FRUSTUM_FAR, iforward, DotProduct( iforward, farpoint ));
+
+	// setup near plane
+	if( flZNear > 0.0f )
+	{
+		vec3_t nearpoint;
+		VectorMA( RI.cullorigin, flZNear, RI.cull_vforward, nearpoint );
+		GL_FrustumSetPlane( out, FRUSTUM_NEAR, RI.cull_vforward, DotProduct( RI.cull_vforward, nearpoint ));
+	}
+}
+
 void GL_FrustumInitOrtho( gl_frustum_t *out, float xLeft, float xRight, float yTop, float yBottom, float flZNear, float flZFar )
 {
 	// setup the near and far planes

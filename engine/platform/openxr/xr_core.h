@@ -13,6 +13,7 @@ extern XrInstance g_xrInstance;
 extern XrSystemId g_xrSystemId;
 extern XrSession g_xrSession;
 extern XrSpace g_xrLocalSpace;
+extern XrSpace g_xrViewSpace;
 extern XrSessionState g_xrSessionState;
 extern qboolean g_xrSessionRunning;
 

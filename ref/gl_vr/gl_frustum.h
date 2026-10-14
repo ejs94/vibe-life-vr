@@ -33,6 +33,7 @@ typedef struct gl_frustum_s
 
 void GL_FrustumInitProj( gl_frustum_t *out, float flZNear, float flZFar, float flFovX, float flFovY );
 void GL_FrustumInitOrtho( gl_frustum_t *out, float xLeft, float xRight, float yTop, float yBottom, float flZNear, float flZFar );
+void GL_FrustumInitVR( gl_frustum_t *out, float flZNear, float flZFar, float angleLeft, float angleRight, float angleDown, float angleUp );
 
 // cull methods
 qboolean GL_FrustumCullBox( const gl_frustum_t *out, const vec3_t mins, const vec3_t maxs, int userClipFlags );
