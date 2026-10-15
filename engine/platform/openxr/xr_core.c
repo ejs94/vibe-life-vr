@@ -39,6 +39,27 @@ EXPORT convar_t *vr_haptics_intensity = NULL;
 EXPORT convar_t *vr_pointer_hud = NULL;
 static XrDebugUtilsMessengerEXT g_xrDebugMessenger = XR_NULL_HANDLE;
 
+static qboolean s_cvarsRegistered = false;
+
+void XR_RegisterCVars( void )
+{
+    if (s_cvarsRegistered) return;
+    s_cvarsRegistered = true;
+
+    vr_smoothturn = Cvar_Get("vr_smoothturn", "1", FCVAR_ARCHIVE, "Smooth turn (1) or snap turn (0)");
+    vr_snap_angle = Cvar_Get("vr_snap_angle", "45", FCVAR_ARCHIVE, "Snap turn angle");
+    vr_walkdirection = Cvar_Get("vr_walkdirection", "0", FCVAR_ARCHIVE, "0 = HMD direction, 1 = Controller orientation");
+    vr_lasersight = Cvar_Get("vr_lasersight", "1", FCVAR_ARCHIVE, "Enable 3D weapon laser sight");
+    vr_headtorch = Cvar_Get("vr_headtorch", "0", FCVAR_ARCHIVE, "0 = Offhand physical flashlight, 1 = Headtorch");
+    vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon");
+    vr_weapon_pitchadjust = Cvar_Get("vr_weapon_pitchadjust", "0", FCVAR_ARCHIVE, "Weapon barrel pitch adjust degrees");
+    vr_height_adjust = Cvar_Get("vr_height_adjust", "0", FCVAR_ARCHIVE, "Player height adjust units");
+    vr_worldscale = Cvar_Get("vr_worldscale", "40.0", FCVAR_ARCHIVE, "VR World Scale (units per meter)");
+    vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
+    vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
+    vr_pointer_hud = Cvar_Get("vr_pointer_hud", "1", FCVAR_ARCHIVE, "Enable VR laser pointer cursor in menus");
+}
+
 #define OXR_CHECK(func, msg) \
     do { \
         XrResult res = (func); \
@@ -75,18 +96,7 @@ static XRAPI_ATTR XrBool32 XRAPI_CALL XR_DebugUtilsCallback(
 
 qboolean XR_Init( void )
 {
-    vr_smoothturn = Cvar_Get("vr_smoothturn", "1", FCVAR_ARCHIVE, "Smooth turn (1) or snap turn (0)");
-    vr_snap_angle = Cvar_Get("vr_snap_angle", "45", FCVAR_ARCHIVE, "Snap turn angle");
-    vr_walkdirection = Cvar_Get("vr_walkdirection", "0", FCVAR_ARCHIVE, "0 = HMD direction, 1 = Controller orientation");
-    vr_lasersight = Cvar_Get("vr_lasersight", "1", FCVAR_ARCHIVE, "Enable 3D weapon laser sight");
-    vr_headtorch = Cvar_Get("vr_headtorch", "0", FCVAR_ARCHIVE, "0 = Offhand physical flashlight, 1 = Headtorch");
-    vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon");
-    vr_weapon_pitchadjust = Cvar_Get("vr_weapon_pitchadjust", "0", FCVAR_ARCHIVE, "Weapon barrel pitch adjust degrees");
-    vr_height_adjust = Cvar_Get("vr_height_adjust", "0", FCVAR_ARCHIVE, "Player height adjust units");
-    vr_worldscale = Cvar_Get("vr_worldscale", "40.0", FCVAR_ARCHIVE, "VR World Scale (units per meter)");
-    vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
-    vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
-    vr_pointer_hud = Cvar_Get("vr_pointer_hud", "1", FCVAR_ARCHIVE, "Enable VR laser pointer cursor in menus");
+    XR_RegisterCVars();
 
     Con_Printf("XR_Init: Initializing Khronos OpenXR Runtime...\n");
 

@@ -30,6 +30,7 @@ extern EXPORT convar_t *vr_haptics_enabled;
 extern EXPORT convar_t *vr_haptics_intensity;
 extern EXPORT convar_t *vr_pointer_hud;
 
+EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );
 EXPORT qboolean XR_InitGraphics( void );
 EXPORT void XR_EnsureCurrent( void );
@@ -51,6 +52,7 @@ EXPORT void XR_QuatToEuler( const XrQuaternionf *q, vec3_t out_angles );
 
 #else // !XASH_OPENXR
 
+static inline void XR_RegisterCVars( void ) {}
 static inline qboolean XR_Init( void ) { return false; }
 static inline qboolean XR_InitGraphics( void ) { return false; }
 static inline void XR_EnsureCurrent( void ) {}

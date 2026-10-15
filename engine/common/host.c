@@ -1257,6 +1257,8 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 #endif
 		FCVAR_READ_ONLY, "indicates if engine was compiled with extended msurface_t struct" );
 
+	XR_RegisterCVars();
+
 	Mod_Init();
 	NET_Init();
 	NET_InitMasters();

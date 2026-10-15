@@ -1102,12 +1102,12 @@ static void R_DrawEntitiesOnList( void )
 		if( XR_IsActive() && (!vr_lasersight || vr_lasersight->value > 0.0f) )
 		{
 			vec3_t handOrigin, handAngles;
-			if( XR_GetRightHandTransform( handOrigin, handAngles ))
+			if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
 			{
 				vec3_t forward, start, end;
 				AngleVectors( handAngles, forward, NULL, NULL );
 
-				float scale = 40.0f;
+				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 				VectorScale( handOrigin, scale, handOrigin );
 				VectorAdd( RI.rvp.vieworigin, handOrigin, start );
 				VectorMA( start, 2048.0f, forward, end );

@@ -24,6 +24,9 @@ static XrAction g_actionJump = XR_NULL_HANDLE;
 static XrAction g_actionDuck = XR_NULL_HANDLE;
 static XrAction g_actionUse = XR_NULL_HANDLE;
 static XrAction g_actionReload = XR_NULL_HANDLE;
+static XrAction g_actionFlashlight = XR_NULL_HANDLE;
+static XrAction g_actionMenu = XR_NULL_HANDLE;
+static XrAction g_actionSprint = XR_NULL_HANDLE;
 static XrAction g_actionMove = XR_NULL_HANDLE;
 static XrAction g_actionTurn = XR_NULL_HANDLE;
 static XrAction g_actionAimPoseLeft = XR_NULL_HANDLE;
@@ -97,6 +100,9 @@ qboolean XR_InitInput( void )
     g_actionDuck        = CreateAction("duck", "Crouch", XR_ACTION_TYPE_BOOLEAN_INPUT);
     g_actionUse         = CreateAction("use", "Use / Interact", XR_ACTION_TYPE_BOOLEAN_INPUT);
     g_actionReload      = CreateAction("reload", "Reload", XR_ACTION_TYPE_BOOLEAN_INPUT);
+    g_actionFlashlight  = CreateAction("flashlight", "Flashlight (impulse 100)", XR_ACTION_TYPE_BOOLEAN_INPUT);
+    g_actionMenu        = CreateAction("menu_toggle", "Menu / Pause", XR_ACTION_TYPE_BOOLEAN_INPUT);
+    g_actionSprint      = CreateAction("sprint", "Sprint", XR_ACTION_TYPE_BOOLEAN_INPUT);
     g_actionMove        = CreateAction("move", "Move (Locomotion)", XR_ACTION_TYPE_VECTOR2F_INPUT);
     g_actionTurn        = CreateAction("turn", "Turn (Snap/Smooth)", XR_ACTION_TYPE_VECTOR2F_INPUT);
     g_actionAimPoseLeft = CreateAction("aim_left", "Left Aim Pose", XR_ACTION_TYPE_POSE_INPUT);
@@ -115,6 +121,9 @@ qboolean XR_InitInput( void )
         { g_actionDuck,         StringToPath("/user/hand/right/input/thumbstick/click") },
         { g_actionUse,          StringToPath("/user/hand/right/input/b/click") },
         { g_actionReload,       StringToPath("/user/hand/left/input/x/click") },
+        { g_actionFlashlight,   StringToPath("/user/hand/left/input/y/click") },
+        { g_actionMenu,         StringToPath("/user/hand/left/input/menu/click") },
+        { g_actionSprint,       StringToPath("/user/hand/left/input/thumbstick/click") },
         { g_actionMove,         StringToPath("/user/hand/left/input/thumbstick") },
         { g_actionTurn,         StringToPath("/user/hand/right/input/thumbstick") },
         { g_actionAimPoseLeft,  StringToPath("/user/hand/left/input/aim/pose") },
@@ -161,6 +170,8 @@ qboolean XR_InitInput( void )
         { g_actionDuck,         StringToPath("/user/hand/right/input/thumbstick/click") },
         { g_actionUse,          StringToPath("/user/hand/right/input/b/click") },
         { g_actionReload,       StringToPath("/user/hand/left/input/a/click") },
+        { g_actionFlashlight,   StringToPath("/user/hand/left/input/b/click") },
+        { g_actionSprint,       StringToPath("/user/hand/left/input/thumbstick/click") },
         { g_actionMove,         StringToPath("/user/hand/left/input/thumbstick") },
         { g_actionTurn,         StringToPath("/user/hand/right/input/thumbstick") },
         { g_actionAimPoseLeft,  StringToPath("/user/hand/left/input/aim/pose") },
@@ -225,6 +236,21 @@ void XR_ShutdownInput( void )
         xrDestroyActionSet(g_actionSet);
         g_actionSet = XR_NULL_HANDLE;
     }
+    g_actionAttack = XR_NULL_HANDLE;
+    g_actionAttack2 = XR_NULL_HANDLE;
+    g_actionGripLeft = XR_NULL_HANDLE;
+    g_actionGripRight = XR_NULL_HANDLE;
+    g_actionJump = XR_NULL_HANDLE;
+    g_actionDuck = XR_NULL_HANDLE;
+    g_actionUse = XR_NULL_HANDLE;
+    g_actionReload = XR_NULL_HANDLE;
+    g_actionFlashlight = XR_NULL_HANDLE;
+    g_actionMenu = XR_NULL_HANDLE;
+    g_actionSprint = XR_NULL_HANDLE;
+    g_actionMove = XR_NULL_HANDLE;
+    g_actionTurn = XR_NULL_HANDLE;
+    g_actionAimPoseLeft = XR_NULL_HANDLE;
+    g_actionAimPoseRight = XR_NULL_HANDLE;
     g_actionHapticLeft = XR_NULL_HANDLE;
     g_actionHapticRight = XR_NULL_HANDLE;
 }
@@ -254,7 +280,7 @@ void XR_SyncInputs( void )
         return;
     }
 
-    // Leitura dos gatilhos analógicos
+    // Leitura dos gatilhos analógicos e grips
     XrActionStateGetInfo getInfo = {0};
     getInfo.type = XR_TYPE_ACTION_STATE_GET_INFO;
 
@@ -274,8 +300,18 @@ void XR_SyncInputs( void )
         getInfo.action = g_actionGripRight;
         if (XR_SUCCEEDED(xrGetActionStateFloat(g_xrSession, &getInfo, &floatState)))
         {
+            g_xrInputState.gripRight = floatState.currentState;
             if (floatState.currentState > 0.5f)
                 g_xrInputState.use = true;
+        }
+    }
+
+    if (g_actionGripLeft != XR_NULL_HANDLE)
+    {
+        getInfo.action = g_actionGripLeft;
+        if (XR_SUCCEEDED(xrGetActionStateFloat(g_xrSession, &getInfo, &floatState)))
+        {
+            g_xrInputState.gripLeft = floatState.currentState;
         }
     }
 
@@ -301,6 +337,27 @@ void XR_SyncInputs( void )
     getInfo.action = g_actionReload;
     if (XR_SUCCEEDED(xrGetActionStateBoolean(g_xrSession, &getInfo, &boolState)))
         g_xrInputState.reload = boolState.currentState;
+
+    if (g_actionFlashlight != XR_NULL_HANDLE)
+    {
+        getInfo.action = g_actionFlashlight;
+        if (XR_SUCCEEDED(xrGetActionStateBoolean(g_xrSession, &getInfo, &boolState)))
+            g_xrInputState.flashlight = boolState.currentState;
+    }
+
+    if (g_actionMenu != XR_NULL_HANDLE)
+    {
+        getInfo.action = g_actionMenu;
+        if (XR_SUCCEEDED(xrGetActionStateBoolean(g_xrSession, &getInfo, &boolState)))
+            g_xrInputState.menu = boolState.currentState;
+    }
+
+    if (g_actionSprint != XR_NULL_HANDLE)
+    {
+        getInfo.action = g_actionSprint;
+        if (XR_SUCCEEDED(xrGetActionStateBoolean(g_xrSession, &getInfo, &boolState)))
+            g_xrInputState.sprint = boolState.currentState;
+    }
 
 
     // Leitura dos sticks analógicos
@@ -375,13 +432,68 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
 {
     if (!g_xrSessionRunning) return;
 
+    qboolean lefthanded = (vr_lefthanded && vr_lefthanded->value > 0.0f);
+
+    float rawMoveX = lefthanded ? g_xrInputState.turnX : g_xrInputState.moveX;
+    float rawMoveY = lefthanded ? g_xrInputState.turnY : g_xrInputState.moveY;
+    float rawTurnX = lefthanded ? g_xrInputState.moveX : g_xrInputState.turnX;
+    float rawTurnY = lefthanded ? g_xrInputState.moveY : g_xrInputState.turnY;
+
+    qboolean attack  = lefthanded ? g_xrInputState.attack2 : g_xrInputState.attack;
+    qboolean attack2 = lefthanded ? g_xrInputState.attack  : g_xrInputState.attack2;
+
     // Aplicar botões de ação
-    if (g_xrInputState.attack)  cmd->buttons |= IN_ATTACK;
-    if (g_xrInputState.attack2) cmd->buttons |= IN_ATTACK2;
+    if (attack)                 cmd->buttons |= IN_ATTACK;
+    if (attack2)                cmd->buttons |= IN_ATTACK2;
     if (g_xrInputState.jump)    cmd->buttons |= IN_JUMP;
     if (g_xrInputState.duck)    cmd->buttons |= IN_DUCK;
     if (g_xrInputState.use)     cmd->buttons |= IN_USE;
     if (g_xrInputState.reload)  cmd->buttons |= IN_RELOAD;
+    if (g_xrInputState.sprint)  cmd->buttons |= IN_RUN;
+
+    // Flashlight Toggle (impulse 100) via Y button (or Index B)
+    static qboolean s_prevFlashlight = false;
+    if (g_xrInputState.flashlight && !s_prevFlashlight)
+    {
+        s_prevFlashlight = true;
+        Cbuf_AddText("impulse 100\n");
+        XR_TriggerHapticEffect(VR_HAND_LEFT, VR_HAPTIC_UI_CLICK, 0.4f);
+    }
+    else if (!g_xrInputState.flashlight && s_prevFlashlight)
+    {
+        s_prevFlashlight = false;
+    }
+
+    // In-Game Menu Toggle (cancelselect) via Left Controller Menu button
+    static qboolean s_prevMenu = false;
+    if (g_xrInputState.menu && !s_prevMenu)
+    {
+        s_prevMenu = true;
+        Cbuf_AddText("cancelselect\n");
+        XR_TriggerHapticEffect(VR_HAND_LEFT, VR_HAPTIC_UI_CLICK, 0.5f);
+    }
+    else if (!g_xrInputState.menu && s_prevMenu)
+    {
+        s_prevMenu = false;
+    }
+
+    // Weapon cycling via turn thumbstick flick (Up: invprev, Down: invnext)
+    static double s_nextWeaponSwitchTime = 0.0;
+    if (host.realtime >= s_nextWeaponSwitchTime)
+    {
+        if (rawTurnY > 0.65f)
+        {
+            Cbuf_AddText("invprev\n");
+            XR_TriggerHapticEffect(lefthanded ? VR_HAND_LEFT : VR_HAND_RIGHT, VR_HAPTIC_UI_CLICK, 0.35f);
+            s_nextWeaponSwitchTime = host.realtime + 0.25;
+        }
+        else if (rawTurnY < -0.65f)
+        {
+            Cbuf_AddText("invnext\n");
+            XR_TriggerHapticEffect(lefthanded ? VR_HAND_LEFT : VR_HAND_RIGHT, VR_HAPTIC_UI_CLICK, 0.35f);
+            s_nextWeaponSwitchTime = host.realtime + 0.25;
+        }
+    }
 
     // 1. Use Gesture (Esticar a mão para frente interage automaticamente com botões/portas)
     if ((-g_xrInputState.rightHandPose.position.z > 0.38f && fabsf(g_xrInputState.rightHandPose.position.y) < 0.35f) ||
@@ -392,11 +504,13 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
 
     // 2. Backpack Gesture (Mochila: mão dominante atrás do ombro saca pé de cabra)
     static qboolean backpack_debounced = false;
-    if (g_xrInputState.rightHandPose.position.z > 0.10f && g_xrInputState.rightHandPose.position.y > -0.15f)
+    XrPosef dominantPose = lefthanded ? g_xrInputState.leftHandPose : g_xrInputState.rightHandPose;
+    if (dominantPose.position.z > 0.10f && dominantPose.position.y > -0.15f)
     {
-        if (g_xrInputState.attack && !backpack_debounced)
+        if (attack && !backpack_debounced)
         {
             Cbuf_AddText("slot1\n"); // Saca o Pé de Cabra / Crowbar!
+            XR_TriggerHapticEffect(lefthanded ? VR_HAND_LEFT : VR_HAND_RIGHT, VR_HAPTIC_WEAPON_CROWBAR, 0.7f);
             backpack_debounced = true;
         }
     }
@@ -405,10 +519,9 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
         backpack_debounced = false;
     }
 
-    // Giro suave ou Snap Turn (Thumbstick Direito)
+    // Giro suave ou Snap Turn (Thumbstick de Giro)
     static qboolean s_yawInitialized = false;
     static qboolean snap_debounced = false;
-
 
     if (!s_yawInitialized && (cmd->viewangles[1] != 0.0f))
     {
@@ -419,34 +532,36 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
     if (vr_smoothturn && vr_smoothturn->value == 0.0f)
     {
         float snapAngle = (vr_snap_angle && vr_snap_angle->value > 0.0f) ? vr_snap_angle->value : 45.0f;
-        if (g_xrInputState.turnX > 0.5f && !snap_debounced)
+        if (rawTurnX > 0.5f && !snap_debounced)
         {
             s_playerTurnYaw -= snapAngle;
             snap_debounced = true;
+            XR_TriggerHapticEffect(lefthanded ? VR_HAND_LEFT : VR_HAND_RIGHT, VR_HAPTIC_UI_CLICK, 0.25f);
         }
-        else if (g_xrInputState.turnX < -0.5f && !snap_debounced)
+        else if (rawTurnX < -0.5f && !snap_debounced)
         {
             s_playerTurnYaw += snapAngle;
             snap_debounced = true;
+            XR_TriggerHapticEffect(lefthanded ? VR_HAND_LEFT : VR_HAND_RIGHT, VR_HAPTIC_UI_CLICK, 0.25f);
         }
-        else if (fabsf(g_xrInputState.turnX) < 0.2f)
+        else if (fabsf(rawTurnX) < 0.2f)
         {
             snap_debounced = false;
         }
     }
     else
     {
-        if (fabsf(g_xrInputState.turnX) > 0.15f)
+        if (fabsf(rawTurnX) > 0.15f)
         {
             float turnSpeed = 150.0f; // graus por segundo
-            s_playerTurnYaw -= g_xrInputState.turnX * turnSpeed * frametime;
+            s_playerTurnYaw -= rawTurnX * turnSpeed * frametime;
         }
     }
     s_playerTurnYaw = anglemod( s_playerTurnYaw );
 
     // Conectar poses 6DoF de mira do controle diretamente ao cmd->viewangles do servidor
     vec3_t handOrigin, handAngles;
-    if (XR_GetRightHandTransform( handOrigin, handAngles ))
+    if (XR_GetPrimaryHandTransform( handOrigin, handAngles ))
     {
         vec3_t worldAimAngles;
         worldAimAngles[0] = handAngles[0];
@@ -457,19 +572,19 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
         VectorCopy( worldAimAngles, cmd->viewangles );
 
         // Desacoplamento da locomoção:
-        // vr_walkdirection 0: Orientado pelo Controle | 1: Orientado pelo Headset (padrão)
+        // vr_walkdirection 0: Orientado pelo Headset (padrão) | 1: Orientado pelo Controle
         vec3_t headAngles;
         XR_GetHeadOrientation( headAngles );
         float headWorldYaw = anglemod( headAngles[1] + s_playerTurnYaw );
-        float walkRefYaw = (vr_walkdirection && vr_walkdirection->value == 0.0f) ? worldAimAngles[1] : headWorldYaw;
+        float walkRefYaw = (vr_walkdirection && vr_walkdirection->value == 1.0f) ? worldAimAngles[1] : headWorldYaw;
 
         float deltaYaw = walkRefYaw - worldAimAngles[1];
         float rad = deltaYaw * (3.14159265f / 180.0f);
         float cosA = cosf(rad);
         float sinA = sinf(rad);
 
-        float forwardMove = g_xrInputState.moveY * cosA - g_xrInputState.moveX * sinA;
-        float sideMove    = g_xrInputState.moveY * sinA + g_xrInputState.moveX * cosA;
+        float forwardMove = rawMoveY * cosA - rawMoveX * sinA;
+        float sideMove    = rawMoveY * sinA + rawMoveX * cosA;
 
         cmd->forwardmove += forwardMove * 320.0f;
         cmd->sidemove    += sideMove * 320.0f;
@@ -477,13 +592,55 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
     else
     {
         cmd->viewangles[1] = s_playerTurnYaw;
-        cmd->forwardmove += g_xrInputState.moveY * 320.0f;
-        cmd->sidemove    += g_xrInputState.moveX * 320.0f;
+        cmd->forwardmove += rawMoveY * 320.0f;
+        cmd->sidemove    += rawMoveX * 320.0f;
     }
 
     // Limitar para os máximos suportados pelo motor
     cmd->forwardmove = bound(-400.0f, cmd->forwardmove, 400.0f);
     cmd->sidemove    = bound(-400.0f, cmd->sidemove, 400.0f);
+}
+
+qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles )
+{
+    if (vr_lefthanded && vr_lefthanded->value > 0.0f)
+        return XR_GetLeftHandTransform( out_origin, out_angles );
+    return XR_GetRightHandTransform( out_origin, out_angles );
+}
+
+qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity )
+{
+    if (vr_lefthanded && vr_lefthanded->value > 0.0f)
+        return XR_GetLeftHandVelocity( out_velocity );
+    return XR_GetRightHandVelocity( out_velocity );
+}
+
+qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles )
+{
+    if (!g_xrSessionRunning) return false;
+
+    vec3_t handOrigin, handAngles;
+    if (!XR_GetPrimaryHandTransform( handOrigin, handAngles )) return false;
+
+    float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+
+    vec3_t eyePos;
+    XR_GetEyePosition( 0, eyePos );
+
+    vec3_t relHand;
+    relHand[0] = (handOrigin[0] - eyePos[0]) * scale;
+    relHand[1] = (handOrigin[1] - eyePos[1]) * scale;
+    relHand[2] = (handOrigin[2] - eyePos[2]) * scale;
+
+    vec3_t forward;
+    AngleVectors( handAngles, forward, NULL, NULL );
+
+    out_muzzle_offset[0] = relHand[0] + forward[0] * 8.0f;
+    out_muzzle_offset[1] = relHand[1] + forward[1] * 8.0f;
+    out_muzzle_offset[2] = relHand[2] + forward[2] * 8.0f;
+
+    VectorCopy( handAngles, out_aim_angles );
+    return true;
 }
 
 qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
@@ -496,18 +653,19 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
     out_origin[1] = -g_xrInputState.rightHandPose.position.x;
     out_origin[2] = g_xrInputState.rightHandPose.position.y;
 
-    // 3. Two-Handed Weapon Stabiliser (Se a mão esquerda estiver a menos de 0.22m da mão direita)
+    // Two-Handed Weapon Stabiliser (Ativado quando o grip esquerdo está pressionado e a distância é de 12cm a 55cm)
     float dx = g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x;
     float dy = g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y;
     float dz = g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z;
     float handDist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-    if (handDist < 0.22f && g_xrInputState.leftHandActive)
+    if (g_xrInputState.gripLeft > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.leftHandActive)
     {
+        // Vetor da mão traseira (direita) para a dianteira (esquerda) em coordenadas GoldSrc:
         vec3_t aimDir;
-        aimDir[0] = -(g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z);
-        aimDir[1] = -(g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x);
-        aimDir[2] = (g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y);
+        aimDir[0] = (g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z);
+        aimDir[1] = (g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x);
+        aimDir[2] = (g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y);
         VectorNormalize(aimDir);
         VectorAngles(aimDir, out_angles);
     }
@@ -532,7 +690,31 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     out_origin[1] = -g_xrInputState.leftHandPose.position.x;
     out_origin[2] = g_xrInputState.leftHandPose.position.y;
 
-    XR_QuatToEuler( &g_xrInputState.leftHandPose.orientation, out_angles );
+    // Two-Handed Weapon Stabiliser canhoto (mão direita segura o cano com grip)
+    float dx = g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x;
+    float dy = g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y;
+    float dz = g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z;
+    float handDist = sqrtf(dx*dx + dy*dy + dz*dz);
+
+    if (g_xrInputState.gripRight > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.rightHandActive)
+    {
+        vec3_t aimDir;
+        aimDir[0] = (g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z);
+        aimDir[1] = (g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x);
+        aimDir[2] = (g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y);
+        VectorNormalize(aimDir);
+        VectorAngles(aimDir, out_angles);
+    }
+    else
+    {
+        XR_QuatToEuler( &g_xrInputState.leftHandPose.orientation, out_angles );
+    }
+
+    if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
+    {
+        out_angles[0] += vr_weapon_pitchadjust->value;
+    }
+
     return true;
 }
 
@@ -559,30 +741,7 @@ qboolean XR_GetLeftHandVelocity( vec3_t out_velocity )
 
 qboolean XR_GetRightHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles )
 {
-    if (!g_xrSessionRunning || !g_xrInputState.rightHandActive) return false;
-
-    vec3_t handOrigin, handAngles;
-    if (!XR_GetRightHandTransform( handOrigin, handAngles )) return false;
-
-    float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
-
-    vec3_t eyePos;
-    XR_GetEyePosition( 0, eyePos );
-
-    vec3_t relHand;
-    relHand[0] = (handOrigin[0] - eyePos[0]) * scale;
-    relHand[1] = (handOrigin[1] - eyePos[1]) * scale;
-    relHand[2] = (handOrigin[2] - eyePos[2]) * scale;
-
-    vec3_t forward;
-    AngleVectors( handAngles, forward, NULL, NULL );
-
-    out_muzzle_offset[0] = relHand[0] + forward[0] * 8.0f;
-    out_muzzle_offset[1] = relHand[1] + forward[1] * 8.0f;
-    out_muzzle_offset[2] = relHand[2] + forward[2] * 8.0f;
-
-    VectorCopy( handAngles, out_aim_angles );
-    return true;
+    return XR_GetPrimaryHandMuzzleTransform( out_muzzle_offset, out_aim_angles );
 }
 
 void XR_ApplyHapticFeedback( int hand, float duration_seconds, float frequency_hz, float amplitude )

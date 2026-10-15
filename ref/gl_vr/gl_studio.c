@@ -548,9 +548,9 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 	if( e == tr.viewent && XR_IsActive() )
 	{
 		vec3_t handOrigin, handAngles;
-		if( XR_GetRightHandTransform( handOrigin, handAngles ))
+		if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
 		{
-			float scale = 40.0f; // unidades Half-Life por metro
+			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 			VectorScale( handOrigin, scale, handOrigin );
 			VectorAdd( RI.rvp.vieworigin, handOrigin, origin );
 			VectorCopy( handAngles, angles );
