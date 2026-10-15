@@ -364,11 +364,16 @@ static void R_VR_Recenter_f( void )
 }
 
 static qboolean s_triggerEyeDump = false;
+static char s_eyeDumpFilename[64] = "vr_eye0.ppm";
 
 static void R_VR_DumpEye_f( void )
 {
+	if( gEngfuncs.Cmd_Argc() > 1 )
+		Q_strncpy( s_eyeDumpFilename, gEngfuncs.Cmd_Argv( 1 ), sizeof( s_eyeDumpFilename ) );
+	else
+		Q_strncpy( s_eyeDumpFilename, "vr_eye0.ppm", sizeof( s_eyeDumpFilename ) );
 	s_triggerEyeDump = true;
-	gEngfuncs.Con_Printf( "^2[VR] Eye dump requested on next eye 0 render.\n" );
+	gEngfuncs.Con_Printf( "^2[VR] Eye dump requested to '%s' on next eye 0 render.\n", s_eyeDumpFilename );
 }
 #else
 void R_VR_ResetCalibration( void ) {}
@@ -1113,12 +1118,27 @@ static void R_DrawEntitiesOnList( void )
 			vec3_t handOrigin, handAngles;
 			if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
 			{
-				vec3_t forward, start, end;
-				AngleVectors( handAngles, forward, NULL, NULL );
-
 				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
-				VectorScale( handOrigin, scale, handOrigin );
-				VectorAdd( RI.rvp.vieworigin, handOrigin, start );
+				float turn_yaw = XR_GetPlayerTurnYaw();
+				float yaw_rad = DEG2RAD( turn_yaw );
+				float cy = cosf( yaw_rad );
+				float sy = sinf( yaw_rad );
+
+				float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
+				float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
+				float world_dz = handOrigin[2] * scale;
+
+				vec3_t worldAngles;
+				worldAngles[0] = handAngles[0];
+				worldAngles[1] = anglemod( handAngles[1] + turn_yaw );
+				worldAngles[2] = handAngles[2];
+
+				vec3_t forward, start, end;
+				AngleVectors( worldAngles, forward, NULL, NULL );
+
+				start[0] = RI.rvp.vieworigin[0] + world_dx;
+				start[1] = RI.rvp.vieworigin[1] + world_dy;
+				start[2] = RI.rvp.vieworigin[2] + world_dz;
 				VectorMA( start, 2048.0f, forward, end );
 
 				pglDisable( GL_TEXTURE_2D );
@@ -1613,11 +1633,11 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 					s_triggerEyeDump = false;
 					int w = g_xrEyeSwapchains[0].width;
 					int h = g_xrEyeSwapchains[0].height;
-					const char *dumpPath =
+					char dumpPath[128];
 #if defined(__ANDROID__)
-						"/sdcard/xash/vr_eye0.ppm";
+					Q_snprintf( dumpPath, sizeof( dumpPath ), "/sdcard/xash/%s", s_eyeDumpFilename );
 #else
-						"vr_eye0.ppm";
+					Q_snprintf( dumpPath, sizeof( dumpPath ), "%s", s_eyeDumpFilename );
 #endif
 					FILE *fp = fopen( dumpPath, "wb" );
 					if( fp )

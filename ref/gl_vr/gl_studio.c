@@ -551,9 +551,23 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 		if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
 		{
 			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
-			VectorScale( handOrigin, scale, handOrigin );
-			VectorAdd( RI.rvp.vieworigin, handOrigin, origin );
-			VectorCopy( handAngles, angles );
+			float turn_yaw = XR_GetPlayerTurnYaw();
+			float yaw_rad = DEG2RAD( turn_yaw );
+			float cy = cosf( yaw_rad );
+			float sy = sinf( yaw_rad );
+
+			// Rotate local hand displacement by the player's world yaw orientation
+			float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
+			float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
+			float world_dz = handOrigin[2] * scale;
+
+			origin[0] = RI.rvp.vieworigin[0] + world_dx;
+			origin[1] = RI.rvp.vieworigin[1] + world_dy;
+			origin[2] = RI.rvp.vieworigin[2] + world_dz;
+
+			angles[0] = handAngles[0];
+			angles[1] = anglemod( handAngles[1] + turn_yaw );
+			angles[2] = handAngles[2];
 		}
 	}
 #endif
@@ -3340,6 +3354,15 @@ void R_DrawViewModel( void )
 	cl_entity_t	*view = tr.viewent;
 
 	R_GatherPlayerLight( view );
+
+	static model_t *s_lastVmModel = (model_t *)-1;
+	if( view->model != s_lastVmModel )
+	{
+		s_lastVmModel = view->model;
+		gEngfuncs.Con_Printf( "^2[VM_DBG_CHANGE] viewmodel changed to: '%s' (health=%d)\n",
+			(view && view->model) ? view->model->name : "NULL",
+			(int)ENGINE_GET_PARM( PARM_LOCAL_HEALTH ) );
+	}
 
 	if( r_drawviewmodel->value == 0 )
 		return;

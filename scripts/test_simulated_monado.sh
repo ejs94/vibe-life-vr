@@ -79,7 +79,7 @@ TEST_LOG="${OUTPUT_DIR}/monado_engine.log"
 log_info "Running bounded Xash3D VR engine session (${TIMEOUT_SECS}s) on map: ${TARGET_MAP}..."
 
 set +e
-timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +map "${TARGET_MAP}" ${EXTRA_ARGS} > "$TEST_LOG" 2>&1
+timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +map "${TARGET_MAP}" ${EXTRA_ARGS} > "$TEST_LOG" 2>&1
 RUN_EXIT=$?
 set -e
 
@@ -93,11 +93,15 @@ if [ -f "qconsole.log" ]; then
     cp -f qconsole.log "${OUTPUT_DIR}/qconsole.log"
 fi
 
-if [ -f "vr_eye0.ppm" ]; then
-    cp -f vr_eye0.ppm "${OUTPUT_DIR}/vr_eye0.ppm"
-    convert "${OUTPUT_DIR}/vr_eye0.ppm" "${OUTPUT_DIR}/vr_eye0.png" 2>/dev/null || true
-    log_ok "Converted Eye 0 dump to PNG: ${OUTPUT_DIR}/vr_eye0.png"
-fi
+for ppm in vr_*.ppm; do
+    if [ -f "$ppm" ]; then
+        cp -f "$ppm" "${OUTPUT_DIR}/$ppm"
+        png_name="${ppm%.ppm}.png"
+        convert "${OUTPUT_DIR}/$ppm" "${OUTPUT_DIR}/${png_name}" 2>/dev/null || true
+        log_ok "Converted Eye dump to PNG: ${OUTPUT_DIR}/${png_name}"
+        rm -f "$ppm"
+    fi
+done
 
 # 3. Analyze Results
 TEST_PASSED=true

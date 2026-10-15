@@ -651,9 +651,9 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
     {
         if (vr_test_hands && vr_test_hands->value > 0.0f)
         {
-            out_origin[0] = 0.35f;   // 35cm à frente
-            out_origin[1] = -0.15f;  // 15cm à direita (coordenadas GoldSrc)
-            out_origin[2] = -0.12f;  // 12cm abaixo dos olhos
+            out_origin[0] = 0.22f;   // 22cm à frente
+            out_origin[1] = -0.06f;  // 6cm à direita (coordenadas GoldSrc)
+            out_origin[2] = -0.08f;  // 8cm abaixo dos olhos
 
             out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
             out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
@@ -710,9 +710,9 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     {
         if (vr_test_hands && vr_test_hands->value > 0.0f)
         {
-            out_origin[0] = 0.35f;
-            out_origin[1] = 0.15f;   // 15cm à esquerda
-            out_origin[2] = -0.12f;
+            out_origin[0] = 0.22f;
+            out_origin[1] = 0.06f;   // 6cm à esquerda
+            out_origin[2] = -0.08f;
 
             out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
             out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
