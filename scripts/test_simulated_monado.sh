@@ -16,8 +16,10 @@ SCRIPT_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
 OUTPUT_DIR="${REPO_DIR}/out/evidence/monado_$(date +%Y%m%d_%H%M%S)"
-TIMEOUT_SECS=15
+TIMEOUT_SECS="${TIMEOUT_SECS:-15}"
 TARGET_MAP="${1:-c1a0}"
+shift || true
+EXTRA_ARGS="${*:-}"
 
 log_info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_ok()   { echo -e "\033[1;32m[PASS]\033[0m $*"; }
@@ -77,7 +79,7 @@ TEST_LOG="${OUTPUT_DIR}/monado_engine.log"
 log_info "Running bounded Xash3D VR engine session (${TIMEOUT_SECS}s) on map: ${TARGET_MAP}..."
 
 set +e
-timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +map "${TARGET_MAP}" > "$TEST_LOG" 2>&1
+timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +map "${TARGET_MAP}" ${EXTRA_ARGS} > "$TEST_LOG" 2>&1
 RUN_EXIT=$?
 set -e
 
@@ -89,6 +91,12 @@ fi
 
 if [ -f "qconsole.log" ]; then
     cp -f qconsole.log "${OUTPUT_DIR}/qconsole.log"
+fi
+
+if [ -f "vr_eye0.ppm" ]; then
+    cp -f vr_eye0.ppm "${OUTPUT_DIR}/vr_eye0.ppm"
+    convert "${OUTPUT_DIR}/vr_eye0.ppm" "${OUTPUT_DIR}/vr_eye0.png" 2>/dev/null || true
+    log_ok "Converted Eye 0 dump to PNG: ${OUTPUT_DIR}/vr_eye0.png"
 fi
 
 # 3. Analyze Results

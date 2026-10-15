@@ -362,6 +362,14 @@ static void R_VR_Recenter_f( void )
 	R_VR_ResetCalibration();
 	gEngfuncs.Con_Printf( "^2[VR] Recenter requested. Head origin will calibrate on next frame.\n" );
 }
+
+static qboolean s_triggerEyeDump = false;
+
+static void R_VR_DumpEye_f( void )
+{
+	s_triggerEyeDump = true;
+	gEngfuncs.Con_Printf( "^2[VR] Eye dump requested on next eye 0 render.\n" );
+}
 #else
 void R_VR_ResetCalibration( void ) {}
 #endif
@@ -388,6 +396,7 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 		{
 			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
 			gEngfuncs.Cmd_AddCommand( "vr_recenter", R_VR_Recenter_f, "Recenter VR headset origin" );
+			gEngfuncs.Cmd_AddCommand( "vr_dumpeye", R_VR_DumpEye_f, "Dump OpenXR eye 0 buffer to PPM image" );
 		}
 
 		// Calibrate baseline head position so the camera starts centered at the map's spawn point
@@ -1599,8 +1608,9 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 
 				// Periodic / Diagnostic dump of Left Eye to PPM for empirical verification
 				static int s_eyeDumpTimer = 60;
-				if( s_eyeDumpTimer > 0 && --s_eyeDumpTimer == 0 )
+				if( (s_eyeDumpTimer > 0 && --s_eyeDumpTimer == 0) || s_triggerEyeDump )
 				{
+					s_triggerEyeDump = false;
 					int w = g_xrEyeSwapchains[0].width;
 					int h = g_xrEyeSwapchains[0].height;
 					const char *dumpPath =
