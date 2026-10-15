@@ -2400,8 +2400,17 @@ void Touch_KeyEvent( int key, int down )
 	ly = y;
 }
 
+#ifdef XASH_OPENXR
+#include "../../platform/openxr/xr_core.h"
+#endif
+
 qboolean Touch_WantVisibleCursor( void )
 {
+#ifdef XASH_OPENXR
+	// In VR, the user interacts with 6DoF spatial controllers, not a 2D touchscreen glass
+	if( XR_IsActive() )
+		return false;
+#endif
 	return ( touch_enable.value && touch_emulate.value ) || touch.clientonly || touch_in_menu.value;
 }
 
