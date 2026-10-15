@@ -61,3 +61,18 @@
 ### Issue #8: Early Config CVar Warnings ("Unknown command vr_...")
 * **Root Cause:** VR CVars were registered during `XR_Init()`, which executes inside `Host_Frame()`. Startup configuration files (`config.cfg`, `valve.rc`) execute earlier during `Host_Init()`.
 * **Resolution:** Added `XR_RegisterCVars()` called directly in `Host_Init()` in `engine/common/host.c`.
+
+---
+
+## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3S Testing)
+
+### Issue #9: In-Headset 2D Menus / Quad HUD Laser Pointer Interaction Non-Functional
+* **Symptoms:** When running the APK in-headset on the Meta Quest 3S, 2D in-game menus (mainui, pause menu, options) are visible on the floating quad, but the VR controller pointer clicks and cursor interaction do not interact with or activate UI buttons.
+* **Root Cause & Investigation Path:** The 3D laser pointer raycast against the floating quad canvas (`XR_UpdatePointerCursor`) needs to project onto 2D UI pixel coordinates and inject mouse events (`K_MOUSE1`, cursor move) into the engine's UI dispatch pipeline (`engine/client/in_touch.c`, `cl_input.c`, `mainui`).
+* **Status:** 🟡 **Active / Backlogged** — Scheduled for dedicated resolution in Phase 05 (In-Headset Spatial UI & Laser Pointer).
+
+### Issue #10: Meta Horizon OS 2D Android Launcher UI Layout & Font Scaling Glitches
+* **Symptoms:** When launching the APK from the Meta Horizon OS library in 2D panel mode, the launcher interface shows visual imperfections (font scaling broken, menu bars misaligned).
+* **Root Cause & Investigation Path:** Android UI layouts in `android/app/src/main/res/layout/` and styles were optimized for standard phone screens rather than Horizon OS resizable floating 2D panel windows. Needs responsive layout constraints, font scaling, and toolbar styling adjustments.
+* **Status:** 🟡 **Active / Backlogged** — Scheduled for launcher UI polish pass.
+

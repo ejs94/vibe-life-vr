@@ -117,4 +117,19 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
 
 ---
 
+## 📱 5. Relatos Empíricos de Testes em Hardware Real (Meta Quest 3S)
+
+Durante os primeiros testes do APK instalado diretamente no **Meta Quest 3S**, dois comportamentos foram catalogados como issues ativas para resolução:
+
+### 5.1. Issue #9: Menus 2D In-Game sem Interação via Laser Pointer
+* **Observação em Headset:** O menu principal e os menus de pausa/opções aparecem na camada quad flutuante no espaço da cabeça (`g_xrViewSpace`), porém os cliques com os gatilhos dos controles Touch Plus não acionam os botões ou campos.
+* **Plano Técnico:** Mapear a interseção do raio do laser 3D do controle primário (`XR_UpdatePointerCursor`) no plano do quad flutuante para coordenadas normalizadas $(u, v)$ de tela e injetar eventos de mouse (`IN_MouseMove`, `K_MOUSE1`) diretamente no pipeline de entrada da engine (`engine/client/in_touch.c` e `mainui`).
+
+### 5.2. Issue #10: Interface 2D do Launcher no Horizon OS com Fontes e Barras Quebradas
+* **Observação em Headset:** Ao abrir o aplicativo pelo ambiente 2D do Horizon OS antes de entrar no modo imersivo OpenXR, a interface do launcher Android apresenta elementos visuais desalinhados, quebra de escala de fontes e layout distorcido nas barras de menu.
+* **Plano Técnico:** Revisar os layouts XML em `android/app/src/main/res/layout/` e `values/styles.xml`, aplicando constraints responsivas (Window Size Classes do Android / Material 3) para janelas flutuantes redimensionáveis do Meta Horizon OS.
+
+---
+
 *Caderno mantido atualizado a cada avanço relevante da engenharia do port VR.*
+
