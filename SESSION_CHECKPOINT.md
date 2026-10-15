@@ -3,8 +3,11 @@
 **Data do Checkpoint:** 15 de Outubro de 2026  
 **Repositório:** `xash3d-fwgs-vr`  
 **Branch:** `feature/openxr-vr`  
-**Último Commit:** `9275e163` (*feat(ui): update README for AI-assisted VR port, optimize Kotlin UI to Meta guidelines and add weapon test map button*) — Sincronizado com `origin/feature/openxr-vr`.  
-**Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Bateria baixa (3%), deixar carregando para a próxima sessão.  
+**Últimos Commits:**
+- `34ca3d03` (*ref: gl_vr: add vr_dumpeye command and improve simulation test script*)
+- `015820a5` (*docs: vr: consolidate port documentation under Documentation/vr/*)
+- `24531512` (*platform: openxr: implement touch locomotion, gestures and two-handed stabilizer*)
+**Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Em carregamento para testes físicos.  
 **APK Atualizado e Instalado:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)
 
 ---
@@ -15,7 +18,10 @@
 2. **Correção do Cálculo de Voltagem da Bateria e Utilitários**
 3. **Personalização do README.md com Destaque para Assistência de IA**
 4. **Modernização da Interface em Kotlin para Meta Horizon OS (Botão "Testar Armas")**
-5. **Implementação e Refinamento Completo da Phase 03 (Controles Touch, Locomoção & Gestos Concluída ✅):**
+5. **Limpeza e Centralização de Documentação:**
+   - Remoção completa do diretório legado `.agents/`.
+   - Centralização e consolidação de toda documentação de arquitetura, pipeline e roadmap em [Documentation/vr/](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/).
+6. **Implementação e Refinamento Completo da Phase 03 (Controles Touch, Locomoção & Gestos Concluída ✅):**
    * **Mapeamento OpenXR Universal:**
      - Criadas ações Khronos para locomoção, rotação, mira 6DoF, gatilhos primário e secundário, grips analógicos, pulo (`IN_JUMP`), agachamento (`IN_DUCK`), uso (`IN_USE`), recarga (`IN_RELOAD`), sprint (`IN_RUN`), lanterna (`impulse 100`) e menu in-game (`cancelselect`).
      - Perfis de interação completos para Meta Quest Touch (Quest 1/2/Pro/3/3S) e Valve Index.
@@ -31,8 +37,12 @@
      - Funções `XR_GetPrimaryHandTransform` e `XR_GetPrimaryHandVelocity` integradas ao renderizador de viewmodel (`gl_studio.c`) e mira laser (`gl_rmain.c`).
    * **Registro Antecipado de CVars (`XR_RegisterCVars`):**
      - Evita warnings de "Unknown command" ao carregar `config.cfg` e commandlines do launcher.
+   * **Simulação Automatizada em Monado OpenXR & Captura de Frames (`vr_dumpeye`):**
+     - Criado script de controle [out/valve_downloads/simulate_action.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/valve_downloads/simulate_action.cfg) para spawnar armas, mover o jogador, pular e atirar no mapa `crossfire`.
+     - Implementado o comando `vr_dumpeye` no renderizador `gl_vr` para captura imediata do framebuffer do olho.
+     - Testes automatizados executados e validados no Monado com evidências geradas em `out/evidence/`.
    * **Compilação e Empacotamento Validados:**
-     - Testes automatizados no simulador Monado PCVR no mapa `crossfire` passaram com 100% de sucesso.
+     - Binários PCVR (`libxash.so`, `libref_gl_vr.so`, `xash3d`) compilados e instalados em `out/`.
      - APK Standalone para Quest gerado com sucesso: [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk).
 
 ---
