@@ -4,11 +4,14 @@
 **Repositório:** `xash3d-fwgs-vr`  
 **Branch:** `feature/openxr-vr`  
 **Últimos Commits:**
+- `759b537d` (*docs: vr: add engineering notebook documenting original vs adapted solutions*)
+- `fb7166a3` (*ref: gl_vr: rotate decoupled viewmodel and laser sight by player turn yaw*)
+- `b2e22bd7` (*platform: openxr: add 6DoF hand simulation CVars for automated testing*)
+- `1bf7f254` (*docs: vr: update session checkpoint with Phase 03 simulation results*)
 - `34ca3d03` (*ref: gl_vr: add vr_dumpeye command and improve simulation test script*)
-- `015820a5` (*docs: vr: consolidate port documentation under Documentation/vr/*)
-- `24531512` (*platform: openxr: implement touch locomotion, gestures and two-handed stabilizer*)
 **Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Em carregamento para testes físicos.  
-**APK Atualizado e Instalado:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)
+**APK Atualizado e Instalado:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)  
+**Caderno de Engenharia:** [Documentation/vr/ENGINEERING_NOTEBOOK.md](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md)
 
 ---
 
