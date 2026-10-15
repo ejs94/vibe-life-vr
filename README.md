@@ -31,14 +31,14 @@ A assistência de IA é empregada continuamente ao longo de todo o ciclo de enge
 | :---: | :--- | :---: | :--- |
 | **01** | **OpenXR Baseline & Dual-Platform Bring-Up** | 🟢 **Concluído** | Session state machine, graphics binding (GLX / EGL), swapchains estéreo operacionais. |
 | **02** | **Renderização Estéreo, Frustum Assimétrico & 6DoF** | 🟢 **Concluído** | Renderização 3D estéreo com iluminação, geometrias e skybox ativa nos mapas `crossfire` e `c1a0`. Validação via dump de swapchain (`Mean RGB > 60-117`) e screencap do Horizon OS. |
-| **03** | **Universal Action Sets, Touch Poses & Locomoção** | 🟡 **Ativo** | Controles Meta Quest Touch, analógicos para smooth/snap turn, botões de ação e locomoção física. |
-| **04** | **Desacoplamento de Armas 6DoF & Lanterna Física** | ⚪ Planejado | Mira de armas desacoplada do olhar e lanterna independente na mão secundária. |
+| **03** | **Universal Action Sets, Touch Poses & Locomoção** | 🟢 **Concluído** | Controles Meta Quest Touch, analógicos para smooth/snap turn, botões de ação, estabilizador de duas mãos, gestos e modo canhoto. |
+| **04** | **Desacoplamento de Armas 6DoF & Lanterna Física** | 🟡 **Ativo** | Mira de armas desacoplada do olhar e lanterna independente na mão secundária. |
 | **05** | **UI Espacial no Headset & Menu VR** | ⚪ Planejado | Pointer laser 3D e menu dedicado `CMenuVR` para conforto e calibração em jogo. |
 | **06** | **Balística de Servidor & Feedback Háptico** | ⚪ Planejado | Origem física de projéteis e recoil tátil nos controles. |
 | **07** | **Presença Imersiva & Áudio 3D HRTF** | ⚪ Planejado | Mãos virtuais com articulação e áudio espacializado via OpenAL Soft. |
 | **08** | **Expansões (Opposing Force, Blue Shift)** | ⚪ Planejado | Suporte às campanhas clássicas e mods GoldSrc. |
 
-Para o acompanhamento detalhado de cada fase, consulte o [VR_PORT_PLAN.md](VR_PORT_PLAN.md) e o histórico de resolução em [ISSUES.md](ISSUES.md).
+Para a especificação técnica completa e histórico de resolução, consulte a documentação centralizada em [Documentation/vr/README.md](Documentation/vr/README.md) e [Documentation/vr/ROADMAP.md](Documentation/vr/ROADMAP.md).
 
 ---
 
