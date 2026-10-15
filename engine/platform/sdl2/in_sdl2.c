@@ -35,6 +35,11 @@ static struct
 	qboolean pushed;
 } in_visible_cursor_pos;
 
+#ifdef XASH_OPENXR
+#include "../openxr/xr_core.h"
+#include "../openxr/xr_input.h"
+#endif
+
 /*
 =============
 Platform_GetMousePos
@@ -43,6 +48,19 @@ Platform_GetMousePos
 */
 void GAME_EXPORT Platform_GetMousePos( int *x, int *y )
 {
+#ifdef XASH_OPENXR
+	if( XR_IsActive() )
+	{
+		int px, py;
+		qboolean hit;
+		if( XR_GetPointerCursorPos( &px, &py, &hit ) && hit )
+		{
+			if( x ) *x = px;
+			if( y ) *y = py;
+			return;
+		}
+	}
+#endif
 	SDL_GetMouseState( x, y );
 
 	if( x )
