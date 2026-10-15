@@ -568,6 +568,21 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			angles[0] = handAngles[0];
 			angles[1] = anglemod( handAngles[1] + turn_yaw );
 			angles[2] = handAngles[2];
+
+			// Apply Grip Offsets in hand local coordinate space
+			vec3_t fwd, rt, up;
+			AngleVectors( angles, fwd, rt, up );
+
+			float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f);
+			float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
+			float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f);
+
+			VectorMA( origin, off_fwd, fwd, origin );
+			VectorMA( origin, off_rt,  rt,  origin );
+			VectorMA( origin, off_up,  up,  origin );
+
+			VectorCopy( origin, e->origin );
+			VectorCopy( angles, e->angles );
 		}
 	}
 #endif
@@ -3235,16 +3250,15 @@ R_StudioDrawModelInternal
 */
 static void R_StudioDrawModelInternal( cl_entity_t *e, int flags )
 {
-	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ))
+#ifdef XASH_OPENXR
+	// In VR, the viewmodel is a 6DoF hand-tracked entity that must use our decoupled studio renderer
+	if( (e == tr.viewent && XR_IsActive()) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
+#else
+	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
+#endif
 	{
 		if( e->player )
 			R_StudioDrawPlayer( flags, &e->curstate );
-		else R_StudioDrawModel( flags );
-	}
-	else if( unlikely( r_studio_builtin_renderer.value ))
-	{
-		if( e->player )
-			R_StudioDrawPlayer( flags, R_StudioGetPlayerState( e->index - 1 ));
 		else R_StudioDrawModel( flags );
 	}
 	else

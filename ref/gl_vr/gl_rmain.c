@@ -1136,9 +1136,16 @@ static void R_DrawEntitiesOnList( void )
 				vec3_t forward, start, end;
 				AngleVectors( worldAngles, forward, NULL, NULL );
 
-				start[0] = RI.rvp.vieworigin[0] + world_dx;
-				start[1] = RI.rvp.vieworigin[1] + world_dy;
-				start[2] = RI.rvp.vieworigin[2] + world_dz;
+				if( tr.viewent && !VectorIsNull( tr.viewent->attachment[0] ))
+				{
+					VectorCopy( tr.viewent->attachment[0], start );
+				}
+				else
+				{
+					start[0] = RI.rvp.vieworigin[0] + world_dx;
+					start[1] = RI.rvp.vieworigin[1] + world_dy;
+					start[2] = RI.rvp.vieworigin[2] + world_dz;
+				}
 				VectorMA( start, 2048.0f, forward, end );
 
 				pglDisable( GL_TEXTURE_2D );

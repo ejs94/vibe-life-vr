@@ -24,7 +24,13 @@ extern EXPORT convar_t *vr_lasersight;
 extern EXPORT convar_t *vr_headtorch;
 extern EXPORT convar_t *vr_lefthanded;
 extern EXPORT convar_t *vr_weapon_pitchadjust;
+extern EXPORT convar_t *vr_weapon_yawadjust;
+extern EXPORT convar_t *vr_weapon_rolladjust;
+extern EXPORT convar_t *vr_weapon_offset_forward;
+extern EXPORT convar_t *vr_weapon_offset_right;
+extern EXPORT convar_t *vr_weapon_offset_up;
 extern EXPORT convar_t *vr_height_adjust;
+
 extern EXPORT convar_t *vr_worldscale;
 extern EXPORT convar_t *vr_haptics_enabled;
 extern EXPORT convar_t *vr_haptics_intensity;

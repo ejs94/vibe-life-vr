@@ -661,19 +661,23 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 
             if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
                 out_angles[0] += vr_weapon_pitchadjust->value;
+            if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+                out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+            if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+                out_angles[2] += vr_weapon_rolladjust->value;
 
             return true;
         }
         return false;
     }
 
-    // Converter para coordenadas GoldSrc:
-    // X = frente (-Z), Y = esquerda (-X), Z = cima (Y)
+    // Convert to GoldSrc coordinates:
+    // X = forward (-Z), Y = left (-X), Z = up (Y)
     out_origin[0] = -g_xrInputState.rightHandPose.position.z;
     out_origin[1] = -g_xrInputState.rightHandPose.position.x;
     out_origin[2] = g_xrInputState.rightHandPose.position.y;
 
-    // Two-Handed Weapon Stabiliser (Ativado quando o grip esquerdo está pressionado e a distância é de 12cm a 55cm)
+    // Two-Handed Weapon Stabiliser (active when left grip > 0.4 and distance is 12cm-55cm)
     float dx = g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x;
     float dy = g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y;
     float dz = g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z;
@@ -681,7 +685,7 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 
     if (g_xrInputState.gripLeft > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.leftHandActive)
     {
-        // Vetor da mão traseira (direita) para a dianteira (esquerda) em coordenadas GoldSrc:
+        // Vector from rear hand (right) to front hand (left) in GoldSrc coordinates:
         vec3_t aimDir;
         aimDir[0] = (g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z);
         aimDir[1] = (g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x);
@@ -698,6 +702,14 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
     {
         out_angles[0] += vr_weapon_pitchadjust->value;
     }
+    if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+    {
+        out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+    }
+    if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+    {
+        out_angles[2] += vr_weapon_rolladjust->value;
+    }
 
     return true;
 }
@@ -711,7 +723,7 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
         if (vr_test_hands && vr_test_hands->value > 0.0f)
         {
             out_origin[0] = 0.22f;
-            out_origin[1] = 0.06f;   // 6cm à esquerda
+            out_origin[1] = 0.06f;   // 6cm to the left
             out_origin[2] = -0.08f;
 
             out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
@@ -720,6 +732,10 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
 
             if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
                 out_angles[0] += vr_weapon_pitchadjust->value;
+            if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+                out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+            if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+                out_angles[2] += vr_weapon_rolladjust->value;
 
             return true;
         }
@@ -730,7 +746,7 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     out_origin[1] = -g_xrInputState.leftHandPose.position.x;
     out_origin[2] = g_xrInputState.leftHandPose.position.y;
 
-    // Two-Handed Weapon Stabiliser canhoto (mão direita segura o cano com grip)
+    // Two-Handed Weapon Stabiliser for left-handed primary (right hand grips barrel)
     float dx = g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x;
     float dy = g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y;
     float dz = g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z;
@@ -753,6 +769,14 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
     {
         out_angles[0] += vr_weapon_pitchadjust->value;
+    }
+    if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+    {
+        out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+    }
+    if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+    {
+        out_angles[2] += vr_weapon_rolladjust->value;
     }
 
     return true;
