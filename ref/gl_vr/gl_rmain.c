@@ -357,7 +357,7 @@ void R_VR_ResetCalibration( void )
 	VectorSet( s_vrBaseOrigin, 0.0f, 1.65f, 0.0f );
 }
 
-static void R_VR_Recenter_f( void )
+void R_VR_Recenter_f( void )
 {
 	R_VR_ResetCalibration();
 	gEngfuncs.Con_Printf( "^2[VR] Recenter requested. Head origin will calibrate on next frame.\n" );
@@ -366,7 +366,7 @@ static void R_VR_Recenter_f( void )
 static qboolean s_triggerEyeDump = false;
 static char s_eyeDumpFilename[64] = "vr_eye0.ppm";
 
-static void R_VR_DumpEye_f( void )
+void R_VR_DumpEye_f( void )
 {
 	if( gEngfuncs.Cmd_Argc() > 1 )
 		Q_strncpy( s_eyeDumpFilename, gEngfuncs.Cmd_Argv( 1 ), sizeof( s_eyeDumpFilename ) );
@@ -400,8 +400,6 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 		if( !gl_vr_height_adjust )
 		{
 			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
-			gEngfuncs.Cmd_AddCommand( "vr_recenter", R_VR_Recenter_f, "Recenter VR headset origin" );
-			gEngfuncs.Cmd_AddCommand( "vr_dumpeye", R_VR_DumpEye_f, "Dump OpenXR eye 0 buffer to PPM image" );
 		}
 
 		// Calibrate baseline head position so the camera starts centered at the map's spawn point
@@ -1536,6 +1534,48 @@ static qboolean R_VR_ReadbackEye0( void *dst, int x, int y, int w, int h, GLuint
 
 	return (err == GL_NO_ERROR);
 }
+
+static void R_VR_CheckDumpEye0( GLuint currentFbo )
+{
+	if( !s_triggerEyeDump )
+		return;
+
+	s_triggerEyeDump = false;
+	int w = g_xrEyeSwapchains[0].width;
+	int h = g_xrEyeSwapchains[0].height;
+	char dumpPath[128];
+#if defined(__ANDROID__)
+	Q_snprintf( dumpPath, sizeof( dumpPath ), "/sdcard/xash/%s", s_eyeDumpFilename );
+#else
+	Q_snprintf( dumpPath, sizeof( dumpPath ), "%s", s_eyeDumpFilename );
+#endif
+	FILE *fp = fopen( dumpPath, "wb" );
+	if( fp )
+	{
+		unsigned char *rgba = (unsigned char *)Mem_Malloc( r_temppool, w * h * 4 );
+		if( rgba )
+		{
+			R_VR_ReadbackEye0( rgba, 0, 0, w, h, currentFbo );
+			fprintf( fp, "P6\n%d %d\n255\n", w, h );
+			unsigned char *row = (unsigned char *)Mem_Malloc( r_temppool, w * 3 );
+			for( int y = h - 1; y >= 0; y-- )
+			{
+				unsigned char *src = &rgba[y * w * 4];
+				for( int x = 0; x < w; x++ )
+				{
+					row[x * 3 + 0] = src[x * 4 + 0];
+					row[x * 3 + 1] = src[x * 4 + 1];
+					row[x * 3 + 2] = src[x * 4 + 2];
+				}
+				fwrite( row, 1, w * 3, fp );
+			}
+			Mem_Free( row );
+			Mem_Free( rgba );
+			gEngfuncs.Con_Printf( "^2[VR] DUMPED OpenXR Eye 0 to %s (%dx%d)!\n", dumpPath, w, h );
+		}
+		fclose( fp );
+	}
+}
 #endif
 
 /*
@@ -1635,44 +1675,9 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 
 				// Periodic / Diagnostic dump of Left Eye to PPM for empirical verification
 				static int s_eyeDumpTimer = 60;
-				if( (s_eyeDumpTimer > 0 && --s_eyeDumpTimer == 0) || s_triggerEyeDump )
-				{
-					s_triggerEyeDump = false;
-					int w = g_xrEyeSwapchains[0].width;
-					int h = g_xrEyeSwapchains[0].height;
-					char dumpPath[128];
-#if defined(__ANDROID__)
-					Q_snprintf( dumpPath, sizeof( dumpPath ), "/sdcard/xash/%s", s_eyeDumpFilename );
-#else
-					Q_snprintf( dumpPath, sizeof( dumpPath ), "%s", s_eyeDumpFilename );
-#endif
-					FILE *fp = fopen( dumpPath, "wb" );
-					if( fp )
-					{
-						unsigned char *rgba = (unsigned char *)Mem_Malloc( r_temppool, w * h * 4 );
-						if( rgba )
-						{
-							R_VR_ReadbackEye0( rgba, 0, 0, w, h, currentFbo );
-							fprintf( fp, "P6\n%d %d\n255\n", w, h );
-							unsigned char *row = (unsigned char *)Mem_Malloc( r_temppool, w * 3 );
-							for( int y = h - 1; y >= 0; y-- )
-							{
-								unsigned char *src = &rgba[y * w * 4];
-								for( int x = 0; x < w; x++ )
-								{
-									row[x * 3 + 0] = src[x * 4 + 0];
-									row[x * 3 + 1] = src[x * 4 + 1];
-									row[x * 3 + 2] = src[x * 4 + 2];
-								}
-								fwrite( row, 1, w * 3, fp );
-							}
-							Mem_Free( row );
-							Mem_Free( rgba );
-							gEngfuncs.Con_Printf( "^2[VR] DUMPED OpenXR Eye 0 to %s (%dx%d)!\n", dumpPath, w, h );
-						}
-						fclose( fp );
-					}
-				}
+				if( s_eyeDumpTimer > 0 && --s_eyeDumpTimer == 0 )
+					s_triggerEyeDump = true;
+				R_VR_CheckDumpEye0( currentFbo );
 			}
 
 #ifdef XASH_OPENXR
@@ -1802,6 +1807,8 @@ static void R_RenderXRMenu( void )
 	pglClear( GL_COLOR_BUFFER_BIT );
 	pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
 	pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+	R_VR_CheckDumpEye0( currentFbo );
 
 	XR_EndEye( 0 );
 

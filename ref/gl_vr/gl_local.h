@@ -517,6 +517,10 @@ void R_BeginFrame( qboolean clearScene );
 void R_RenderFrame( const struct ref_viewpass_s *vp );
 void R_EndFrame( void );
 extern int g_vr_eye;
+#ifdef XASH_OPENXR
+void R_VR_Recenter_f( void );
+void R_VR_DumpEye_f( void );
+#endif
 void R_ClearScene( void );
 void R_GetTextureParms( int *w, int *h, int texnum );
 void R_DrawStretchPic( float x, float y, float w, float h, float s1, float t1, float s2, float t2, int texnum );

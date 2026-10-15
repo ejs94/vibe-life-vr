@@ -200,6 +200,11 @@ void GL_CheckRenderTargets( void )
 	int width, height;
 	float scale = bound( 0.1f, r_scene_scale.value, 8.0f );
 	qboolean wanted = scale != 1.0f;
+#ifdef XASH_OPENXR
+	// Screen FBO is always required in VR to capture 2D HUD and floating menus
+	if( XR_IsActive() )
+		wanted = true;
+#endif
 
 	GL_GetWindowSize( &width, &height );
 

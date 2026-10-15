@@ -1289,6 +1289,10 @@ static void GL_InitCommands( void )
 
 	gEngfuncs.Cmd_AddCommand( "r_info", R_RenderInfo_f, "display renderer info" );
 	gEngfuncs.Cmd_AddCommand( "timerefresh", SCR_TimeRefresh_f, "turn quickly and print rendering statistcs" );
+#ifdef XASH_OPENXR
+	gEngfuncs.Cmd_AddCommand( "vr_recenter", R_VR_Recenter_f, "Recenter VR headset origin" );
+	gEngfuncs.Cmd_AddCommand( "vr_dumpeye", R_VR_DumpEye_f, "Dump OpenXR eye 0 buffer to PPM image" );
+#endif
 }
 
 /*
@@ -1337,6 +1341,10 @@ static void GL_RemoveCommands( void )
 {
 	gEngfuncs.Cmd_RemoveCommand( "r_info" );
 	gEngfuncs.Cmd_RemoveCommand( "timerefresh" );
+#ifdef XASH_OPENXR
+	gEngfuncs.Cmd_RemoveCommand( "vr_recenter" );
+	gEngfuncs.Cmd_RemoveCommand( "vr_dumpeye" );
+#endif
 }
 
 /*
