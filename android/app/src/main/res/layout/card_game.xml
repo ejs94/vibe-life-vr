@@ -67,6 +67,8 @@
 					android:layout_height="match_parent"
 					android:gravity="center_vertical"
 					android:singleLine="true"
+					android:textSize="18sp"
+					android:textStyle="bold"
 					android:textColor="@color/horizon_text_primary"
 					app:layout_constrainedWidth="true"
 					app:layout_constraintBottom_toBottomOf="parent"
@@ -88,14 +90,34 @@
 			app:layout_constraintBottom_toBottomOf="parent"
 			app:layout_constraintEnd_toEndOf="parent">
 
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/btnTestMap"
+				style="@style/Widget.Material3.Button.TonalButton"
+				android:layout_width="wrap_content"
+				android:layout_height="48dp"
+				android:minHeight="48dp"
+				android:layout_marginEnd="10dp"
+				android:text="@string/launch_test_map"
+				android:textColor="@color/horizon_text_primary"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				app:backgroundTint="@color/horizon_surface_variant"
+				app:strokeColor="@color/horizon_border"
+				app:strokeWidth="1dp"
+				app:cornerRadius="12dp"
+				app:icon="@drawable/ic_baseline_terminal_24"
+				app:iconGravity="textStart"
+				app:iconTint="@color/horizon_primary" />
 
 			<com.google.android.material.button.MaterialButton
 				android:id="@+id/launchButton"
 				style="@style/Widget.Material3.Button"
 				android:layout_width="wrap_content"
 				android:layout_height="48dp"
+				android:minHeight="48dp"
 				android:text="@string/play_in_vr"
 				android:textColor="@color/horizon_bg"
+				android:textSize="14sp"
 				android:textStyle="bold"
 				app:backgroundTint="@color/horizon_primary"
 				app:cornerRadius="12dp"

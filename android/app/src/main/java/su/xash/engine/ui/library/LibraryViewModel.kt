@@ -52,7 +52,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 		_selectedItem.value = game
 	}
 
-	fun startEngine(ctx: Context, game: Game) {
-		game.startEngine(ctx)
+	fun startEngine(ctx: Context, game: Game, extraArgs: String? = null) {
+		game.startEngine(ctx, extraArgs)
 	}
 }

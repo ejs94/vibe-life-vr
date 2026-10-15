@@ -105,4 +105,8 @@
 	<string name="onboarding_refresh">Rescan Folder</string>
 	<string name="openxr_status_title">OpenXR Runtime Status</string>
 	<string name="openxr_status_ready">OpenXR Loader is integrated and ready for Quest 3S.</string>
+	<string name="launch_test_map">TEST WEAPONS</string>
+	<string name="test_map_title">Weapon Testing Grounds</string>
+	<string name="test_map_crossfire">Crossfire (All weapons on ground)</string>
+	<string name="test_map_hazard">Hazard Course (Training range)</string>
 </resources>

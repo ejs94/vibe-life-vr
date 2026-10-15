@@ -76,6 +76,8 @@
 			android:screenOrientation="landscape"
 			android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
 			android:allowEmbedded="true">
+			<meta-data android:name="com.oculus.vrshell.default_panel_dimensions" android:value="960,540" />
+			<meta-data android:name="com.oculus.vrshell.resizable" android:value="true" />
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />

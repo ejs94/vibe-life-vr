@@ -58,6 +58,25 @@ class GameAdapter(private val libraryViewModel: LibraryViewModel) :
 				launchButton.setOnClickListener {
 					libraryViewModel.startEngine(it.context, game)
 				}
+				btnTestMap.setOnClickListener {
+					// Launch test map with all weapons on the ground (Crossfire)
+					libraryViewModel.startEngine(it.context, game, "+map crossfire")
+				}
+				btnTestMap.setOnLongClickListener { v ->
+					val options = arrayOf(
+						v.context.getString(R.string.test_map_crossfire),
+						v.context.getString(R.string.test_map_hazard)
+					)
+					val cmds = arrayOf("+map crossfire", "+map t0a0")
+					com.google.android.material.dialog.MaterialAlertDialogBuilder(v.context)
+						.setTitle(R.string.test_map_title)
+						.setItems(options) { _, which ->
+							libraryViewModel.startEngine(v.context, game, cmds[which])
+						}
+						.setNegativeButton(android.R.string.cancel, null)
+						.show()
+					true
+				}
 			}
 		}
 	}

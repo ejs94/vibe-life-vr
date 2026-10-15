@@ -52,7 +52,7 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 		}
 	}
 
-	fun startEngine(ctx: Context) {
+	fun startEngine(ctx: Context, extraArgs: String? = null) {
 		val packageNames = getPackageNamesForGameDir(basedir.name)
 		var externalGame = false
 		var commandLineArgs = ""
@@ -72,6 +72,10 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 		}
 
 		commandLineArgs += pref.getString("arguments", "-console -log") ?: ""
+
+		if (!extraArgs.isNullOrBlank()) {
+			commandLineArgs += " $extraArgs "
+		}
 
 		if (externalGame && packageNames != null) {
 			var packageName: String? = null

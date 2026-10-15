@@ -1,147 +1,122 @@
-> [!CAUTION]
-> **Only download Xash3D FWGS from official sources.** Third-party builds, "modded launchers", "optimized" repacks and random mirrors are frequently bundled with malware, miners, spyware and credential stealers. We cannot vouch for anything we did not build. Get official binaries only from the [releases page](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous).
+# 🥽 Xash3D VR (Half-Life VR) — Native OpenXR Port
 
-# Xash3D FWGS Engine <img align="right" width="128" height="128" src="https://github.com/FWGS/xash3d-fwgs/raw/master/game_launch/icon-xash-material.png" alt="Xash3D FWGS icon" />
-[![GitHub Actions Status](https://github.com/FWGS/xash3d-fwgs/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/FWGS/xash3d-fwgs/actions/workflows/c-cpp.yml) [![FreeBSD Build Status](https://img.shields.io/cirrus/github/FWGS/xash3d-fwgs?label=freebsd%20build)](https://cirrus-ci.com/github/FWGS/xash3d-fwgs) \
-[![Discord Server](https://img.shields.io/discord/355697768582610945?logo=Discord&label=International%20Discord%20chat)](http://xash.su/discord/) [![Russian speakers Telegram Chat](https://img.shields.io/badge/Russian_speakers_Telegram_chat-gray?logo=Telegram)](https://t.me/flyingwithgauss) \
-[![Download Daily Build](https://img.shields.io/badge/downloads-testing-orange)](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous)
+[![OpenXR Standard](https://img.shields.io/badge/OpenXR-1.0%2F1.1%20Compliant-blue.svg)](https://www.khronos.org/openxr/)
+[![Platforms](https://img.shields.io/badge/Platforms-Meta%20Quest%20Standalone%20%7C%20Linux%20PCVR-brightgreen.svg)]()
+[![Target Hardware](https://img.shields.io/badge/Hardware-Quest%201%2F2%2FPro%2F3%2F3S-orange.svg)]()
+[![Engine](https://img.shields.io/badge/Engine-Xash3D%20FWGS%20v0.21-purple.svg)](https://github.com/FWGS/xash3d-fwgs)
+[![AI-Assisted](https://img.shields.io/badge/Engineering-AI--Assisted%20%28Pair%20Programming%29-indigo.svg)]()
 
-Xash3D ([pronounced](https://ipa-reader.com/?text=ks%C9%91%CA%82) `[ksɑʂ]`) FWGS is a game engine, aimed to provide compatibility with Half-Life Engine and extend it, as well as to give game developers well known workflow.
+> **Xash3D VR** é a porta de Realidade Virtual para o motor **Xash3D FWGS**, trazendo a experiência completa do clássico **Half-Life** (e mods GoldSrc) para headsets VR utilizando o padrão Khronos **OpenXR puro**.
+>
+> Projetado com arquitetura C99 moderna e desacoplada, o projeto roda **nativamente no Meta Quest Standalone** (Horizon OS / Android arm64-v8a) e em **Desktop Linux PCVR** (Monado, WiVRn, SteamVR) sem depender de bibliotecas legadas ou proprietárias de fabricantes (zero VrApi, zero dependências fechadas).
 
-Xash3D FWGS is a heavily modified fork of an original [Xash3D Engine](https://www.moddb.com/engines/xash3d-engine) by Unkle Mike.
+---
 
-## Donate
-[![Donate to FWGS button](https://img.shields.io/badge/Donate_to_FWGS-%3C3-magenta)](Documentation/donate.md) \
-If you like Xash3D FWGS, consider supporting individual engine maintainers. By supporting us, you help to continue developing this game engine further. The sponsorship links are available in [documentation](Documentation/donate.md).
+## 🤖 Engenharia Assistida por Inteligência Artificial (AI-Assisted Engineering)
 
-## Fork features
-* Steam Half-Life (HLSDK 2.5) support.
-* Crossplatform and modern compilers support: supports Windows, Linux, BSD & Android on x86 & ARM and [many more](Documentation/ports.md).
-* Better multiplayer: multiple master servers, headless dedicated server, voice chat, [GoldSrc protocol support](Documentation/goldsrc-protocol-support.md) and IPv6 support.
-* Multiple renderers support: OpenGL, GLESv1, GLESv2 and Software.
-* Advanced virtual filesystem: `.pk3` and `.pk3dir` support, compatibility with GoldSrc FS module, fast case-insensitivity emulation for crossplatform.
-* Mobility API: better game integration on mobile devices (vibration, touch controls).
-* Different input methods: touch and gamepad in addition to mouse & keyboard.
-* TrueType font rendering, as a part of mainui_cpp.
-* External VGUI support module.
-* PNG & KTX2 image format support.
-* Ogg Vorbis (`.ogg`) & Ogg Opus (`.opus`) audio formats support.
-* [A set of small improvements](Documentation/), without broken compatibility.
+> [!NOTE]
+> **Transparência e Inovação Técnica:**  
+> Este projeto é ativamente desenvolvido e mantido com assistência de **Inteligência Artificial de Fronteira** (Pair Programming com modelos avançados do Google DeepMind / Antigravity).
 
-## Installation & Running
-0) Get Xash3D FWGS binaries: you can use [testing](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous) build or you can compile engine from source code.
-1) Copy engine binaries to some directory.
-2) Copy `valve` directory from [Half-Life](https://store.steampowered.com/app/70/HalfLife/) to directory with engine binaries.
-If your CPU is NOT x86 compatible or you're running 64-bit version of the engine, you may want to compile [Half-Life SDK](https://github.com/FWGS/hlsdk-portable).
-This repository contains our fork of HLSDK and restored source code for Half-Life expansions and some mods.
-You still needed to copy `valve` directory as all game resources located there.
-3) Run the main executable (`xash3d.exe` or AppImage).
+A assistência de IA é empregada continuamente ao longo de todo o ciclo de engenharia do projeto, destacando-se em:
+* **Diagnóstico de Drivers Gráficos Móveis:** Identificação cirúrgica de comportamentos não documentados de hardware na arquitetura Qualcomm Adreno TBDR (Snapdragon XR2 Gen 2 no Quest 3S), como fast-clears de GMEM tile memory e a virtualização de tabelas de texturas no GL4ES que desvinculavam FBOs da swapchain do OpenXR gerando telas pretas.
+* **Matemática Espacial 3D e Ótica VR:** Dedução e implementação dos vetores de projeção assimétrica por olho (`xrLocateViews`), cálculo trigonométrico do frustum de culling 6DoF sem descarte indevido de nós do mundo, e conversão de quaternions de rastreamento para ângulos de Euler do GoldSrc.
+* **Automação e Portões de Qualidade (Quality Gates):** Desenvolvimento de scripts de telemetria em tempo real ([`test_quest_auto.sh`](scripts/test_quest_auto.sh) e [`quest_battery.sh`](scripts/quest_battery.sh)) com leitura direta de buffers de swapchain (`glReadPixels` em PPM/PNG), screencaps do compositor do Meta Horizon OS e validação matemática de canais de cor.
 
-For additional info, run Xash3D with `-help` command line key.
+---
 
-### Android
-0) Install the APK file.
-1) Copy `valve` directory to a folder named `xash` in the Internal storage.
-2) Run games from within the app.
+## 🚀 Status do Projeto & Roadmap
 
-## Reporting issues
-* Issues are accepted in both English and Russian.
-* They are only accepted if you run legally acquired product (e.g. Half-Life in Steam).
+| Fase | Descrição | Status | Validação Empírica |
+| :---: | :--- | :---: | :--- |
+| **01** | **OpenXR Baseline & Dual-Platform Bring-Up** | 🟢 **Concluído** | Session state machine, graphics binding (GLX / EGL), swapchains estéreo operacionais. |
+| **02** | **Renderização Estéreo, Frustum Assimétrico & 6DoF** | 🟢 **Concluído** | Renderização 3D estéreo com iluminação, geometrias e skybox ativa nos mapas `crossfire` e `c1a0`. Validação via dump de swapchain (`Mean RGB > 60-117`) e screencap do Horizon OS. |
+| **03** | **Universal Action Sets, Touch Poses & Locomoção** | 🟡 **Ativo** | Controles Meta Quest Touch, analógicos para smooth/snap turn, botões de ação e locomoção física. |
+| **04** | **Desacoplamento de Armas 6DoF & Lanterna Física** | ⚪ Planejado | Mira de armas desacoplada do olhar e lanterna independente na mão secundária. |
+| **05** | **UI Espacial no Headset & Menu VR** | ⚪ Planejado | Pointer laser 3D e menu dedicado `CMenuVR` para conforto e calibração em jogo. |
+| **06** | **Balística de Servidor & Feedback Háptico** | ⚪ Planejado | Origem física de projéteis e recoil tátil nos controles. |
+| **07** | **Presença Imersiva & Áudio 3D HRTF** | ⚪ Planejado | Mãos virtuais com articulação e áudio espacializado via OpenAL Soft. |
+| **08** | **Expansões (Opposing Force, Blue Shift)** | ⚪ Planejado | Suporte às campanhas clássicas e mods GoldSrc. |
 
-## Contributing code
-* Check the CONTRIBUTING.md file.
+Para o acompanhamento detalhado de cada fase, consulte o [VR_PORT_PLAN.md](VR_PORT_PLAN.md) e o histórico de resolução em [ISSUES.md](ISSUES.md).
 
-## Build instructions
-We are using Waf build system. If you have some Waf-related questions, I recommend you to read [Waf Book](https://waf.io/book/).
+---
 
-**NOTE: NEVER USE GitHub's ZIP ARCHIVES. GitHub doesn't include external dependencies we're using!**
+## ✨ Recursos Principais
 
-### Prerequisites
-If your CPU is x86 compatible and you're on Windows or Linux, we are building 32-bit code by default. This was done to maintain compatibility with Steam releases of Half-Life and based on it's engine games.
-Even if Xash3D FWGS does support targetting 64-bit, you can't load games without recompiling them from source code!
+* **Padrão Khronos OpenXR 1.0/1.1 Nativo:** Código C99 modular sem wrappers obsoletos (sem VrApi).
+* **Compatibilidade Dual-Platform:**
+  * **Meta Quest Standalone:** Quest 1, Quest 2, Quest Pro, Quest 3 e Quest 3S (Horizon OS / Android arm64-v8a).
+  * **Desktop PCVR (Linux):** Monado (simulado ou com headset físico), WiVRn, SteamVR e ALVR.
+* **Launcher Modernizado para Horizon OS (Kotlin):**
+  * Desenvolvido seguindo as **Diretrizes de Design da Meta** (alvos de toque mínimos de 48dp, tipografia ergonômica de 14-18sp, cantos arredondados de 12dp).
+  * Painel centrado e delimitado a **960x540dp**, eliminando esticamento lateral excessivo e fadiga visual no headset.
+  * **Botão dedicado "TESTAR ARMAS"**: Carrega instantaneamente o mapa de testes (`crossfire`) com todas as armas do Half-Life espalhadas pelo chão para teste imediato de mecânicas e mira.
+* **Renderizador Dedicado `ref_gl_vr`:**
+  * Apresentação estéreo com cálculo de frustum ótico independente para cada olho.
+  * Registro e bypass de texturas externas da swapchain do OpenXR via GL4ES e GLES nativo.
+  * Preservação de canais de cor e endurecimento de alfa contra blends indevidos do compositor TimeWarp.
+* **Ferramental de Diagnóstico e Saúde:**
+  * Monitoramento de bateria em tempo real com voltagem de precisão em mV/V ([`scripts/quest_battery.sh`](scripts/quest_battery.sh)).
+  * Pipeline de testes automatizados com extração de buffer e análise de pixels ([`scripts/test_quest_auto.sh`](scripts/test_quest_auto.sh)).
 
-If your CPU is NOT x86 compatible or you decided build 64-bit version of engine, you may want to compile [Half-Life SDK](https://github.com/FWGS/hlsdk-portable).
-This repository contains our fork of HLSDK and restored source code for Half-Life expansions and some mods.
+---
 
-#### Windows (Visual Studio)
-* Install Visual Studio.
-* Install latest [Python](https://python.org) **OR** run `cinst python.install` if you have Chocolatey.
-* Install latest [Git](https://git-scm.com/download/win) **OR** run `cinst git.install` if you have Chocolatey.
-* Download [SDL2](https://libsdl.org/download-2.0.php) development package for Visual Studio.
-* Clone this repository: `git clone --recursive https://github.com/FWGS/xash3d-fwgs`.
-* Make sure you have at least 12GB of free space to store all build-time dependencies: ~10GB for Visual Studio, 300 MB for Git, 100 MB for Python and other.
+## 🛠️ Como Compilar e Executar
 
-#### GNU/Linux
-##### Debian/Ubuntu
-* Only for 32-bit engine on 64-bit x86 operating system:
-  * Enable i386 on your system: `$ sudo dpkg --add-architecture i386`.
-  * Install `aptitude` ([why?](https://github.com/FWGS/xash3d-fwgs/issues/1828#issuecomment-2415131759)):  `$ sudo apt update && sudo apt upgrade && sudo apt install aptitude`
-  * Install development tools: `$ sudo aptitude --without-recommends install git build-essential gcc-multilib g++-multilib libsdl2-dev:i386 libfreetype-dev:i386 libopus-dev:i386 libbz2-dev:i386 libvorbis-dev:i386 libopusfile-dev:i386 libogg-dev:i386`.
-  * Set PKG_CONFIG_PATH environment variable to point at 32-bit libraries: `$ export PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig`.
+### 🥽 1. Meta Quest Standalone (Android arm64)
 
-* For 64-bit engine on 64-bit x86 and other non-x86 systems:
-  * Install development tools: `$ sudo apt install git build-essential python libsdl2-dev libfreetype6-dev libopus-dev libbz2-dev libvorbis-dev libopusfile-dev libogg-dev`.
+#### Pré-requisitos:
+* Android SDK e NDK configurados (ou Android Studio instalado).
+* Headset Meta Quest com Modo Desenvolvedor ativo e conectado via USB ou Wi-Fi ADB.
 
-* Clone this repostory: `$ git clone --recursive https://github.com/FWGS/xash3d-fwgs`.
+#### Compilação e Instalação do APK:
+```bash
+# 1. Compilar o APK Standalone do Quest
+./scripts/build_quest_apk.sh
 
-##### RedHat/Fedora
-* Only for 32-bit engine on 64-bit x86 operating system:
-  * Install development tools: `$ sudo dnf install git gcc gcc-c++ glibc-devel.i686 SDL3-devel.i686 sdl2-compat-devel.i686 opus-devel.i686 freetype-devel.i686 bzip2-devel.i686 libvorbis-devel.i686 opusfile-devel.i686 libogg-devel.i686`.
-  * Set PKG_CONFIG_PATH environment variable to point at 32-bit libraries: `$ export PKG_CONFIG_PATH=/usr/lib/pkgconfig`.
+# 2. Instalar no headset via ADB
+adb install -r out/xash3d-vr-quest.apk
 
-* For 64-bit engine on 64-bit x86 and other non-x86 systems:
-  * Install development tools: `$ sudo dnf install git gcc gcc-c++ SDL3-devel sdl2-compat-devel opus-devel freetype-devel bzip2-devel libvorbis-devel opusfile-devel libogg-devel`.
+# 3. Copiar os dados do jogo (pasta valve do Half-Life oficial do Steam)
+adb push /caminho/para/Half-Life/valve /sdcard/xash/valve
+```
 
-* Clone this repostory: `$ git clone --recursive https://github.com/FWGS/xash3d-fwgs`.
+#### Teste Automatizado com Validação de Pixels:
+```bash
+# Executa 25 segundos no mapa crossfire, extrai o buffer de renderização e confirma pixels coloridos
+./scripts/test_quest_auto.sh 25 crossfire
+```
 
-#### Android (Windows/Linux/macOS)
-* Install [Android Studio](https://developer.android.com/studio) (or the command line tools).
-* Install [Python](https://python.org) (at least 2.7, latest is better).
-* Install [Git](https://git-scm.com/download/win).
-* Install [Ninja](https://ninja-build.org/).
-* Install [CMake](https://cmake.org/) (for some dependencies).
+---
 
-* Clone this repostory: `$ git clone --recursive https://github.com/FWGS/xash3d-fwgs`.
+### 🖥️ 2. Desktop Linux PCVR (Monado / WiVRn / SteamVR)
 
-#### iOS/iPadOS
-* Install Xcode from the appstore.
-* Install [Homebrew package manager](https://brew.sh).
+#### Compilação:
+```bash
+# 1. Configurar o build com suporte a OpenXR e Renderer VR
+./waf configure --enable-openxr --enable-gl-vr
 
-* Install build dependencies by running: `brew install python`.
+# 2. Compilar e instalar localmente
+./waf build
+./waf install --destdir=./out
+```
 
-* Clone the SDL2 repo `$ git clone --recursive https://github.com/libsdl-org/SDL.git -b SDL2` and compile the iOS framework by navigating to SDL/Xcode/SDL and opening the Xcode project.
+#### Execução com WiVRn ou Monado Simulado:
+```bash
+# Teste automatizado com runtime simulado do Monado
+./scripts/test_simulated_monado.sh crossfire
 
-* Clone this repository: `$ git clone --recursive https://github.com/FWGS/xash3d-fwgs`.
+# Ou iniciar o jogo diretamente em VR
+./scripts/run_wivrn.sh
+```
 
-### Building
-#### Windows (Visual Studio)
-0) Open command line.
-1) Navigate to `xash3d-fwgs` directory.
-2) (optional) Examine which build options are available: `waf --help`.
-3) Configure build: `waf configure --sdl2=c:/path/to/SDL2`.
-4) Compile: `waf build`.
-5) Install: `waf install --destdir=c:/path/to/any/output/directory`.
+---
 
-#### Linux
-If compiling 32-bit on amd64, make sure `PKG_CONFIG_PATH` from the previous step is set correctly, prior to running configure.
+## 📄 Licença & Reconhecimentos
 
-0) (optional) Examine which build options are available: `./waf --help`.
-1) Configure build: `./waf configure` (you need to pass `-8` to compile 64-bit engine on 64-bit x86 processor).
-2) Compile: `./waf build`.
-3) Install: `./waf install --destdir=/path/to/any/output/directory`.
-
-#### Android (Windows/Linux/macOS)
-To build you should clone [SDL](https://github.com/libsdl-org/SDL) from `SDL2` branch and [HLSDK-portable](https://github.com/FWGS/hlsdk-portable) `mobile-hacks` branch repositories to 3rdparty folder, after that you should be able to open the project in Android Studio from `android` directory or manually call Gradle to build the APK.
-
-#### iOS/iPadOS (MacOS only)
-0) (optional) Examine which build options are available: `./waf --help`.
-1) Configure build: `./waf configure --ios --enable-bundled-deps --sdl2 (path/to/SDL2.framework)`, set `--ios-simulator` instead of `--ios` if you want to build for simulator.
-2) Compile `./waf build`.
-3) Navigate to `build` and copy your compiled SDL2.framework there, then add your game dylibs to `build/ios/libs/(gamedir)/(dlls/cl_dlls)`(You can also run `scripts/ios/buildhlsdk.sh` instead to automatically create an ipa with hlsdk dylibs)
-4) Run `scripts/ios/createipa.sh` to create an installable ipa
-
-### Running tests
-
-Tests are enabled with `--enable-tests` passed to `./waf configure` and can be run with `./waf --alltests`.
-
-This builds both standalone unit tests and a separate engine test binary (`xash3d_tests`) that embeds engine-level tests. The engine test binary requires no game assets.
+* **Motor Base:** [Xash3D FWGS](https://github.com/FWGS/xash3d-fwgs) — Licenciado sob GNU GPLv3.
+* **Valve Corporation:** Criadores do Half-Life e do motor GoldSrc original.
+* **Team Beef (Lambda1VR):** Agradecimento especial pelos insights pioneiros sobre arquitetura de FBOs dedicados e tratamento de canais alfa em hardware móvel.
+* **Khronos Group:** Pelo padrão aberto OpenXR e especificações do ecossistema de Realidade Estendida.
+* **AI Pair Programming:** Desenvolvimento e diagnósticos assistidos por modelos avançados de Inteligência Artificial do Google DeepMind.
