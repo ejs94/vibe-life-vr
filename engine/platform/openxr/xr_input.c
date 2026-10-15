@@ -1046,24 +1046,65 @@ void XR_UpdatePointerCursor( void )
 	}
 
 	int hand = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? VR_HAND_LEFT : VR_HAND_RIGHT;
-	qboolean handActive = (hand == VR_HAND_LEFT) ? g_xrInputState.leftHandActive : g_xrInputState.rightHandActive;
-	if( !handActive )
+	XrSpace handSpace = (hand == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
+
+	XrPosef poseInView = {0};
+	qboolean hasPose = false;
+	float dx = 0.0f, dy = 0.0f, dz = -1.0f;
+
+	// 1. Locate physical controller directly in head-relative View Space (g_xrViewSpace)
+	if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE )
 	{
-		s_pointerState.active = false;
-		return;
+		XrTime syncTime = XR_GetPredictedDisplayTime();
+		XrSpaceLocation loc = {0};
+		loc.type = XR_TYPE_SPACE_LOCATION;
+		if( syncTime > 0 && XR_SUCCEEDED( xrLocateSpace( handSpace, g_xrViewSpace, syncTime, &loc ) ))
+		{
+			if( loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT )
+			{
+				poseInView = loc.pose;
+				hasPose = true;
+
+				float qx = poseInView.orientation.x;
+				float qy = poseInView.orientation.y;
+				float qz = poseInView.orientation.z;
+				float qw = poseInView.orientation.w;
+
+				dx = -2.0f * (qx * qz + qw * qy);
+				dy = -2.0f * (qy * qz - qw * qx);
+				dz = -1.0f + 2.0f * (qx * qx + qy * qy);
+			}
+		}
 	}
 
-	XrPosef pose = (hand == VR_HAND_LEFT) ? g_xrInputState.leftHandPose : g_xrInputState.rightHandPose;
+	// 2. Fallback to simulated hand pose for headless / simulator verification
+	if( !hasPose )
+	{
+		if( vr_test_hands && vr_test_hands->value > 0.0f )
+		{
+			poseInView.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
+			poseInView.position.y = -0.15f;
+			poseInView.position.z = -0.30f;
 
-	// Calculate pointing ray direction in OpenXR coordinates
-	float qx = pose.orientation.x;
-	float qy = pose.orientation.y;
-	float qz = pose.orientation.z;
-	float qw = pose.orientation.w;
+			float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+			float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
 
-	float dx = -2.0f * (qx * qz + qw * qy);
-	float dy = -2.0f * (qy * qz - qw * qx);
-	float dz = -1.0f + 2.0f * (qx * qx + qy * qy);
+			float pitch_rad = DEG2RAD( pitch );
+			float yaw_rad   = DEG2RAD( yaw );
+
+			// View space: +X Right, +Y Up, -Z Forward
+			dx =  sinf( yaw_rad ) * cosf( pitch_rad );
+			dy = -sinf( pitch_rad ); // negative pitch in GoldSrc points up (+Y in View space)
+			dz = -cosf( yaw_rad ) * cosf( pitch_rad );
+
+			hasPose = true;
+		}
+		else
+		{
+			s_pointerState.active = false;
+			return;
+		}
+	}
 
 	float len = sqrtf( dx * dx + dy * dy + dz * dz );
 	if( len > 0.0001f )
@@ -1073,7 +1114,7 @@ void XR_UpdatePointerCursor( void )
 		dz /= len;
 	}
 
-	// Quad plane is located at Z = -1.5m in OpenXR local space
+	// Floating menu quad plane is anchored at Z = -1.5m in View Space
 	float planeZ = -1.5f;
 	qboolean hit = false;
 	float u = 0.5f, v = 0.5f;
@@ -1081,29 +1122,35 @@ void XR_UpdatePointerCursor( void )
 
 	float worldScale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 
-	// Controller origin in engine units
-	vec3_t rayStart, rayEnd;
-	rayStart[0] = -pose.position.z * worldScale;
-	rayStart[1] = -pose.position.x * worldScale;
-	rayStart[2] =  pose.position.y * worldScale;
+	// Dimensions of the floating menu quad layer matching XR_EndMenuFrame
+	float quadWidth = 1.8f;
+	float aspect = (refState.width > 0 && refState.height > 0) ? ((float)refState.height / (float)refState.width) : 0.75f;
+	float quadHeight = quadWidth * aspect;
+	float halfW = quadWidth * 0.5f;
+	float halfH = quadHeight * 0.5f;
 
-	float hit_x = pose.position.x + 2.0f * dx;
-	float hit_y = pose.position.y + 2.0f * dy;
-	float hit_z = pose.position.z + 2.0f * dz;
+	// Controller origin in head-relative GoldSrc coordinates
+	vec3_t rayStart, rayEnd;
+	rayStart[0] = -poseInView.position.z * worldScale;
+	rayStart[1] = -poseInView.position.x * worldScale;
+	rayStart[2] =  poseInView.position.y * worldScale;
+
+	float hit_x = poseInView.position.x + 2.0f * dx;
+	float hit_y = poseInView.position.y + 2.0f * dy;
+	float hit_z = poseInView.position.z + 2.0f * dz;
 
 	if( dz < -0.01f )
 	{
-		float t = (planeZ - pose.position.z) / dz;
+		float t = (planeZ - poseInView.position.z) / dz;
 		if( t > 0.0f )
 		{
-			float ix = pose.position.x + t * dx;
-			float iy = pose.position.y + t * dy;
+			float ix = poseInView.position.x + t * dx;
+			float iy = poseInView.position.y + t * dy;
 
-			// Floating menu quad dimensions: 1.6m width, 0.9m height
-			if( ix >= -0.8f && ix <= 0.8f && iy >= -0.45f && iy <= 0.45f )
+			if( ix >= -halfW && ix <= halfW && iy >= -halfH && iy <= halfH )
 			{
-				u = (ix + 0.8f) / 1.6f;
-				v = 0.5f - (iy / 0.9f);
+				u = (ix + halfW) / quadWidth;
+				v = (halfH - iy) / quadHeight; // top of screen (v=0) is +halfH
 				u = bound( 0.0f, u, 1.0f );
 				v = bound( 0.0f, v, 1.0f );
 
@@ -1137,14 +1184,30 @@ void XR_UpdatePointerCursor( void )
 	VectorCopy( rayStart, s_pointerState.rayStart );
 	VectorCopy( rayEnd, s_pointerState.rayEnd );
 
+	static int s_ptrDbgTimer = 0;
+	if( ++s_ptrDbgTimer >= 30 )
+	{
+		s_ptrDbgTimer = 0;
+		if( vr_test_hands && vr_test_hands->value > 0.0f )
+		{
+			Con_Printf( "^3[VR_POINTER] hit=%d screen=(%d, %d) uv=(%.2f, %.2f) hand_angles=(pitch=%.1f, yaw=%.1f)\n",
+				hit, px, py, u, v,
+				vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f,
+				vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f );
+		}
+	}
+
 	// Dominant hand trigger click -> K_MOUSE1
 	static qboolean s_prevTrigger = false;
-	qboolean trigger = g_xrInputState.attack;
+	qboolean trigger = (hand == VR_HAND_LEFT) ? g_xrInputState.attack2 : g_xrInputState.attack;
+	if( vr_test_click && vr_test_click->value > 0.0f )
+		trigger = true;
 	if( trigger && !s_prevTrigger )
 	{
 		s_prevTrigger = true;
 		if( hit )
 		{
+			Con_Printf( "^2[VR_POINTER] Trigger CLICK at screen=(%d, %d) uv=(%.2f, %.2f)\n", px, py, u, v );
 			XR_TriggerHapticEffect( hand, VR_HAPTIC_UI_CLICK, 0.6f );
 			Key_Event( K_MOUSE1, true );
 		}
@@ -1155,9 +1218,9 @@ void XR_UpdatePointerCursor( void )
 		Key_Event( K_MOUSE1, false );
 	}
 
-	// Dominant hand secondary button -> K_ESCAPE
+	// Menu / Back button -> K_ESCAPE
 	static qboolean s_prevBack = false;
-	qboolean back = g_xrInputState.attack2;
+	qboolean back = g_xrInputState.menu;
 	if( back && !s_prevBack )
 	{
 		s_prevBack = true;

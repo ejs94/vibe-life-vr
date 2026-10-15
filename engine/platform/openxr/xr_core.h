@@ -38,6 +38,7 @@ extern EXPORT convar_t *vr_pointer_hud;
 extern EXPORT convar_t *vr_test_hands;
 extern EXPORT convar_t *vr_test_hand_pitch;
 extern EXPORT convar_t *vr_test_hand_yaw;
+extern EXPORT convar_t *vr_test_click;
 
 EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );
