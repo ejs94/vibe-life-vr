@@ -12,7 +12,7 @@
 | **02** | **Stereo Rendering, Asymmetric Frustum & 6DoF** | 🟢 **Completed** | Full stereo 3D rendering with correct culling in `crossfire` and `c1a0`. Black screen resolved via `gl4es_registerExternalTexture`. Eye buffer dump: `Mean RGB > 60-117`. |
 | **03** | **Universal Action Sets, Touch Poses & Locomotion** | 🟢 **Completed** | Analog stick locomotion, snap/smooth turn, action buttons (fire, alt-fire, jump, crouch, use, reload, flashlight, menu), two-handed stabilizer, weapon cycling, left-handed mode. |
 | **04** | **6DoF Weapon Decoupling & Off-Hand Flashlight** | 🟡 **Active** | Weapon viewmodels locked to dominant controller aim pose; physical flashlight casting dynamically from off-hand controller (`cl_tent.c`). |
-| **05** | **In-Headset Spatial UI, Laser Pointer & VR Options** | ⚪ Planned | 3D laser pointer for menus (`XR_UpdatePointerCursor`), floating quad layer interaction, and dedicated in-game VR options screen (`CMenuVR`). |
+| **05** | **In-Headset Spatial UI, Laser Pointer & VR Options** | 🟡 **Active** | 3D laser pointer for menus (`XR_UpdatePointerCursor`) & floating quad layer interaction verified in simulation; dedicated VR options screen (`CMenuVR`) pending. |
 | **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | ⚪ Planned | Bullets, rockets, and Tau beams spawned from physical muzzle (`pev->vuser1`); physical grenade throwing momentum (`pev->vuser3`); full haptic library integration. |
 | **07** | **Immersive Hand Presence & 3D Spatial Audio** | ⚪ Planned | Articulated hand models with animated fingers and 3D HRTF spatialized audio via OpenAL Soft. |
 | **08** | **Expansions (Opposing Force, Blue Shift) & Mod Suite** | ⚪ Planned | Complete support for Gearbox expansions, weapon packs, and GoldSrc singleplayer/multiplayer mods. |
@@ -62,14 +62,26 @@
 * **Root Cause:** VR CVars were registered during `XR_Init()`, which executes inside `Host_Frame()`. Startup configuration files (`config.cfg`, `valve.rc`) execute earlier during `Host_Init()`.
 * **Resolution:** Added `XR_RegisterCVars()` called directly in `Host_Init()` in `engine/common/host.c`.
 
+### Issue #9: In-Headset 2D Menus / Quad HUD Laser Pointer Interaction Non-Functional
+* **Symptoms:** When running the APK in-headset on the Meta Quest 3S, 2D in-game menus (mainui, pause menu, options) were visible on the floating quad, but VR controller pointer clicks and cursor interaction did not interact with or activate UI buttons.
+* **Root Causes:**
+  1. *Space Mismatch:* `XR_UpdatePointerCursor()` originally queried controller poses in `STAGE` roomscale space (floor at $Y=0$, head at $Y \approx 1.5m$), whereas the floating menu quad layer is positioned in head-relative `g_xrViewSpace` (head at $(0,0,0)$, quad at $Z=-1.5m$). The raycast was testing against $Y \in [-0.45, 0.45]$, which was below floor level in room coordinates and therefore `hit` was permanently `false`.
+  2. *Android Touchscreen Emulation Hijack:* On Android, `Touch_WantVisibleCursor()` defaulted to `true`, causing `IN_MouseMove()` to abort and all clicks in `Touch_KeyEvent()` to redirect to touchscreen coordinates, calling `Platform_GetMousePos()` which returned $(0,0)$.
+  3. *Missing Pointer Coordinates in Platform Input:* `Platform_GetMousePos()` in `in_sdl2.c` only called `SDL_GetMouseState()`, returning 0 on Quest since no physical mouse exists.
+  4. *Missing FBO Allocation:* In `ref_gl_vr`, `tr.targets.screen.fbo` was only allocated if `r_scene_scale != 1.0f`.
+* **Resolution:**
+  - Rewrote `XR_UpdatePointerCursor()` to locate the controller directly in `g_xrViewSpace` using `xrLocateSpace(handSpace, g_xrViewSpace, syncTime, &loc)`.
+  - Added simulated hands fallback (`vr_test_hands 1`, `vr_test_hand_yaw`, `vr_test_hand_pitch`, `vr_test_click`) to enable fully automated CI/headless simulation testing.
+  - Disabled touch cursor emulation when VR is active in `in_touch.c` (`if (XR_IsActive()) return false;`).
+  - Forwarded laser pointer screen pixel coordinates in `Platform_GetMousePos()` via `XR_GetPointerCursorPos()`.
+  - Forced `tr.targets.screen` FBO allocation whenever `XR_IsActive()` in `ref/gl_vr/gl_fbo.c`.
+  - Extended Eye 0 buffer dumping to 2D menus in `ref/gl_vr/gl_rmain.c` via `R_VR_CheckDumpEye0()`.
+  - Validated via automated Monado simulation (`simulate_menu.cfg`): controller hovered over "Hazard course", highlighted the button orange, clicked the trigger, and launched the game level `t0a0`.
+* **Status:** 🟢 **Resolved** (Phase 05 UI laser pointer gate passed).
+
 ---
 
 ## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3S Testing)
-
-### Issue #9: In-Headset 2D Menus / Quad HUD Laser Pointer Interaction Non-Functional
-* **Symptoms:** When running the APK in-headset on the Meta Quest 3S, 2D in-game menus (mainui, pause menu, options) are visible on the floating quad, but the VR controller pointer clicks and cursor interaction do not interact with or activate UI buttons.
-* **Root Cause & Investigation Path:** The 3D laser pointer raycast against the floating quad canvas (`XR_UpdatePointerCursor`) needs to project onto 2D UI pixel coordinates and inject mouse events (`K_MOUSE1`, cursor move) into the engine's UI dispatch pipeline (`engine/client/in_touch.c`, `cl_input.c`, `mainui`).
-* **Status:** 🟡 **Active / Backlogged** — Scheduled for dedicated resolution in Phase 05 (In-Headset Spatial UI & Laser Pointer).
 
 ### Issue #10: Meta Horizon OS 2D Android Launcher UI Layout & Font Scaling Glitches
 * **Symptoms:** When launching the APK from the Meta Horizon OS library in 2D panel mode, the launcher interface shows visual imperfections (font scaling broken, menu bars misaligned).
