@@ -21,6 +21,12 @@ TARGET_MAP="${1:-c1a0}"
 shift || true
 EXTRA_ARGS="${*:-}"
 
+if [ "$TARGET_MAP" = "menu" ] || [ "$TARGET_MAP" = "none" ]; then
+    MAP_CMD=""
+else
+    MAP_CMD="+map ${TARGET_MAP}"
+fi
+
 log_info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_ok()   { echo -e "\033[1;32m[PASS]\033[0m $*"; }
 log_warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
@@ -79,7 +85,7 @@ TEST_LOG="${OUTPUT_DIR}/monado_engine.log"
 log_info "Running bounded Xash3D VR engine session (${TIMEOUT_SECS}s) on map: ${TARGET_MAP}..."
 
 set +e
-timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +map "${TARGET_MAP}" ${EXTRA_ARGS} > "$TEST_LOG" 2>&1
+timeout "${TIMEOUT_SECS}s" ./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 ${MAP_CMD} ${EXTRA_ARGS} > "$TEST_LOG" 2>&1
 RUN_EXIT=$?
 set -e
 
