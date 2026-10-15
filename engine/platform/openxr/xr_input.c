@@ -645,7 +645,27 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
 
 qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
-    if (!g_xrSessionRunning || !g_xrInputState.rightHandActive) return false;
+    if (!g_xrSessionRunning) return false;
+
+    if (!g_xrInputState.rightHandActive)
+    {
+        if (vr_test_hands && vr_test_hands->value > 0.0f)
+        {
+            out_origin[0] = 0.35f;   // 35cm à frente
+            out_origin[1] = -0.15f;  // 15cm à direita (coordenadas GoldSrc)
+            out_origin[2] = -0.12f;  // 12cm abaixo dos olhos
+
+            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+            out_angles[2] = 0.0f;
+
+            if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
+                out_angles[0] += vr_weapon_pitchadjust->value;
+
+            return true;
+        }
+        return false;
+    }
 
     // Converter para coordenadas GoldSrc:
     // X = frente (-Z), Y = esquerda (-X), Z = cima (Y)
@@ -684,7 +704,27 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 
 qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
-    if (!g_xrSessionRunning || !g_xrInputState.leftHandActive) return false;
+    if (!g_xrSessionRunning) return false;
+
+    if (!g_xrInputState.leftHandActive)
+    {
+        if (vr_test_hands && vr_test_hands->value > 0.0f)
+        {
+            out_origin[0] = 0.35f;
+            out_origin[1] = 0.15f;   // 15cm à esquerda
+            out_origin[2] = -0.12f;
+
+            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+            out_angles[2] = 0.0f;
+
+            if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
+                out_angles[0] += vr_weapon_pitchadjust->value;
+
+            return true;
+        }
+        return false;
+    }
 
     out_origin[0] = -g_xrInputState.leftHandPose.position.z;
     out_origin[1] = -g_xrInputState.leftHandPose.position.x;

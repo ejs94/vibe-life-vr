@@ -37,6 +37,9 @@ EXPORT convar_t *vr_worldscale = NULL;
 EXPORT convar_t *vr_haptics_enabled = NULL;
 EXPORT convar_t *vr_haptics_intensity = NULL;
 EXPORT convar_t *vr_pointer_hud = NULL;
+EXPORT convar_t *vr_test_hands = NULL;
+EXPORT convar_t *vr_test_hand_pitch = NULL;
+EXPORT convar_t *vr_test_hand_yaw = NULL;
 static XrDebugUtilsMessengerEXT g_xrDebugMessenger = XR_NULL_HANDLE;
 
 static qboolean s_cvarsRegistered = false;
@@ -58,6 +61,9 @@ void XR_RegisterCVars( void )
     vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
     vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
     vr_pointer_hud = Cvar_Get("vr_pointer_hud", "1", FCVAR_ARCHIVE, "Enable VR laser pointer cursor in menus");
+    vr_test_hands = Cvar_Get("vr_test_hands", "0", 0, "Simulate 6DoF hand pose when physical controllers unavailable");
+    vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
+    vr_test_hand_yaw = Cvar_Get("vr_test_hand_yaw", "0", 0, "Simulated hand aim yaw degrees");
 }
 
 #define OXR_CHECK(func, msg) \

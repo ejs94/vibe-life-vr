@@ -29,6 +29,9 @@ extern EXPORT convar_t *vr_worldscale;
 extern EXPORT convar_t *vr_haptics_enabled;
 extern EXPORT convar_t *vr_haptics_intensity;
 extern EXPORT convar_t *vr_pointer_hud;
+extern EXPORT convar_t *vr_test_hands;
+extern EXPORT convar_t *vr_test_hand_pitch;
+extern EXPORT convar_t *vr_test_hand_yaw;
 
 EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );
