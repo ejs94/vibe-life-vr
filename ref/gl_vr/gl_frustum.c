@@ -78,20 +78,20 @@ void GL_FrustumInitVR( gl_frustum_t *out, float flZNear, float flZFar, float ang
 	float theta_d = fabsf( angleDown );
 	float theta_u = fabsf( angleUp );
 
-	// setup left plane (angleLeft is negative, rotated towards -RI.cull_vright)
-	VectorMAM( sinf( theta_l ), RI.cull_vforward, -cosf( theta_l ), RI.cull_vright, normal );
+	// FRUSTUM_LEFT plane (culls points too far to the right, using theta_r):
+	VectorMAM( sinf( theta_r ), RI.cull_vforward, -cosf( theta_r ), RI.cull_vright, normal );
 	GL_FrustumSetPlane( out, FRUSTUM_LEFT, normal, DotProduct( RI.cullorigin, normal ));
 
-	// setup right plane (angleRight is positive, rotated towards +RI.cull_vright)
-	VectorMAM( sinf( theta_r ), RI.cull_vforward, cosf( theta_r ), RI.cull_vright, normal );
+	// FRUSTUM_RIGHT plane (culls points too far to the left, using theta_l):
+	VectorMAM( sinf( theta_l ), RI.cull_vforward, cosf( theta_l ), RI.cull_vright, normal );
 	GL_FrustumSetPlane( out, FRUSTUM_RIGHT, normal, DotProduct( RI.cullorigin, normal ));
 
-	// setup bottom plane (angleDown is negative, rotated towards -RI.cull_vup)
-	VectorMAM( sinf( theta_d ), RI.cull_vforward, -cosf( theta_d ), RI.cull_vup, normal );
+	// FRUSTUM_BOTTOM plane (culls points too far up, using theta_u):
+	VectorMAM( sinf( theta_u ), RI.cull_vforward, -cosf( theta_u ), RI.cull_vup, normal );
 	GL_FrustumSetPlane( out, FRUSTUM_BOTTOM, normal, DotProduct( RI.cullorigin, normal ));
 
-	// setup top plane (angleUp is positive, rotated towards +RI.cull_vup)
-	VectorMAM( sinf( theta_u ), RI.cull_vforward, cosf( theta_u ), RI.cull_vup, normal );
+	// FRUSTUM_TOP plane (culls points too far down, using theta_d):
+	VectorMAM( sinf( theta_d ), RI.cull_vforward, cosf( theta_d ), RI.cull_vup, normal );
 	GL_FrustumSetPlane( out, FRUSTUM_TOP, normal, DotProduct( RI.cullorigin, normal ));
 
 	// setup far plane

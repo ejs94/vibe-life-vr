@@ -43,14 +43,14 @@ get_battery_data() {
     local raw_info
     raw_info=$($ADB_CMD shell dumpsys battery 2>/dev/null || true)
     
-    LEVEL=$(echo "$raw_info" | awk '/level:/ {print $2}' | tr -d '\r')
-    SCALE=$(echo "$raw_info" | awk '/scale:/ {print $2}' | tr -d '\r')
-    STATUS_CODE=$(echo "$raw_info" | awk '/status:/ {print $2}' | tr -d '\r')
-    HEALTH_CODE=$(echo "$raw_info" | awk '/health:/ {print $2}' | tr -d '\r')
-    TEMP_RAW=$(echo "$raw_info" | awk '/temperature:/ {print $2}' | tr -d '\r')
-    VOLTAGE_RAW=$(echo "$raw_info" | awk '/voltage:/ {print $2}' | tr -d '\r')
-    USB_POWERED=$(echo "$raw_info" | awk '/USB powered:/ {print $2}' | tr -d '\r')
-    AC_POWERED=$(echo "$raw_info" | awk '/AC powered:/ {print $2}' | tr -d '\r')
+    LEVEL=$(echo "$raw_info" | awk '$1 == "level:" {print $2}' | tr -d '\r')
+    SCALE=$(echo "$raw_info" | awk '$1 == "scale:" {print $2}' | tr -d '\r')
+    STATUS_CODE=$(echo "$raw_info" | awk '$1 == "status:" {print $2}' | tr -d '\r')
+    HEALTH_CODE=$(echo "$raw_info" | awk '$1 == "health:" {print $2}' | tr -d '\r')
+    TEMP_RAW=$(echo "$raw_info" | awk '$1 == "temperature:" {print $2}' | tr -d '\r')
+    VOLTAGE_RAW=$(echo "$raw_info" | awk '$1 == "voltage:" {print $2}' | tr -d '\r')
+    USB_POWERED=$(echo "$raw_info" | awk '$1 == "USB" && $2 == "powered:" {print $3}' | tr -d '\r')
+    AC_POWERED=$(echo "$raw_info" | awk '$1 == "AC" && $2 == "powered:" {print $3}' | tr -d '\r')
 
     LEVEL="${LEVEL:-0}"
     SCALE="${SCALE:-100}"

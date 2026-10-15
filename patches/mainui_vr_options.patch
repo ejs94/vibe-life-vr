@@ -1,0 +1,304 @@
+diff --git a/BaseMenu.h b/BaseMenu.h
+index ae05457..10fc09b 100755
+--- a/BaseMenu.h
++++ b/BaseMenu.h
+@@ -306,6 +306,7 @@ void UI_AdvUserOptions_Menu( void );
+ bool UI_AdvServerOptions_IsAvailable( void );
+ void UI_AdvServerOptions_Menu( void );
+ void UI_InputDevices_Menu( void );
++void UI_VR_Menu( void );
+ 
+ void UI_OpenUpdatePage(bool engine , bool preferstore);
+ 
+diff --git a/menus/Configuration.cpp b/menus/Configuration.cpp
+index 6e0a981..3e38c95 100644
+--- a/menus/Configuration.cpp
++++ b/menus/Configuration.cpp
+@@ -65,6 +65,8 @@ void CMenuOptions::_Init( void )
+ 		PC_TOUCH, UI_Touch_Menu, QMF_NOTIFY, 't' );
+ 	AddButton( L( "GameUI_Joystick" ), L( "Change gamepad axis and button settings" ),
+ 		PC_GAMEPAD, UI_GamePad_Menu, QMF_NOTIFY, 'g' );
++	AddButton( L( "VR Options" ), L( "Virtual Reality and comfort settings" ),
++		PC_ADV_CONTROLS, UI_VR_Menu, QMF_NOTIFY );
+ 	AddButton( L( "Update" ), L( "Check for updates" ),
+ 		PC_UPDATE, msgBox.MakeOpenEvent(), QMF_NOTIFY );
+ 	AddButton( L( "Done" ), L( "Go back to the Main menu" ),
+diff --git a/menus/Main.cpp b/menus/Main.cpp
+index 4d1a382..6479782 100644
+--- a/menus/Main.cpp
++++ b/menus/Main.cpp
+@@ -87,6 +87,12 @@ private:
+ 
+ void CMenuMain::QuitDialogCb()
+ {
++	if( EngFuncs::GetCvarFloat( "cl_confirmquit" ) == 0.0f )
++	{
++		EngFuncs::ClientCmd( false, "quit \"menu\"\n" );
++		return;
++	}
++
+ 	if( CL_IsActive() && EngFuncs::GetCvarFloat( "host_serverstate" ) && EngFuncs::GetCvarFloat( "maxplayers" ) == 1.0f )
+ 		dialog.SetMessage( L( "StringsList_235" ) );
+ 	else
+diff --git a/menus/VR.cpp b/menus/VR.cpp
+new file mode 100644
+index 0000000..d5a4749
+--- /dev/null
++++ b/menus/VR.cpp
+@@ -0,0 +1,256 @@
++/*
++VR.cpp - In-Headset Virtual Reality configuration menu
++Copyright (C) 2026 FWGS / Xash3D VR contributors
++
++This program is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
++(at your option) any later version.
++
++This program is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++GNU General Public License for more details.
++*/
++
++#include "build.h"
++#include "Framework.h"
++#include "Bitmap.h"
++#include "PicButton.h"
++#include "Slider.h"
++#include "CheckBox.h"
++#include "SpinControl.h"
++#include "Action.h"
++
++#define ART_BANNER "gfx/shell/head_advanced"
++
++class CMenuVR : public CMenuFramework
++{
++public:
++	CMenuVR() : CMenuFramework( "CMenuVR" ) { }
++
++private:
++	void _Init() override;
++	void _VidInit() override;
++	void GetConfig();
++	void SaveAndPopMenu() override;
++
++	void ToggleSmoothTurn();
++
++	// Section labels
++	CMenuAction labelLocomotion;
++	CMenuAction labelWeapons;
++	CMenuAction labelCalibration;
++
++	// Locomotion & Comfort
++	CMenuCheckBox smoothturn;
++	CMenuSpinControl snapAngle;
++	CMenuCheckBox walkdirection;
++
++	// Immersion & Weapons
++	CMenuCheckBox lasersight;
++	CMenuCheckBox headtorch;
++	CMenuCheckBox lefthanded;
++	CMenuCheckBox haptics;
++	CMenuCheckBox pointerHud;
++
++	// Calibration & World Scale
++	CMenuSlider weaponPitch;
++	CMenuSlider worldscale;
++	CMenuSlider heightAdjust;
++};
++
++/*
++=================
++CMenuVR::ToggleSmoothTurn
++=================
++*/
++void CMenuVR::ToggleSmoothTurn( void )
++{
++	snapAngle.SetGrayed( smoothturn.bChecked );
++}
++
++/*
++=================
++CMenuVR::GetConfig
++=================
++*/
++void CMenuVR::GetConfig( void )
++{
++	smoothturn.LinkCvar( "vr_smoothturn" );
++	snapAngle.LinkCvar( "vr_snap_angle", CMenuEditable::CVAR_VALUE );
++	walkdirection.LinkCvar( "vr_walkdirection" );
++
++	lasersight.LinkCvar( "vr_lasersight" );
++	headtorch.LinkCvar( "vr_headtorch" );
++	lefthanded.LinkCvar( "vr_lefthanded" );
++	haptics.LinkCvar( "vr_haptics_enabled" );
++	pointerHud.LinkCvar( "vr_pointer_hud" );
++
++	weaponPitch.LinkCvar( "vr_weapon_pitchadjust" );
++	worldscale.LinkCvar( "vr_worldscale" );
++	heightAdjust.LinkCvar( "vr_height_adjust" );
++
++	ToggleSmoothTurn();
++}
++
++/*
++=================
++CMenuVR::SaveAndPopMenu
++=================
++*/
++void CMenuVR::SaveAndPopMenu( void )
++{
++	smoothturn.WriteCvar();
++	snapAngle.WriteCvar();
++	walkdirection.WriteCvar();
++
++	lasersight.WriteCvar();
++	headtorch.WriteCvar();
++	lefthanded.WriteCvar();
++	haptics.WriteCvar();
++	pointerHud.WriteCvar();
++
++	weaponPitch.WriteCvar();
++	worldscale.WriteCvar();
++	heightAdjust.WriteCvar();
++
++	CMenuFramework::SaveAndPopMenu();
++}
++
++/*
++=================
++CMenuVR::_Init
++=================
++*/
++void CMenuVR::_Init( void )
++{
++	banner.SetPicture( ART_BANNER );
++
++	// Headers
++	labelLocomotion.szName = L( "Locomotion & Comfort" );
++	labelLocomotion.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	labelLocomotion.colorBase = uiColorHelp;
++
++	labelWeapons.szName = L( "Weapons & Flashlight" );
++	labelWeapons.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	labelWeapons.colorBase = uiColorHelp;
++
++	labelCalibration.szName = L( "Calibration & Scale" );
++	labelCalibration.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	labelCalibration.colorBase = uiColorHelp;
++
++	// Locomotion & Comfort controls
++	smoothturn.SetNameAndStatus( L( "Smooth Turning" ), L( "Continuous smooth turning instead of snap turning" ) );
++	smoothturn.onChanged = VoidCb( &CMenuVR::ToggleSmoothTurn );
++
++	snapAngle.SetNameAndStatus( L( "Snap Turn Angle" ), L( "Degrees turned per snap turn flick (15 to 90 deg)" ) );
++	snapAngle.Setup( 15.0f, 90.0f, 15.0f );
++	snapAngle.SetDisplayPrecision( 0 );
++
++	walkdirection.SetNameAndStatus( L( "Controller Walk Direction" ), L( "Move toward controller orientation instead of head gaze" ) );
++
++	// Immersion & Weapon controls
++	lasersight.SetNameAndStatus( L( "3D Weapon Laser Sight" ), L( "Visible laser pointer projected from weapon barrel" ) );
++	headtorch.SetNameAndStatus( L( "Head-Mounted Flashlight" ), L( "Flashlight attaches to head instead of off-hand" ) );
++	lefthanded.SetNameAndStatus( L( "Left-Handed Primary Weapon" ), L( "Hold primary weapon in left hand" ) );
++	haptics.SetNameAndStatus( L( "Haptic Vibration Feedback" ), L( "Tactile recoil and environmental sensations in controllers" ) );
++	pointerHud.SetNameAndStatus( L( "Menu Laser Pointer" ), L( "Interact with VR menus using laser pointer virtual cursor" ) );
++
++	// Calibration & World scale sliders
++	weaponPitch.SetNameAndStatus( L( "Weapon Pitch Offset" ), L( "Adjust weapon barrel angle in degrees (-30 to +30)" ) );
++	weaponPitch.Setup( -30.0f, 30.0f, 1.0f );
++
++	worldscale.SetNameAndStatus( L( "VR World Scale" ), L( "World scale units per meter (default: 40)" ) );
++	worldscale.Setup( 20.0f, 60.0f, 1.0f );
++
++	heightAdjust.SetNameAndStatus( L( "Player Height Offset" ), L( "Vertical player height calibration (-20 to +20)" ) );
++	heightAdjust.Setup( -20.0f, 20.0f, 1.0f );
++
++	// Side buttons
++	AddItem( banner );
++	AddButton( L( "Done" ), nullptr, PC_DONE, VoidCb( &CMenuVR::SaveAndPopMenu ) );
++	AddButton( L( "GameUI_Cancel" ), nullptr, PC_CANCEL, VoidCb( &CMenuFramework::Hide ) );
++
++	// Controls registration
++	AddItem( labelLocomotion );
++	AddItem( smoothturn );
++	AddItem( snapAngle );
++	AddItem( walkdirection );
++
++	AddItem( labelWeapons );
++	AddItem( lasersight );
++	AddItem( headtorch );
++	AddItem( lefthanded );
++	AddItem( haptics );
++	AddItem( pointerHud );
++
++	AddItem( labelCalibration );
++	AddItem( weaponPitch );
++	AddItem( worldscale );
++	AddItem( heightAdjust );
++}
++
++/*
++=================
++CMenuVR::_VidInit
++=================
++*/
++void CMenuVR::_VidInit( void )
++{
++	int lx = 330;
++	int ly = 230;
++
++	// Locomotion & Comfort column
++	labelLocomotion.SetCoord( lx, ly );
++	ly += 40;
++
++	smoothturn.SetCoord( lx, ly );
++	ly += 45;
++
++	snapAngle.SetRect( lx, ly + 15, 230, 30 );
++	ly += 65;
++
++	walkdirection.SetCoord( lx, ly );
++	ly += 55;
++
++	// Weapons & Flashlight
++	labelWeapons.SetCoord( lx, ly );
++	ly += 35;
++
++	lasersight.SetCoord( lx, ly );
++	ly += 38;
++
++	headtorch.SetCoord( lx, ly );
++	ly += 38;
++
++	lefthanded.SetCoord( lx, ly );
++	ly += 38;
++
++	haptics.SetCoord( lx, ly );
++	ly += 38;
++
++	pointerHud.SetCoord( lx, ly );
++
++	// Right column: Calibration & World Scale
++	int rx = 660;
++	int ry = 230;
++
++	labelCalibration.SetCoord( rx, ry );
++	ry += 60;
++
++	weaponPitch.SetCoord( rx, ry );
++	weaponPitch.size.w = 280;
++	ry += 80;
++
++	worldscale.SetCoord( rx, ry );
++	worldscale.size.w = 280;
++	ry += 80;
++
++	heightAdjust.SetCoord( rx, ry );
++	heightAdjust.size.w = 280;
++
++	GetConfig();
++}
++
++ADD_MENU( menu_vr, CMenuVR, UI_VR_Menu );

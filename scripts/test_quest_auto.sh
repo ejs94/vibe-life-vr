@@ -60,9 +60,10 @@ log_info "Waking headset display, disabling proximity sleep, and clearing compet
 adb shell input keyevent 224 2>/dev/null || true
 adb shell input keyevent 82 2>/dev/null || true
 adb shell svc power stayon true >/dev/null 2>&1 || true
-adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable >/dev/null 2>&1 || true
 adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null 2>&1 || true
+adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 adb shell am force-stop org.meumeu.wivrn >/dev/null 2>&1 || true
+adb shell am force-stop quest.side.vr >/dev/null 2>&1 || true
 adb shell setprop debug.oculus.guardian_pause 1 >/dev/null 2>&1 || true
 adb shell input keyevent 4 2>/dev/null || true
 
@@ -100,6 +101,12 @@ for i in $(seq 1 "$TIMEOUT_SECS"); do
     if adb shell "pidof ${PACKAGE_NAME}" >/dev/null 2>&1; then
         RUNNING=true
     fi
+    if [ "$i" -eq 12 ]; then
+        log_info "Capturing live Android OS screencap at t=12s..."
+        adb shell "screencap -p /sdcard/screencap_os.png" 2>/dev/null || true
+        adb pull /sdcard/screencap_os.png "${OUTPUT_DIR}/screencap_os.png" 2>/dev/null || true
+        adb shell "rm -f /sdcard/screencap_os.png" 2>/dev/null || true
+    fi
 done
 
 # Try capturing in-headset eye swapchain dump if available
@@ -107,6 +114,27 @@ if adb shell "test -f /sdcard/xash/vr_eye0.ppm" >/dev/null 2>&1; then
     log_info "Pulling vr_eye0.ppm from headset storage..."
     adb pull /sdcard/xash/vr_eye0.ppm "${OUTPUT_DIR}/vr_eye0.ppm" 2>/dev/null || true
     adb shell "rm -f /sdcard/xash/vr_eye0.ppm" 2>/dev/null || true
+
+    if [ -f "${OUTPUT_DIR}/vr_eye0.ppm" ]; then
+        log_info "Converting vr_eye0.ppm to PNG and analyzing pixel colors..."
+        python3 -c "
+from PIL import Image
+import numpy as np
+
+img = Image.open('${OUTPUT_DIR}/vr_eye0.ppm')
+img.save('${OUTPUT_DIR}/vr_eye0.png')
+arr = np.array(img)
+min_rgb = arr.min(axis=(0,1))
+max_rgb = arr.max(axis=(0,1))
+mean_rgb = arr.mean(axis=(0,1))
+print(f'Eye 0 Dimensions: {img.size[0]}x{img.size[1]}')
+print(f'Color Channels: Min={min_rgb}, Max={max_rgb}, Mean={mean_rgb}')
+if np.all(max_rgb == 0):
+    print('\033[1;31m[FAIL] Eye 0 buffer is solid BLACK!\033[0m')
+else:
+    print('\033[1;32m[PASS] Eye 0 buffer contains active 3D rendering and geometry!\033[0m')
+"
+    fi
 fi
 
 # 8. Force stop activity and terminate logcat collector

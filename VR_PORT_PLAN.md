@@ -1,7 +1,7 @@
 # 🗺️ Xash3D VR Port — Master Development Plan & Task Tracker
 
 > **Official Technical Planning & Execution Document**  
-> **Status:** 🟡 **Phase 01 Active — OpenXR Runtime Foundation & Dual-Platform Bring-Up**  
+> **Status:** 🟡 **Phase 03 Active — Universal Action Sets, Controller Poses & Locomotion**  
 > **API Standard:** Pure Khronos OpenXR 1.0/1.1 (C99)  
 > **Target Platforms:**  
 > - **Desktop PCVR:** Linux (x86_64 / aarch64) via Monado, WiVRn, SteamVR, and ALVR  
@@ -73,25 +73,26 @@ xash3d-fwgs-vr/
 
 ---
 
-### 🟡 Phase 02: Stereo Rendering, Asymmetric Frustum & 6DoF Head Tracking
+### 🟢 Phase 02: Stereo Rendering, Asymmetric Frustum & 6DoF Head Tracking (COMPLETED & VERIFIED)
 * **Goal:** Deliver stereoscopic perspective and optical lens correction for both eyes.
-* **Status:** 🟡 **Active** (Unblocked by Phase 01 Verification)
+* **Status:** 🟢 **Completed & Verified** (Dual-Platform Gate Passed)
 * **Key Deliverables:**
   - Connect `ref_gl_vr` stereo render pass to OpenXR eye swapchain framebuffers.
   - Query FOV tangents via `xrLocateViews` and inject per-eye asymmetric lens Frustum into `R_SetupProjectionMatrix`.
   - Convert OpenXR tracking Quaternions to Euler angles in `cl_view.c`.
   - Apply 3D physical head translation to `worldviewMatrix` in `R_SetupGL`.
   - Spatial floating 2D quad canvas (`XrCompositionLayerQuad`) for HUD and menus.
+  - Fix GL4ES texture virtualization bypass (`gl4es_registerExternalTexture`) and Qualcomm Adreno direct GLES attachment.
 * **PCVR Verification Test:**
-  - Load Half-Life maps (`c1a0`, `crossfire`). Confirm 6DoF head tracking with 1:1 real-world physical movement, zero optical distortion, and floating HUD.
+  - Load Half-Life maps (`c1a0`, `crossfire`). Confirm 6DoF head tracking with 1:1 real-world physical movement, zero optical distortion, and floating HUD. **(PASSED - Monado simulated 6DoF & WiVRn)**
 * **Android Standalone Verification Test:**
-  - Run on Quest standalone. Confirm smooth 6DoF head tracking, correct stereo depth, and stable framerate.
+  - Run on Quest 3S standalone. Confirm smooth 6DoF head tracking, correct stereo depth, non-black rendering, and stable framerate. **(PASSED - Mean RGB [105.7, 112.7, 117.9], OS compositor screencap validated)**
 
 ---
 
-### ⚪ Phase 03: Universal Action Sets, Controller Poses & Locomotion
+### 🟡 Phase 03: Universal Action Sets, Controller Poses & Locomotion (ACTIVE)
 * **Goal:** Full motion controller input for Meta Quest Touch and Valve Index.
-* **Status:** ⚪ Planned
+* **Status:** 🟡 **Active** (Unblocked by Phase 02 Verification)
 * **Key Deliverables:**
   - Action set creation (`xrCreateActionSet`) and interaction profiles for Meta Quest Touch (Quest 1/2/Pro/3/3S) and Valve Index.
   - Analog stick locomotion and turn mechanics in `usercmd_t`.

@@ -1,0 +1,60 @@
+diff --git a/include/gl4esinit.h b/include/gl4esinit.h
+index 79cbb344..c2de9f7f 100644
+--- a/include/gl4esinit.h
++++ b/include/gl4esinit.h
+@@ -24,6 +24,8 @@ void initialize_gl4es(void);
+ void close_gl4es(void);
+ // wrapped GetProcAddress
+ void* APIENTRY_GL4ES gl4es_GetProcAddress(const char *name);
++// register external hardware texture into GL4ES tracking
++void gl4es_registerExternalTexture(GLuint texture, int width, int height);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/gl/texture.h b/src/gl/texture.h
+index 33e140a3..55689e0a 100644
+--- a/src/gl/texture.h
++++ b/src/gl/texture.h
+@@ -176,6 +176,7 @@ static inline GLenum map_tex_target(GLenum target) {
+     return target;
+ }
+ gltexture_t* gl4es_getTexture(GLenum target, GLuint texture);
++void gl4es_registerExternalTexture(GLuint texture, int width, int height);
+ gltexture_t* gl4es_getCurrentTexture(GLenum target);
+ 
+ static inline GLuint what_target(GLenum target) {
+diff --git a/src/gl/texture_params.c b/src/gl/texture_params.c
+index 96e07205..6073e2be 100644
+--- a/src/gl/texture_params.c
++++ b/src/gl/texture_params.c
+@@ -960,3 +960,30 @@ AliasExport(void,glPixelStorei,,(GLenum pname, GLint param));
+ //ARB mapper
+ AliasExport(void,glActiveTexture,ARB,(GLenum texture));
+ AliasExport(void,glClientActiveTexture,ARB,(GLenum texture));
++
++void gl4es_registerExternalTexture(GLuint texture, int width, int height) {
++    if (!texture) return;
++    int ret;
++    khint_t k = kh_get(tex, glstate->texture.list, texture);
++    gltexture_t *t = NULL;
++    if (k == kh_end(glstate->texture.list)) {
++        k = kh_put(tex, glstate->texture.list, texture, &ret);
++        t = kh_value(glstate->texture.list, k) = (gltexture_t*)malloc(sizeof(gltexture_t));
++        memset(t, 0, sizeof(gltexture_t));
++        t->texture = texture;
++    } else {
++        t = kh_value(glstate->texture.list, k);
++    }
++    t->glname = texture;
++    t->target = GL_TEXTURE_2D;
++    t->width = width;
++    t->height = height;
++    t->nwidth = width;
++    t->nheight = height;
++    t->adjustxy[0] = 1.0f;
++    t->adjustxy[1] = 1.0f;
++    t->format = GL_RGBA;
++    t->type = GL_UNSIGNED_BYTE;
++}
++
++

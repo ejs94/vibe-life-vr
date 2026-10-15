@@ -347,6 +347,25 @@ static float R_GetFarClip( void )
 	return 2048.0f;
 }
 
+#ifdef XASH_OPENXR
+static vec3_t s_vrBaseOrigin = {0.0f, 1.65f, 0.0f};
+static qboolean s_vrOriginCalibrated = false;
+
+void R_VR_ResetCalibration( void )
+{
+	s_vrOriginCalibrated = false;
+	VectorSet( s_vrBaseOrigin, 0.0f, 1.65f, 0.0f );
+}
+
+static void R_VR_Recenter_f( void )
+{
+	R_VR_ResetCalibration();
+	gEngfuncs.Con_Printf( "^2[VR] Recenter requested. Head origin will calibrate on next frame.\n" );
+}
+#else
+void R_VR_ResetCalibration( void ) {}
+#endif
+
 /*
 =============
 R_ComputeEyeTransform
@@ -363,19 +382,26 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 	if( eye >= 0 && XR_IsActive() )
 	{
 		float worldscale = gl_vr_worldscale ? gl_vr_worldscale->value : 40.0f;
-		static float s_standingEyeHeight = 1.65f;
-		static qboolean s_heightCalibrated = false;
 		static cvar_t *gl_vr_height_adjust = NULL;
 
 		if( !gl_vr_height_adjust )
-			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
-
-		// Issue #3: Protect standing height with default 1.65m fallback to prevent
-		// head colliding into low-ceiling brushes (e.g. tram in c1a0) on initial frames
-		if( !s_heightCalibrated && g_xrViews[0].pose.position.y > 0.5f )
 		{
-			s_standingEyeHeight = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
-			s_heightCalibrated = true;
+			gl_vr_height_adjust = gEngfuncs.pfnGetCvarPointer( "vr_height_adjust" );
+			gEngfuncs.Cmd_AddCommand( "vr_recenter", R_VR_Recenter_f, "Recenter VR headset origin" );
+		}
+
+		// Calibrate baseline head position so the camera starts centered at the map's spawn point
+		// regardless of the user's physical position in their Guardian boundary
+		if( !s_vrOriginCalibrated && (fabsf(g_xrViews[0].pose.position.x) > 0.001f ||
+		                              fabsf(g_xrViews[0].pose.position.y) > 0.001f ||
+		                              fabsf(g_xrViews[0].pose.position.z) > 0.001f) )
+		{
+			s_vrBaseOrigin[0] = (g_xrViews[0].pose.position.x + g_xrViews[1].pose.position.x) * 0.5f;
+			s_vrBaseOrigin[1] = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
+			s_vrBaseOrigin[2] = (g_xrViews[0].pose.position.z + g_xrViews[1].pose.position.z) * 0.5f;
+			s_vrOriginCalibrated = true;
+			gEngfuncs.Con_Printf( "^2[VR] Head origin calibrated to room position: (%.2f, %.2f, %.2f)\n",
+				s_vrBaseOrigin[0], s_vrBaseOrigin[1], s_vrBaseOrigin[2] );
 		}
 
 		float turn_yaw = XR_GetPlayerTurnYaw();
@@ -383,10 +409,11 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 		float cy = cosf( yaw_rad );
 		float sy = sinf( yaw_rad );
 
-		// OpenXR LOCAL room coordinates: +X = Right, +Y = Up, -Z = Forward
-		float room_forward = -g_xrViews[eye].pose.position.z;
-		float room_right   =  g_xrViews[eye].pose.position.x;
-		float room_up      =  (g_xrViews[eye].pose.position.y - s_standingEyeHeight);
+		// OpenXR room coordinates relative to calibrated player origin:
+		// +X = Right, +Y = Up, -Z = Forward
+		float room_forward = -(g_xrViews[eye].pose.position.z - s_vrBaseOrigin[2]);
+		float room_right   =  (g_xrViews[eye].pose.position.x - s_vrBaseOrigin[0]);
+		float room_up      =  (g_xrViews[eye].pose.position.y - s_vrBaseOrigin[1]);
 
 		if( gl_vr_height_adjust )
 			room_up += gl_vr_height_adjust->value / worldscale;
@@ -1181,6 +1208,7 @@ void R_RenderScene( void )
 	R_DrawEntitiesOnList();
 
 	R_DrawWaterSurfaces();
+	GL_CheckForErrors();
 }
 
 void R_GammaChanged( qboolean do_reset_gamma )
@@ -1278,10 +1306,53 @@ void R_SetupRefParams( const ref_viewpass_t *rvp )
 }
 
 #ifdef XASH_OPENXR
+#if defined(__ANDROID__)
+#include <dlfcn.h>
+typedef void (*PFN_glFramebufferTexture2D)(GLenum, GLenum, GLenum, GLuint, GLint);
+typedef void (*PFN_glBindFramebuffer)(GLenum, GLuint);
+typedef void (*PFN_glBlitFramebuffer)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
+typedef void (*PFN_glReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
+typedef GLenum (*PFN_glGetError)(void);
+typedef GLenum (*PFN_glCheckFramebufferStatus)(GLenum);
+
+static struct {
+	void *handle;
+	PFN_glFramebufferTexture2D glFramebufferTexture2D;
+	PFN_glBindFramebuffer glBindFramebuffer;
+	PFN_glBlitFramebuffer glBlitFramebuffer;
+	PFN_glReadPixels glReadPixels;
+	PFN_glGetError glGetError;
+	PFN_glCheckFramebufferStatus glCheckFramebufferStatus;
+} s_realGLES = {0};
+
+static void R_InitRealGLES( void )
+{
+	if( s_realGLES.handle ) return;
+	s_realGLES.handle = dlopen( "libGLESv2.so", RTLD_NOW | RTLD_GLOBAL );
+	if( !s_realGLES.handle )
+		s_realGLES.handle = dlopen( "libGLESv3.so", RTLD_NOW | RTLD_GLOBAL );
+	if( s_realGLES.handle )
+	{
+		s_realGLES.glFramebufferTexture2D = (PFN_glFramebufferTexture2D)dlsym( s_realGLES.handle, "glFramebufferTexture2D" );
+		s_realGLES.glBindFramebuffer = (PFN_glBindFramebuffer)dlsym( s_realGLES.handle, "glBindFramebuffer" );
+		s_realGLES.glBlitFramebuffer = (PFN_glBlitFramebuffer)dlsym( s_realGLES.handle, "glBlitFramebuffer" );
+		s_realGLES.glReadPixels = (PFN_glReadPixels)dlsym( s_realGLES.handle, "glReadPixels" );
+		s_realGLES.glGetError = (PFN_glGetError)dlsym( s_realGLES.handle, "glGetError" );
+		s_realGLES.glCheckFramebufferStatus = (PFN_glCheckFramebufferStatus)dlsym( s_realGLES.handle, "glCheckFramebufferStatus" );
+	}
+}
+
+// Function exported by gl4es to register external hardware textures into its virtualization table
+extern void gl4es_registerExternalTexture(GLuint texture, int width, int height);
+#endif
+
 static GLuint s_xrEyeFbos[2][8] = {{0}};
 static GLuint s_xrEyeDepthRbos[2][8] = {{0}};
 static uint32_t s_xrEyeFbosWidth[2] = {0};
 static uint32_t s_xrEyeFbosHeight[2] = {0};
+static GLuint s_readbackFbo = 0;
+static GLuint s_readbackTex = 0;
+static int s_readbackW = 0, s_readbackH = 0;
 
 static void R_SetupXREyeFbos( void )
 {
@@ -1322,24 +1393,112 @@ static void R_SetupXREyeFbos( void )
 			pglRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h );
 			pglBindRenderbuffer( GL_RENDERBUFFER, 0 );
 
+#if defined(__ANDROID__)
+			R_InitRealGLES();
+			// Crucial fix: Register external OpenXR hardware swapchain texture with GL4ES
+			// so GL4ES maps texture -> texture instead of generating an empty dummy texture!
+			gl4es_registerExternalTexture( g_xrEyeSwapchains[eye].images[j], w, h );
+#endif
+
 			pglGenFramebuffers( 1, &s_xrEyeFbos[eye][j] );
 			pglBindFramebuffer( GL_FRAMEBUFFER, s_xrEyeFbos[eye][j] );
+
+#if defined(__ANDROID__)
+			// Guarantee hardware attachment directly in GLES driver
+			if( s_realGLES.glFramebufferTexture2D )
+				s_realGLES.glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_xrEyeSwapchains[eye].images[j], 0 );
+#endif
 			pglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_xrEyeSwapchains[eye].images[j], 0 );
 			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye][j] );
 			pglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, s_xrEyeDepthRbos[eye][j] );
 
 			GLenum status = pglCheckFramebufferStatus( GL_FRAMEBUFFER );
+#if defined(__ANDROID__)
+			GLenum realStatus = s_realGLES.glCheckFramebufferStatus ? s_realGLES.glCheckFramebufferStatus( GL_FRAMEBUFFER ) : 0;
+			gEngfuncs.Con_Printf( "R_SetupXREyeFbos: Eye %d FBO %d (fbo=%u tex=%u): GL4ES status=0x%x, Real GLES status=0x%x\n",
+				eye, j, s_xrEyeFbos[eye][j], g_xrEyeSwapchains[eye].images[j], status, realStatus );
+#else
 			if( status != GL_FRAMEBUFFER_COMPLETE )
 			{
 				gEngfuncs.Con_Printf( S_ERROR "R_SetupXREyeFbos: Eye %d, FBO %d incomplete (0x%x)\n", eye, j, status );
 			}
+#endif
 		}
 		pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+		if( s_readbackFbo )
+		{
+			pglDeleteFramebuffers( 1, &s_readbackFbo );
+			s_readbackFbo = 0;
+		}
+		if( s_readbackTex )
+		{
+			pglDeleteTextures( 1, &s_readbackTex );
+			s_readbackTex = 0;
+		}
+		s_readbackW = s_readbackH = 0;
 
 		s_xrEyeFbosWidth[eye] = w;
 		s_xrEyeFbosHeight[eye] = h;
 		gEngfuncs.Con_Printf( "R_SetupXREyeFbos: Eye %d OpenXR FBOs initialized (%dx%d, %d dedicated buffers)\n", eye, w, h, count );
 	}
+}
+
+static qboolean R_VR_ReadbackEye0( void *dst, int x, int y, int w, int h, GLuint srcFbo )
+{
+	int fullW = g_xrEyeSwapchains[0].width;
+	int fullH = g_xrEyeSwapchains[0].height;
+	if( fullW <= 0 || fullH <= 0 )
+		return false;
+
+#if defined(__ANDROID__)
+	R_InitRealGLES();
+#endif
+
+	if( !s_readbackFbo || s_readbackW != fullW || s_readbackH != fullH )
+	{
+		if( s_readbackFbo ) { pglDeleteFramebuffers( 1, &s_readbackFbo ); s_readbackFbo = 0; }
+		if( s_readbackTex ) { pglDeleteTextures( 1, &s_readbackTex ); s_readbackTex = 0; }
+		pglGenTextures( 1, &s_readbackTex );
+		pglBindTexture( GL_TEXTURE_2D, s_readbackTex );
+		pglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, fullW, fullH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+		pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+		pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+		pglBindTexture( GL_TEXTURE_2D, 0 );
+		pglGenFramebuffers( 1, &s_readbackFbo );
+		pglBindFramebuffer( GL_FRAMEBUFFER, s_readbackFbo );
+#if defined(__ANDROID__)
+		if( s_realGLES.glFramebufferTexture2D )
+			s_realGLES.glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_readbackTex, 0 );
+#endif
+		pglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_readbackTex, 0 );
+		s_readbackW = fullW;
+		s_readbackH = fullH;
+	}
+
+#if defined(__ANDROID__)
+	if( s_realGLES.glBlitFramebuffer && s_realGLES.glBindFramebuffer && s_realGLES.glReadPixels )
+	{
+		s_realGLES.glBindFramebuffer( GL_READ_FRAMEBUFFER, srcFbo );
+		s_realGLES.glBindFramebuffer( GL_DRAW_FRAMEBUFFER, s_readbackFbo );
+		s_realGLES.glBlitFramebuffer( 0, 0, fullW, fullH, 0, 0, fullW, fullH, GL_COLOR_BUFFER_BIT, GL_NEAREST );
+		s_realGLES.glBindFramebuffer( GL_FRAMEBUFFER, s_readbackFbo );
+		s_realGLES.glReadPixels( x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, dst );
+		GLenum err = s_realGLES.glGetError ? s_realGLES.glGetError() : GL_NO_ERROR;
+		s_realGLES.glBindFramebuffer( GL_FRAMEBUFFER, srcFbo );
+		return (err == GL_NO_ERROR);
+	}
+#endif
+
+	pglBindFramebuffer( GL_READ_FRAMEBUFFER, srcFbo );
+	pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, s_readbackFbo );
+	pglBlitFramebuffer( 0, 0, fullW, fullH, 0, 0, fullW, fullH, GL_COLOR_BUFFER_BIT, GL_NEAREST );
+	pglBindFramebuffer( GL_FRAMEBUFFER, s_readbackFbo );
+	pglReadPixels( x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, dst );
+	GLenum err = pglGetError();
+	pglBindFramebuffer( GL_FRAMEBUFFER, srcFbo );
+
+	return (err == GL_NO_ERROR);
 }
 #endif
 
@@ -1420,9 +1579,95 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 
 			R_RenderScene();
 
-			// We keep the eye swapchain open so that R_EndFrame() can blend
-			// the 2D HUD (drawn by V_PostRender) onto both eyes before XR_EndEye!
+			if( eye == 0 )
+			{
+				static int s_sceneDbg = 5;
+				if( s_sceneDbg > 0 )
+				{
+					s_sceneDbg--;
+					unsigned char px[12] = {0};
+					R_VR_ReadbackEye0( px, g_xrEyeSwapchains[0].width / 2, g_xrEyeSwapchains[0].height / 2, 1, 1, currentFbo );
+					R_VR_ReadbackEye0( px + 4, 200, 200, 1, 1, currentFbo );
+					R_VR_ReadbackEye0( px + 8, g_xrEyeSwapchains[0].width - 200, g_xrEyeSwapchains[0].height - 200, 1, 1, currentFbo );
+					vec3_t dbgOrg, dbgAng;
+					R_ComputeEyeTransform( 0, dbgOrg, dbgAng );
+					gEngfuncs.Con_Printf( "^3[VR_SCENE_DBG] frame=%d fbo=%u leafs=%d polys=%d org=(%.1f,%.1f,%.1f) ang=(%.1f,%.1f,%.1f) center=(%u,%u,%u,%u) p1=(%u,%u,%u,%u) p2=(%u,%u,%u,%u)\n",
+						tr.framecount, currentFbo, r_stats.c_world_leafs, r_stats.c_world_polys,
+						dbgOrg[0], dbgOrg[1], dbgOrg[2], dbgAng[0], dbgAng[1], dbgAng[2],
+						px[0], px[1], px[2], px[3], px[4], px[5], px[6], px[7], px[8], px[9], px[10], px[11] );
+				}
+
+				// Periodic / Diagnostic dump of Left Eye to PPM for empirical verification
+				static int s_eyeDumpTimer = 60;
+				if( s_eyeDumpTimer > 0 && --s_eyeDumpTimer == 0 )
+				{
+					int w = g_xrEyeSwapchains[0].width;
+					int h = g_xrEyeSwapchains[0].height;
+					const char *dumpPath =
+#if defined(__ANDROID__)
+						"/sdcard/xash/vr_eye0.ppm";
+#else
+						"vr_eye0.ppm";
+#endif
+					FILE *fp = fopen( dumpPath, "wb" );
+					if( fp )
+					{
+						unsigned char *rgba = (unsigned char *)Mem_Malloc( r_temppool, w * h * 4 );
+						if( rgba )
+						{
+							R_VR_ReadbackEye0( rgba, 0, 0, w, h, currentFbo );
+							fprintf( fp, "P6\n%d %d\n255\n", w, h );
+							unsigned char *row = (unsigned char *)Mem_Malloc( r_temppool, w * 3 );
+							for( int y = h - 1; y >= 0; y-- )
+							{
+								unsigned char *src = &rgba[y * w * 4];
+								for( int x = 0; x < w; x++ )
+								{
+									row[x * 3 + 0] = src[x * 4 + 0];
+									row[x * 3 + 1] = src[x * 4 + 1];
+									row[x * 3 + 2] = src[x * 4 + 2];
+								}
+								fwrite( row, 1, w * 3, fp );
+							}
+							Mem_Free( row );
+							Mem_Free( rgba );
+							gEngfuncs.Con_Printf( "^2[VR] DUMPED OpenXR Eye 0 to %s (%dx%d)!\n", dumpPath, w, h );
+						}
+						fclose( fp );
+					}
+				}
+			}
+
+#ifdef XASH_OPENXR
+			// Harden alpha channel to 1.0f before presentation to prevent OpenXR TimeWarp compositor blending to black.
+			// Credit to Team Beef (Lambda1VR) for this battle-tested pattern.
+			pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
+			pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
+			pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+			pglClear( GL_COLOR_BUFFER_BIT );
+			pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+
+			// Flush GL commands into current eye FBO before unbinding and releasing to OpenXR
+			pglFlush();
+			pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+			XR_EndEye( eye );
+#endif
 		}
+
+#if defined(XASH_OPENXR) && !defined(__ANDROID__)
+		// Mirror left eye to desktop PC window
+		uint32_t imgIdx0 = g_xrEyeSwapchains[0].currentImageIndex;
+		GLuint leftEyeFbo = s_xrEyeFbos[0][imgIdx0];
+		if( leftEyeFbo )
+		{
+			pglBindFramebuffer( GL_READ_FRAMEBUFFER, leftEyeFbo );
+			pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
+			pglBlitFramebuffer( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height,
+			                    0, 0, orig_w, orig_h,
+			                    GL_COLOR_BUFFER_BIT, GL_LINEAR );
+			pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
+		}
+#endif
 
 		RI.rvp.viewport[0] = orig_x;
 		RI.rvp.viewport[1] = orig_y;
@@ -1430,22 +1675,7 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 		RI.rvp.viewport[3] = orig_h;
 		g_vr_eye = -1;
 
-		// Clear screen target FBO to transparent (0,0,0,0) so that 2D HUD elements
-		// drawn in V_PostRender() start with a clean transparent backdrop
-		if( !GL_RenderTargetsActive() || !tr.targets.screen.fbo )
-		{
-			GL_CheckRenderTargets();
-		}
-
-		if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
-		{
-			pglBindFramebuffer( GL_FRAMEBUFFER, tr.targets.screen.fbo );
-			pglViewport( 0, 0, tr.targets.screen.width, tr.targets.screen.height );
-			pglClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
-			pglClear( GL_COLOR_BUFFER_BIT );
-			pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
-		}
-
+		XR_EndFrame();
 		s_xrSceneRendered = true;
 	}
 	else if( vr_fake_stereo && vr_fake_stereo->value > 0.0f ) {
@@ -1552,56 +1782,7 @@ void R_EndFrame( void )
 #ifdef XASH_OPENXR
 	if( XR_IsActive() )
 	{
-		if( s_xrSceneRendered )
-		{
-			// Issue #5: Composite the 2D HUD (rendered into tr.targets.screen by V_PostRender)
-			// onto both eye swapchains with alpha blending before closing the OpenXR frame.
-			if( GL_RenderTargetsActive() && tr.targets.screen.fbo )
-			{
-				for( int eye = 0; eye < 2; eye++ )
-				{
-					uint32_t imgIdx = g_xrEyeSwapchains[eye].currentImageIndex;
-					GLuint currentFbo = s_xrEyeFbos[eye][imgIdx];
-
-					pglBindFramebuffer( GL_FRAMEBUFFER, currentFbo );
-					GL_BlendTargetQuad( &tr.targets.screen, g_xrEyeSwapchains[eye].width, g_xrEyeSwapchains[eye].height, GL_LINEAR );
-
-					// Harden swapchain alpha channel to 1.0f before presentation.
-					pglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE );
-					pglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
-					pglClear( GL_COLOR_BUFFER_BIT );
-					pglColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
-					pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
-
-					XR_EndEye( eye );
-				}
-			}
-			else
-			{
-				for( int eye = 0; eye < 2; eye++ )
-				{
-					XR_EndEye( eye );
-				}
-			}
-
-#if !defined(__ANDROID__)
-			// Mirror left eye to desktop PC window
-			uint32_t imgIdx0 = g_xrEyeSwapchains[0].currentImageIndex;
-			GLuint leftEyeFbo = s_xrEyeFbos[0][imgIdx0];
-			if( leftEyeFbo )
-			{
-				pglBindFramebuffer( GL_READ_FRAMEBUFFER, leftEyeFbo );
-				pglBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
-				pglBlitFramebuffer( 0, 0, g_xrEyeSwapchains[0].width, g_xrEyeSwapchains[0].height,
-				                    0, 0, gpGlobals->width, gpGlobals->height,
-				                    GL_COLOR_BUFFER_BIT, GL_LINEAR );
-				pglBindFramebuffer( GL_FRAMEBUFFER, 0 );
-			}
-#endif
-
-			XR_EndFrame();
-		}
-		else
+		if( !s_xrSceneRendered )
 		{
 			R_RenderXRMenu();
 		}

@@ -199,11 +199,7 @@ void GL_CheckRenderTargets( void )
 {
 	int width, height;
 	float scale = bound( 0.1f, r_scene_scale.value, 8.0f );
-#ifdef XASH_OPENXR
-	qboolean wanted = (scale != 1.0f) || XR_IsActive();
-#else
 	qboolean wanted = scale != 1.0f;
-#endif
 
 	GL_GetWindowSize( &width, &height );
 

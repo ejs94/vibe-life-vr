@@ -101,7 +101,7 @@ qboolean XR_CreateSwapchains( void )
 
         XrSwapchainCreateInfo createInfo = {0};
         createInfo.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-        createInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+        createInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
         createInfo.format = selectedFormat;
         createInfo.sampleCount = 1;
         createInfo.width = g_xrEyeSwapchains[eye].width;
@@ -114,6 +114,12 @@ qboolean XR_CreateSwapchains( void )
             eye, createInfo.width, createInfo.height, (unsigned long long)createInfo.format, (unsigned long long)createInfo.usageFlags);
 
         XrResult res = xrCreateSwapchain(g_xrSession, &createInfo, &g_xrEyeSwapchains[eye].swapchain);
+        if (XR_FAILED(res))
+        {
+            Con_Printf("XR_CreateSwapchains: Eye %d create with TRANSFER_SRC failed (res = %d), retrying with COLOR_ATTACHMENT_BIT only...\n", eye, res);
+            createInfo.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+            res = xrCreateSwapchain(g_xrSession, &createInfo, &g_xrEyeSwapchains[eye].swapchain);
+        }
         if (XR_FAILED(res))
         {
             Con_Printf("XR_CreateSwapchains: Failed to create swapchain for eye %d (res = %d)\n", eye, res);

@@ -397,6 +397,7 @@ static void R_NewMap( void )
 {
 	tr.worldmodel = gp_cl->models[1];
 
+	R_VR_ResetCalibration();
 	R_ClearDecals(); // clear all level decals
 
 	R_StudioResetPlayerModels();

@@ -1655,8 +1655,8 @@ void GL_OnContextCreated( void )
 	set_getmainfbsize( GL4ES_GetMainFBSize );
 	initialize_gl4es();
 
-	// merge glBegin/glEnd in beams and console
-	pglHint( GL_BEGINEND_HINT_GL4ES, 1 );
+	// Disable beginend batching so that glBegin/glEnd immediately renders into the active FBO
+	pglHint( GL_BEGINEND_HINT_GL4ES, 0 );
 	// dxt unpacked to 16-bit looks ugly
 	pglHint( GL_AVOID16BITS_HINT_GL4ES, 1 );
 #endif // XASH_GL4ES
