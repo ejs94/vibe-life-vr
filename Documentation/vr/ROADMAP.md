@@ -88,3 +88,12 @@
 * **Root Cause & Investigation Path:** Android UI layouts in `android/app/src/main/res/layout/` and styles were optimized for standard phone screens rather than Horizon OS resizable floating 2D panel windows. Needs responsive layout constraints, font scaling, and toolbar styling adjustments.
 * **Status:** 🟡 **Active / Backlogged** — Scheduled for launcher UI polish pass.
 
+### Issue #11: Weapon Laser Sight Muzzle Emitter Displaced on Weapons Lacking Attachments or Under Two-Handed Grip
+* **Symptoms:** On certain weapons (e.g. Crossbow, Hornet Gun, Crowbar, or custom models), the 3D laser sight beam does not emerge from the physical tip of the barrel. Instead, it appears to originate from the player's hand/wrist or gets displaced when two-handed grip stabilization is engaged.
+* **Root Cause & Investigation Path:**
+  1. In `gl_rmain.c`, the laser sight checks `if (tr.viewent && !VectorIsNull(tr.viewent->attachment[0]))`. Models without a compiled muzzle attachment (such as `v_crossbow.mdl` and `v_hgun.mdl`) evaluate to null, falling back directly to `RI.rvp.vieworigin + world_dx/dy/dz` (the raw controller wrist position) instead of the gun muzzle.
+  2. Viewmodel grip offsets (`vr_weapon_offset_forward`, `vr_weapon_offset_right`, `vr_weapon_offset_up`) applied to `tr.viewent` in `gl_studio.c` are omitted in the fallback path of `gl_rmain.c`.
+  3. When two-handed weapon stabilization is active (`gripLeft > 0.4`), the aim angle redirects along the two-hand vector, but if `attachment[0]` is missing, the emitter origin remains pinned to the rear hand controller, visually detaching from the tilted viewmodel barrel.
+  4. **Proposed Solution:** In `gl_rmain.c`, if `attachment[0]` is missing, compute the emitter origin by projecting along the viewmodel entity's orientation (`tr.viewent->origin + forward * barrel_length + up * barrel_up`), with per-weapon length tables or bone extraction, ensuring seamless alignment across all arsenal weapons and during two-handed stabilization.
+* **Status:** 🟡 **Active / Backlogged** — Scheduled for Phase 04/06 weapon alignment refinement.
+
