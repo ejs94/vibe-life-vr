@@ -117,6 +117,20 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
 
 ---
 
+### 2.7. Arquitetura Universal de Balística & Muzzle Heurístico para Mods e Expansões
+* **O Problema:** No GoldSrc clássico de 1998, as armas de 1ª pessoa (`v_*.mdl`) eram meras animações 2D/3D decorativas na tela — as balas saíam dos olhos do jogador (`pev->origin + pev->view_ofs`) em direção ao centro do monitor (`v_forward`). Em VR, os controles 6DoF apontam livremente pelo espaço físico. Para o Half-Life original, muitas armas possuem o ponto de fixação da boca do cano (`attachment[0]`). Contudo, em expansões oficiais (*Opposing Force*, *Blue Shift*), mods consagrados (*They Hunger*, *Afraid of Monsters*, *Counter-Strike*, *Cry of Fear*) e armas customizadas da comunidade (GameBanana), a maioria dos modelos **não possui attachments compilados** ou foram modelados com pivôs arbitrários. Ports legados (como *Lambda1VR*) contornavam isso através de hardcoding em tabelas estáticas de offsets no código e re-exportação manual de modelos 3D em pacotes proprietários (`extras.pak`), o que quebra qualquer mod novo da comunidade.
+* **Nossa Solução Universal em Cascata (3 Camadas):**
+  1. **Nível 1 (Attachment Explícito):** Se o modelo `.mdl` do mod possui `attachment[0]` compilado pelo artista original (ex.: MP5, Shotgun, Glock, Python), o renderizador extrai a posição exata da boca do cano a partir da matriz de iluminação e ossos (`R_StudioCalcAttachments`).
+  2. **Nível 2 (Per-Weapon Config Profile):** Se houver parâmetros específicos definidos por CVars (`vr_weapon_offset_forward`, `vr_weapon_offset_right`, `vr_weapon_offset_up`, `vr_weapon_pitchadjust`), eles são somados na base local da empunhadura no espaço da mão.
+  3. **Nível 3 (Heurística Geométrica Automática por Bounding Box / PCA):** Se a arma não possuir attachments (como *Crossbow*, *Hornet Gun*, *Crowbar* e centenas de armas de mods), o motor inspeciona dinamicamente o cabeçalho do modelo Studio (`studiohdr_t`):
+     - Lê a extensão longitudinal do modelo (`m_pStudioHeader->bbmax[0]`);
+     - Determina o comprimento real do cano da arma através da extensão da malha;
+     - Projeta a boca do cano virtual (`attachment[0]`) ao longo do vetor `forward` da orientação da arma no espaço mundial a partir do punho:
+       $$\text{Muzzle} = \text{viewent.origin} + \mathbf{fwd} \times \text{barrel\_len} + \mathbf{up} \times \text{barrel\_up}$$
+  4. **Acoplamento com a Aim Pose do OpenXR:** Conforme consagrado pelo padrão `HAND-001` do *VR Modding Playbook*, a direção do disparo no servidor (`cmd->viewangles` $\rightarrow$ `pev->v_angle`) e a orientação do modelo em `gl_studio.c` utilizam a mesma **Aim Pose** do controle primário, garantindo que o traçado do projétil, o cano físico da arma e o feixe da mira laser coincidam por construção geométrica, sem depender de ajustes manuais.
+
+---
+
 ## 📱 5. Relatos Empíricos de Testes em Hardware Real (Meta Quest 3S)
 
 Durante os primeiros testes do APK instalado diretamente no **Meta Quest 3S**, dois comportamentos foram catalogados como issues ativas para resolução:

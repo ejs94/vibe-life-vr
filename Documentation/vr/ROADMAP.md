@@ -89,11 +89,15 @@
 * **Status:** 🟡 **Active / Backlogged** — Scheduled for launcher UI polish pass.
 
 ### Issue #11: Weapon Laser Sight Muzzle Emitter Displaced on Weapons Lacking Attachments or Under Two-Handed Grip
-* **Symptoms:** On certain weapons (e.g. Crossbow, Hornet Gun, Crowbar, or custom models), the 3D laser sight beam does not emerge from the physical tip of the barrel. Instead, it appears to originate from the player's hand/wrist or gets displaced when two-handed grip stabilization is engaged.
-* **Root Cause & Investigation Path:**
-  1. In `gl_rmain.c`, the laser sight checks `if (tr.viewent && !VectorIsNull(tr.viewent->attachment[0]))`. Models without a compiled muzzle attachment (such as `v_crossbow.mdl` and `v_hgun.mdl`) evaluate to null, falling back directly to `RI.rvp.vieworigin + world_dx/dy/dz` (the raw controller wrist position) instead of the gun muzzle.
-  2. Viewmodel grip offsets (`vr_weapon_offset_forward`, `vr_weapon_offset_right`, `vr_weapon_offset_up`) applied to `tr.viewent` in `gl_studio.c` are omitted in the fallback path of `gl_rmain.c`.
-  3. When two-handed weapon stabilization is active (`gripLeft > 0.4`), the aim angle redirects along the two-hand vector, but if `attachment[0]` is missing, the emitter origin remains pinned to the rear hand controller, visually detaching from the tilted viewmodel barrel.
-  4. **Proposed Solution:** In `gl_rmain.c`, if `attachment[0]` is missing, compute the emitter origin by projecting along the viewmodel entity's orientation (`tr.viewent->origin + forward * barrel_length + up * barrel_up`), with per-weapon length tables or bone extraction, ensuring seamless alignment across all arsenal weapons and during two-handed stabilization.
-* **Status:** 🟡 **Active / Backlogged** — Scheduled for Phase 04/06 weapon alignment refinement.
+* **Symptoms:** On certain weapons (e.g. Crossbow, Hornet Gun, Crowbar, or custom models), the 3D laser sight beam did not emerge from the physical tip of the barrel. Instead, it originated from the player's hand/wrist or became displaced when two-handed grip stabilization was engaged.
+* **Root Cause:**
+  1. In `gl_rmain.c`, the laser sight checked `if (tr.viewent && !VectorIsNull(tr.viewent->attachment[0]))`. Models without a compiled muzzle attachment (such as `v_crossbow.mdl` and `v_hgun.mdl`) had `attachment[0]` filled with the viewmodel root origin (the hand/wrist) in `R_StudioClientEvents`.
+  2. The fallback path in `gl_rmain.c` projected from the raw controller wrist without considering the viewmodel entity's orientation or barrel length.
+* **Resolution:**
+  - Implemented a 3-tier cascade in `gl_studio.c` and `gl_rmain.c`:
+    1. If authored `attachment[0]` exists, use it.
+    2. If `attachment[0]` is missing or unprojected at the root origin, automatically inspect `studiohdr_t->bbmax[0]` and project a virtual muzzle forward along the model's physical barrel axis (`origin + forward * barrel_len + up * barrel_up`).
+    3. In `gl_rmain.c`, calculate fallback start from `tr.viewent->origin` with forward projection, guaranteeing that custom weapons from mods and expansions without attachments automatically emit lasers and ballistics from the barrel tip.
+  - Verified across the arsenal via Monado simulation dumps (`simulate_weapons_laser.cfg`).
+* **Status:** 🟢 **Resolved** (Geometric studio bounding box heuristic active).
 
