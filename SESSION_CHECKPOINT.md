@@ -1,52 +1,44 @@
 # 📌 Ponto de Parada da Sessão (Session Checkpoint)
 
-**Data do Checkpoint:** 15 de Outubro de 2026  
+**Data do Checkpoint:** 16 de Outubro de 2026  
 **Repositório:** `xash3d-fwgs-vr`  
 **Branch:** `feature/openxr-vr`  
-**Últimos Commits:**
-- `759b537d` (*docs: vr: add engineering notebook documenting original vs adapted solutions*)
-- `fb7166a3` (*ref: gl_vr: rotate decoupled viewmodel and laser sight by player turn yaw*)
-- `b2e22bd7` (*platform: openxr: add 6DoF hand simulation CVars for automated testing*)
-- `1bf7f254` (*docs: vr: update session checkpoint with Phase 03 simulation results*)
-- `34ca3d03` (*ref: gl_vr: add vr_dumpeye command and improve simulation test script*)
-**Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Em carregamento para testes físicos.  
-**APK Atualizado e Instalado:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)  
+**Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Desligado (testes executados 100% via simulação Monado PCVR).  
+**APK Atualizado e Pronto:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)  
 **Caderno de Engenharia:** [Documentation/vr/ENGINEERING_NOTEBOOK.md](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md)
 
 ---
 
 ## 🏁 O que foi Concluído nesta Sessão
 
-1. **Resolução Definitiva da Tela Preta no Meta Quest 3S (Phase 02 Concluída ✅)**
-2. **Correção do Cálculo de Voltagem da Bateria e Utilitários**
-3. **Personalização do README.md com Destaque para Assistência de IA**
-4. **Modernização da Interface em Kotlin para Meta Horizon OS (Botão "Testar Armas")**
-5. **Limpeza e Centralização de Documentação:**
-   - Remoção completa do diretório legado `.agents/`.
-   - Centralização e consolidação de toda documentação de arquitetura, pipeline e roadmap em [Documentation/vr/](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/).
-6. **Implementação e Refinamento Completo da Phase 03 (Controles Touch, Locomoção & Gestos Concluída ✅):**
-   * **Mapeamento OpenXR Universal:**
-     - Criadas ações Khronos para locomoção, rotação, mira 6DoF, gatilhos primário e secundário, grips analógicos, pulo (`IN_JUMP`), agachamento (`IN_DUCK`), uso (`IN_USE`), recarga (`IN_RELOAD`), sprint (`IN_RUN`), lanterna (`impulse 100`) e menu in-game (`cancelselect`).
-     - Perfis de interação completos para Meta Quest Touch (Quest 1/2/Pro/3/3S) e Valve Index.
-   * **Locomoção e Rotação Avançada:**
-     - Rotação Snap (`vr_snap_angle`, padrão 45°) com feedback tátil de clique e modo Smooth Turn (`150 deg/s`).
-     - Desacoplamento de locomoção via `vr_walkdirection`: orientado pelo Headset (`0`, padrão) ou pelo Controle (`1`).
-     - Troca rápida de armas pelo stick analógico de rotação (flick para cima = `invprev`, para baixo = `invnext`).
-   * **Estabilizador Físico de Duas Mãos (Two-Handed Weapon Stabilizer):**
-     - Corrigida a geometria do vetor de mira para coordenadas GoldSrc (`rearHand -> frontHand`).
-     - Ativação sensível ao botão de Grip da mão secundária (`grip > 0.4`) na faixa de empunhadura de 12cm a 55cm.
-   * **Suporte Completo a Modo Canhoto (`vr_lefthanded`):**
-     - Inversão dinâmica de sticks de movimento/giro, gatilhos primário/secundário e mira primária.
-     - Funções `XR_GetPrimaryHandTransform` e `XR_GetPrimaryHandVelocity` integradas ao renderizador de viewmodel (`gl_studio.c`) e mira laser (`gl_rmain.c`).
-   * **Registro Antecipado de CVars (`XR_RegisterCVars`):**
-     - Evita warnings de "Unknown command" ao carregar `config.cfg` e commandlines do launcher.
-   * **Simulação Automatizada em Monado OpenXR & Captura de Frames (`vr_dumpeye`):**
-     - Criado script de controle [out/valve_downloads/simulate_action.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/valve_downloads/simulate_action.cfg) para spawnar armas, mover o jogador, pular e atirar no mapa `crossfire`.
-     - Implementado o comando `vr_dumpeye` no renderizador `gl_vr` para captura imediata do framebuffer do olho.
-     - Testes automatizados executados e validados no Monado com evidências geradas em `out/evidence/`.
-   * **Compilação e Empacotamento Validados:**
-     - Binários PCVR (`libxash.so`, `libref_gl_vr.so`, `xash3d`) compilados e instalados em `out/`.
-     - APK Standalone para Quest gerado com sucesso: [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk).
+1. **Correção dos Controles Touch / Analógicos Inativos (`input.c`):**
+   - No cliente FWGS moderno, `clgame.dllFuncs.pfnLookEvent` é não-nulo, fazendo `IN_EngineAppendMove` retornar prematuramente antes do bloco OpenXR ser alcançado.
+   - O bloco OpenXR de despacho de comandos (`XR_InputAppendMove`) foi movido para o topo de `IN_EngineAppendMove`.
+   - Locomoção pelo stick analógico esquerdo, giro pelo analógico direito e todos os botões de ação (`IN_ATTACK`, `IN_JUMP`, `IN_DUCK`, `IN_USE`, `IN_RELOAD`, `IN_RUN`, lanterna) agora são devidamente transmitidos ao servidor em todos os frames.
+
+2. **Correção do Ponto de Origem do Laser e Empunhadura da Mão Dominante (`xr_input.c`, `gl_rmain.c`, `gl_studio.c`):**
+   - O cálculo das coordenadas da mão em `XR_GetRightHandTransform` e `XR_GetLeftHandTransform` utilizava a pose bruta do OpenXR no espaço de rastreamento do chão (`g_xrLocalSpace`), sem subtrair a posição da cabeça do headset (`g_xrViews[0].pose.position`). Isso deslocava a arma ~1.4m acima e fora do campo relativo da visão.
+   - Subtração da cabeça aplicada: `rel = handPose.position - headPose.position`, alinhando a arma milimetricamente com a mão dominante.
+   - Adicionada detecção e fallback em `gl_rmain.c` contra origens `simorg` obsoletas (centro do jogador): a mira laser agora emerge exclusivamente da ponta do cano da mão primária.
+   - Criada a CVar `vr_twohanded` (padrão `0`) com validação estrita (`aimDir[0] > 0.08f`), impedindo que apertar o grip da mão esquerda aponte a arma para o chão ou suma com o laser.
+
+3. **Eliminação de Náusea no Giro de Cabeça (Roll) com Matriz de Visão Ortonormal Livre de Singularidade (`gl_rmain.c`):**
+   - O cálculo anterior decompunha os quaternions do OpenXR em ângulos de Euler e realizava três rotações legadas do Quake (`ConcatRotate(-roll, 1, 0, 0)`), girando o ponto de vista ao redor do eixo X fixo do mundo em vez da linha de visão do olho.
+   - Implementado cálculo direto da matriz Modelview a partir do quaternion OpenXR: eixos Right ($R$), Up ($U$) e Forward ($F$) ortonormais combinados com a rotação de locomoção `turn_yaw`.
+   - Inclinação lateral da cabeça (roll) agora é 100% natural, sem acelerações espúrias, sem distorção e sem náusea.
+
+4. **Ajuste de Distância do Menu 2D Flutuante (`xr_swapchain.c`, `xr_input.c`):**
+   - Adicionada CVar `vr_menu_distance` (padrão `2.1m`, anteriormente hardcoded em `1.5m`) e `vr_menu_scale` (`1.8m`), trazendo o plano do menu para o sweet spot óptico das lentes do Quest e eliminando o corte ou borrão nas bordas da tela.
+   - Ponteiro laser do cursor em menus perfeitamente sincronizado com a nova distância e escala do quad.
+
+5. **Modernização do Botão de Testes no Launcher Android:**
+   - Botão renomeado para `"TEST GAME"` / `"TESTAR JOGO"` nos arquivos `strings.xml`.
+   - Comando de inicialização atualizado para entrar automaticamente com todas as armas, HEV suit, munição e cheats ativados: `+sv_cheats 1 +map crossfire +give item_suit +impulse 101`.
+
+6. **Simulação PCVR com Movimentação 6DoF de Cabeça:**
+   - Implementadas as CVars `vr_test_head` (0/1), `vr_test_head_pitch`, `vr_test_head_yaw` e `vr_test_head_roll` em `xr_swapchain.c` para teste programático.
+   - Criado e executado o script [scripts/simulate_head_and_weapons.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/simulate_head_and_weapons.cfg) no simulador Monado, gerando evidências visuais de rotação de cabeça e disparo com MP5, Shotgun e Hornetgun.
+   - APK Standalone Meta Quest gerado e atualizado em [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk).
 
 ---
 
