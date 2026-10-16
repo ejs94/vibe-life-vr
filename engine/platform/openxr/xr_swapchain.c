@@ -225,6 +225,33 @@ qboolean XR_WaitFrame( XrFrameState *outFrameState )
 
         uint32_t viewCount = 2;
         xrLocateViews(g_xrSession, &locateInfo, &viewState, 2, &viewCount, g_xrViews);
+
+        // Simulated head orientation for headless / automated regression testing
+        if (vr_test_head && vr_test_head->value > 0.0f)
+        {
+            float p = (vr_test_head_pitch ? vr_test_head_pitch->value : 0.0f) * (3.14159265f / 180.0f);
+            float y = (vr_test_head_yaw   ? vr_test_head_yaw->value   : 0.0f) * (3.14159265f / 180.0f);
+            float r = (vr_test_head_roll  ? vr_test_head_roll->value  : 0.0f) * (3.14159265f / 180.0f);
+
+            // OpenXR Euler mapping: Pitch around +X, Yaw around +Y, Roll around -Z
+            float cp = cosf(p * 0.5f), sp = sinf(p * 0.5f);
+            float cy = cosf(y * 0.5f), sy = sinf(y * 0.5f);
+            float cr = cosf(-r * 0.5f), sr = sinf(-r * 0.5f);
+
+            XrQuaternionf q;
+            q.w = cy * cp * cr - sy * sp * sr;
+            q.x = cy * sp * cr + sy * cp * sr;
+            q.y = sy * cp * cr - cy * sp * sr;
+            q.z = cy * cp * sr + sy * sp * cr;
+
+            for (int eye = 0; eye < 2; eye++)
+            {
+                g_xrViews[eye].pose.orientation = q;
+                g_xrViews[eye].pose.position.x = (eye == 0) ? -0.032f : 0.032f;
+                g_xrViews[eye].pose.position.y = 1.65f;
+                g_xrViews[eye].pose.position.z = 0.0f;
+            }
+        }
     }
 
     if (outFrameState)
@@ -420,12 +447,15 @@ EXPORT void XR_EndMenuFrame( void )
     quadLayer.subImage.imageRect.extent.width = g_xrEyeSwapchains[0].width;
     quadLayer.subImage.imageRect.extent.height = g_xrEyeSwapchains[0].height;
     quadLayer.subImage.imageArrayIndex = 0;
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 2.1f;
+    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.8f;
+
     quadLayer.pose.position.x = 0.0f;
     quadLayer.pose.position.y = 0.0f;
-    quadLayer.pose.position.z = -1.5f;
+    quadLayer.pose.position.z = -menuDist;
     quadLayer.pose.orientation.w = 1.0f;
-    quadLayer.size.width = 1.8f;
-    quadLayer.size.height = 1.8f * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
+    quadLayer.size.width = menuScale;
+    quadLayer.size.height = menuScale * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
 
     const XrCompositionLayerBaseHeader *layers[1];
     layers[0] = (const XrCompositionLayerBaseHeader*)&quadLayer;

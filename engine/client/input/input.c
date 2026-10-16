@@ -628,6 +628,21 @@ Called from cl_main.c after generating command in client
 */
 void IN_EngineAppendMove( float frametime, usercmd_t *cmd, qboolean active )
 {
+#ifdef XASH_OPENXR
+	// OpenXR VR locomotion, 6DoF hand aiming, and controller button dispatch
+	if( XR_IsActive() && active && !cl.paused && !cl.intermission )
+	{
+		vec3_t headAngles;
+		XR_GetHeadOrientation( headAngles );
+		cl.viewangles[0] = headAngles[0];
+		cl.viewangles[1] = anglemod( headAngles[1] + XR_GetPlayerTurnYaw() );
+		cl.viewangles[2] = headAngles[2];
+		VectorCopy( cl.viewangles, cmd->viewangles );
+
+		XR_InputAppendMove( cmd, frametime );
+	}
+#endif
+
 	if( clgame.dllFuncs.pfnLookEvent )
 		return;
 
@@ -642,18 +657,6 @@ void IN_EngineAppendMove( float frametime, usercmd_t *cmd, qboolean active )
 		IN_CollectInput( &forward, &side, &pitch, &yaw, false );
 
 		IN_JoyAppendMove( cmd, forward, side );
-#ifdef XASH_OPENXR
-		if( XR_IsActive( ))
-		{
-			vec3_t headAngles;
-			XR_GetHeadOrientation( headAngles );
-			cl.viewangles[0] = headAngles[0];
-			cl.viewangles[1] = anglemod( headAngles[1] + XR_GetPlayerTurnYaw() );
-			cl.viewangles[2] = headAngles[2];
-			VectorCopy( cl.viewangles, cmd->viewangles );
-		}
-		XR_InputAppendMove( cmd, frametime );
-#endif
 
 		if( pitch || yaw )
 		{

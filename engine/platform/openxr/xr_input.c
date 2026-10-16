@@ -671,25 +671,30 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
     if (!g_xrInputState.rightHandActive)
         return false;
 
-    // Convert to GoldSrc coordinates:
-    // X = forward (-Z), Y = left (-X), Z = up (Y)
-    out_origin[0] = -g_xrInputState.rightHandPose.position.z;
-    out_origin[1] = -g_xrInputState.rightHandPose.position.x;
-    out_origin[2] = g_xrInputState.rightHandPose.position.y;
+    // Convert to head-relative GoldSrc coordinates:
+    // X = forward (-rel_z), Y = left (-rel_x), Z = up (rel_y)
+    float rel_x = g_xrInputState.rightHandPose.position.x - g_xrViews[0].pose.position.x;
+    float rel_y = g_xrInputState.rightHandPose.position.y - g_xrViews[0].pose.position.y;
+    float rel_z = g_xrInputState.rightHandPose.position.z - g_xrViews[0].pose.position.z;
 
-    // Two-Handed Weapon Stabiliser (active when left grip > 0.4 and distance is 12cm-55cm)
+    out_origin[0] = -rel_z;
+    out_origin[1] = -rel_x;
+    out_origin[2] =  rel_y;
+
+    // Two-Handed Weapon Stabiliser (active when enabled, left grip > 0.4, distance 12cm-55cm, and front hand is forward)
+    qboolean twohanded_enabled = (vr_twohanded && vr_twohanded->value > 0.0f);
     float dx = g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x;
     float dy = g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y;
     float dz = g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z;
     float handDist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-    if (g_xrInputState.gripLeft > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.leftHandActive)
+    vec3_t aimDir;
+    aimDir[0] = (g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z);
+    aimDir[1] = (g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x);
+    aimDir[2] = (g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y);
+
+    if (twohanded_enabled && g_xrInputState.gripLeft > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.leftHandActive && aimDir[0] > 0.08f)
     {
-        // Vector from rear hand (right) to front hand (left) in GoldSrc coordinates:
-        vec3_t aimDir;
-        aimDir[0] = (g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z);
-        aimDir[1] = (g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x);
-        aimDir[2] = (g_xrInputState.leftHandPose.position.y - g_xrInputState.rightHandPose.position.y);
         VectorNormalize(aimDir);
         VectorAngles(aimDir, out_angles);
     }
@@ -742,22 +747,29 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     if (!g_xrInputState.leftHandActive)
         return false;
 
-    out_origin[0] = -g_xrInputState.leftHandPose.position.z;
-    out_origin[1] = -g_xrInputState.leftHandPose.position.x;
-    out_origin[2] = g_xrInputState.leftHandPose.position.y;
+    // Convert to head-relative GoldSrc coordinates:
+    float rel_x = g_xrInputState.leftHandPose.position.x - g_xrViews[0].pose.position.x;
+    float rel_y = g_xrInputState.leftHandPose.position.y - g_xrViews[0].pose.position.y;
+    float rel_z = g_xrInputState.leftHandPose.position.z - g_xrViews[0].pose.position.z;
+
+    out_origin[0] = -rel_z;
+    out_origin[1] = -rel_x;
+    out_origin[2] =  rel_y;
 
     // Two-Handed Weapon Stabiliser for left-handed primary (right hand grips barrel)
+    qboolean twohanded_enabled = (vr_twohanded && vr_twohanded->value > 0.0f);
     float dx = g_xrInputState.rightHandPose.position.x - g_xrInputState.leftHandPose.position.x;
     float dy = g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y;
     float dz = g_xrInputState.rightHandPose.position.z - g_xrInputState.leftHandPose.position.z;
     float handDist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-    if (g_xrInputState.gripRight > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.rightHandActive)
+    vec3_t aimDir;
+    aimDir[0] = (g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z);
+    aimDir[1] = (g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x);
+    aimDir[2] = (g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y);
+
+    if (twohanded_enabled && g_xrInputState.gripRight > 0.4f && handDist >= 0.12f && handDist <= 0.55f && g_xrInputState.rightHandActive && aimDir[0] > 0.08f)
     {
-        vec3_t aimDir;
-        aimDir[0] = (g_xrInputState.leftHandPose.position.z - g_xrInputState.rightHandPose.position.z);
-        aimDir[1] = (g_xrInputState.leftHandPose.position.x - g_xrInputState.rightHandPose.position.x);
-        aimDir[2] = (g_xrInputState.rightHandPose.position.y - g_xrInputState.leftHandPose.position.y);
         VectorNormalize(aimDir);
         VectorAngles(aimDir, out_angles);
     }
@@ -1111,8 +1123,9 @@ void XR_UpdatePointerCursor( void )
 		dz /= len;
 	}
 
-	// Floating menu quad plane is anchored at Z = -1.5m in View Space
-	float planeZ = -1.5f;
+	// Floating menu quad plane is anchored at Z = -vr_menu_distance in View Space
+	float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 2.1f;
+	float planeZ = -menuDist;
 	qboolean hit = false;
 	float u = 0.5f, v = 0.5f;
 	int px = 0, py = 0;
@@ -1120,7 +1133,7 @@ void XR_UpdatePointerCursor( void )
 	float worldScale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 
 	// Dimensions of the floating menu quad layer matching XR_EndMenuFrame
-	float quadWidth = 1.8f;
+	float quadWidth = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.8f;
 	float aspect = (refState.width > 0 && refState.height > 0) ? ((float)refState.height / (float)refState.width) : 0.75f;
 	float quadHeight = quadWidth * aspect;
 	float halfW = quadWidth * 0.5f;

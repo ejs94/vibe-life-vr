@@ -39,6 +39,9 @@ EXPORT convar_t *vr_weapon_offset_right = NULL;
 EXPORT convar_t *vr_weapon_offset_up = NULL;
 EXPORT convar_t *vr_height_adjust = NULL;
 EXPORT convar_t *vr_hide_arms = NULL;
+EXPORT convar_t *vr_twohanded = NULL;
+EXPORT convar_t *vr_menu_distance = NULL;
+EXPORT convar_t *vr_menu_scale = NULL;
 EXPORT convar_t *vr_worldscale = NULL;
 EXPORT convar_t *vr_haptics_enabled = NULL;
 EXPORT convar_t *vr_haptics_intensity = NULL;
@@ -47,6 +50,10 @@ EXPORT convar_t *vr_test_hands = NULL;
 EXPORT convar_t *vr_test_hand_pitch = NULL;
 EXPORT convar_t *vr_test_hand_yaw = NULL;
 EXPORT convar_t *vr_test_click = NULL;
+EXPORT convar_t *vr_test_head = NULL;
+EXPORT convar_t *vr_test_head_pitch = NULL;
+EXPORT convar_t *vr_test_head_yaw = NULL;
+EXPORT convar_t *vr_test_head_roll = NULL;
 static XrDebugUtilsMessengerEXT g_xrDebugMessenger = XR_NULL_HANDLE;
 
 static qboolean s_cvarsRegistered = false;
@@ -70,6 +77,9 @@ void XR_RegisterCVars( void )
     vr_weapon_offset_up = Cvar_Get("vr_weapon_offset_up", "0", FCVAR_ARCHIVE, "Weapon grip up offset (GoldSrc units)");
     vr_height_adjust = Cvar_Get("vr_height_adjust", "0", FCVAR_ARCHIVE, "Player height adjust units");
     vr_hide_arms = Cvar_Get("vr_hide_arms", "1", FCVAR_ARCHIVE, "Hide flat-screen HEV arm/glove meshes on viewmodel in VR");
+    vr_twohanded = Cvar_Get("vr_twohanded", "0", FCVAR_ARCHIVE, "Enable two-handed weapon grip stabilization");
+    vr_menu_distance = Cvar_Get("vr_menu_distance", "2.1", FCVAR_ARCHIVE, "Distance in meters of floating 2D menu quad");
+    vr_menu_scale = Cvar_Get("vr_menu_scale", "1.8", FCVAR_ARCHIVE, "Width in meters of floating 2D menu quad");
     vr_worldscale = Cvar_Get("vr_worldscale", "40.0", FCVAR_ARCHIVE, "VR World Scale (units per meter)");
     vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
     vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
@@ -78,6 +88,10 @@ void XR_RegisterCVars( void )
     vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
     vr_test_hand_yaw = Cvar_Get("vr_test_hand_yaw", "0", 0, "Simulated hand aim yaw degrees");
     vr_test_click = Cvar_Get("vr_test_click", "0", 0, "Simulate controller trigger click for UI/weapon testing");
+    vr_test_head = Cvar_Get("vr_test_head", "0", 0, "Simulate head orientation for testing (0 = off, 1 = on)");
+    vr_test_head_pitch = Cvar_Get("vr_test_head_pitch", "0", 0, "Simulated head pitch degrees");
+    vr_test_head_yaw = Cvar_Get("vr_test_head_yaw", "0", 0, "Simulated head yaw degrees");
+    vr_test_head_roll = Cvar_Get("vr_test_head_roll", "0", 0, "Simulated head roll degrees");
 }
 
 #define OXR_CHECK(func, msg) \

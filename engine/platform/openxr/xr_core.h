@@ -32,6 +32,10 @@ extern EXPORT convar_t *vr_weapon_offset_up;
 extern EXPORT convar_t *vr_height_adjust;
 extern EXPORT convar_t *vr_hide_arms;
 
+extern EXPORT convar_t *vr_twohanded;
+extern EXPORT convar_t *vr_menu_distance;
+extern EXPORT convar_t *vr_menu_scale;
+
 extern EXPORT convar_t *vr_worldscale;
 extern EXPORT convar_t *vr_haptics_enabled;
 extern EXPORT convar_t *vr_haptics_intensity;
@@ -40,6 +44,10 @@ extern EXPORT convar_t *vr_test_hands;
 extern EXPORT convar_t *vr_test_hand_pitch;
 extern EXPORT convar_t *vr_test_hand_yaw;
 extern EXPORT convar_t *vr_test_click;
+extern EXPORT convar_t *vr_test_head;
+extern EXPORT convar_t *vr_test_head_pitch;
+extern EXPORT convar_t *vr_test_head_yaw;
+extern EXPORT convar_t *vr_test_head_roll;
 
 EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );
