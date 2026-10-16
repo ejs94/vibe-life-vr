@@ -101,3 +101,16 @@
   - Verified across the arsenal via Monado simulation dumps (`simulate_weapons_laser.cfg`).
 * **Status:** 🟢 **Resolved** (Geometric studio bounding box heuristic active).
 
+### Feature #12: Dynamic Articulated Skeletal 3D Hands & Finger Curling (Half-Life: Alyx / HL2VR Style)
+* **Goal & Scope:** Replace static viewmodel-baked hands with fully independent, articulated 3D hand entities whose fingers dynamically follow the player's physical hand inputs in real time.
+* **Technical Architecture & Specifications:**
+  1. *Independent Skeletal Hand Entity:* Disassociate the hand mesh from the weapon `.mdl`. Implement a standalone hand entity (`clgame.handent` / `v_hand_rig.mdl`) containing a full 15–20 bone finger rig (Thumb, Index, Middle, Ring, Pinky with proximal, intermediate, and distal phalanges).
+  2. *Continuous OpenXR Finger Curling Inputs:*
+     - **Index Finger:** Driven by the analog trigger axis ($[0.0, 1.0]$) and capacitive touch sensor.
+     - **Middle, Ring & Pinky Fingers:** Driven by the analog grip axis ($[0.0, 1.0]$) to wrap around the weapon handle or close into a fist.
+     - **Thumb:** Driven by capacitive touch states on the thumbstick, A/X, and B/Y buttons (touching = curled down, lifting = thumbs-up/pointing gesture).
+  3. *Procedural Bone Rotation in `gl_studio.c`:* Evaluate finger curling inside `R_StudioSetupBones()` by rotating child bone matrices along the finger bend axis upstream of vertex skinning.
+  4. *Off-Hand Interactivity:* Render the secondary hand freely in 6DoF space, enabling two-handed stabilization grabbing, physical ladder climbing, manual reloading, and environmental poking.
+  5. *Meta Quest Optical Hand Tracking:* Future integration with OpenXR `XR_EXT_hand_tracking` to drive all 26 finger joint poses optically without physical controllers.
+* **Status:** ⚪ **Backlogged** (Scheduled for Phase 07: Immersive Hand Presence).
+
