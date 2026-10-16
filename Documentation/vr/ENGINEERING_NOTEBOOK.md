@@ -129,6 +129,15 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
        $$\text{Muzzle} = \text{viewent.origin} + \mathbf{fwd} \times \text{barrel\_len} + \mathbf{up} \times \text{barrel\_up}$$
   4. **Acoplamento com a Aim Pose do OpenXR:** Conforme consagrado pelo padrão `HAND-001` do *VR Modding Playbook*, a direção do disparo no servidor (`cmd->viewangles` $\rightarrow$ `pev->v_angle`) e a orientação do modelo em `gl_studio.c` utilizam a mesma **Aim Pose** do controle primário, garantindo que o traçado do projétil, o cano físico da arma e o feixe da mira laser coincidam por construção geométrica, sem depender de ajustes manuais.
 
+### 2.8. Supressão de Braços Flat & Renderização de Mãos 3D (`vr_hide_arms`)
+* **O Problema:** Os modelos originais de 1998 foram construídos para telas 2D com o antebraço rígido do Gordon Freeman fundido na arma e projetado a partir da borda inferior da tela. Em VR, quando o controle aponta para direções livres, o antebraço congelado gira no ar como um manequim, causando severa dissonância cognitiva (o cérebro não reconhece o braço conectado ao ombro) e obstruindo a visão da arma e miras.
+* **Nossa Solução Própria Multimodal:**
+  Em `gl_studio.c`, interceptamos a submissão de malhas (`R_StudioDrawPoints`) através da CVar `vr_hide_arms`:
+  - `vr_hide_arms 1` (Padrão): **Mão 3D ativa.** Oculta o antebraço, mangas e punhos (`sleeve`, `forearm`, `cuff`), preservando com perfeição os dedos e a luva 3D (`glove`, `knuckle`, `handpak`) segurando a empunhadura da arma.
+  - `vr_hide_arms 2`: **Arma flutuante limpa.** Oculta tanto o braço quanto a mão/luva, deixando apenas a carcaça pura da arma no espaço (estilo competitivo / *Medal of Honor VR*).
+  - `vr_hide_arms 0`: Exibe a malha completa original de 1998 sem filtragem.
+* **Próximos Passos para Mãos 3D Livres:** Para a mão secundária (sem arma) e mãos vazias, planeja-se a inclusão da entidade de mão 3D independente (`v_hand.mdl`) e o suporte à extensão `XR_EXT_hand_tracking` para rastreamento óptico dos 26 ossos reais dos dedos no Meta Quest 3S.
+
 ---
 
 ## 📱 5. Relatos Empíricos de Testes em Hardware Real (Meta Quest 3S)
