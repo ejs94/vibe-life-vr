@@ -1149,8 +1149,8 @@ static void R_DrawEntitiesOnList( void )
 				pglDisable( GL_TEXTURE_2D );
 				pglEnable( GL_BLEND );
 				pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
-				pglLineWidth( 2.0f );
-				pglColor4f( 1.0f, 0.15f, 0.15f, 0.6f );
+				pglLineWidth( 2.5f );
+				pglColor4f( 1.0f, 0.15f, 0.15f, 0.85f );
 
 				pglBegin( GL_LINES );
 				pglVertex3fv( start );
