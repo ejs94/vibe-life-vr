@@ -2489,6 +2489,36 @@ static void R_StudioClientEvents( void )
 		Matrix3x4_OriginFromMatrix( g_studio.rotationmatrix, e->attachment[1] );
 		Matrix3x4_OriginFromMatrix( g_studio.rotationmatrix, e->attachment[2] );
 		Matrix3x4_OriginFromMatrix( g_studio.rotationmatrix, e->attachment[3] );
+
+#ifdef XASH_OPENXR
+		// If this is the VR viewmodel and lacks authored attachments, synthesize
+		// a virtual muzzle attachment at the forward physical barrel tip.
+		if( e == tr.viewent && XR_IsActive() )
+		{
+			vec3_t fwd, up;
+			// In GoldSrc rotation matrices, column 0 is Forward and column 2 is Up
+			fwd[0] = g_studio.rotationmatrix[0][0];
+			fwd[1] = g_studio.rotationmatrix[1][0];
+			fwd[2] = g_studio.rotationmatrix[2][0];
+			up[0]  = g_studio.rotationmatrix[0][2];
+			up[1]  = g_studio.rotationmatrix[1][2];
+			up[2]  = g_studio.rotationmatrix[2][2];
+
+			float barrel_len = m_pStudioHeader->bbmax[0];
+			if( barrel_len < 8.0f || barrel_len > 45.0f )
+			{
+				float total_span = m_pStudioHeader->bbmax[0] - m_pStudioHeader->bbmin[0];
+				if( total_span > 12.0f && total_span < 60.0f )
+					barrel_len = total_span * 0.70f;
+				else
+					barrel_len = 18.0f; // Sane GoldSrc weapon default length
+			}
+
+			// Project virtual muzzle along the physical barrel axis
+			VectorMA( e->attachment[0], barrel_len, fwd, e->attachment[0] );
+			VectorMA( e->attachment[0], 1.5f, up, e->attachment[0] );
+		}
+#endif
 	}
 
 	if( FBitSet( e->curstate.effects, EF_MUZZLEFLASH ))

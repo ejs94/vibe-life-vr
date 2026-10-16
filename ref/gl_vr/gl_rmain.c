@@ -1137,12 +1137,35 @@ static void R_DrawEntitiesOnList( void )
 				if( tr.viewent && !VectorIsNull( tr.viewent->attachment[0] ))
 				{
 					VectorCopy( tr.viewent->attachment[0], start );
+
+					// If attachment[0] happens to be unprojected (identical to viewent->origin within 3 units),
+					// project forward along the barrel axis so it emerges from the front
+					float dist = VectorDistance( start, tr.viewent->origin );
+					if( dist < 3.0f )
+					{
+						VectorMA( tr.viewent->origin, 18.0f, forward, start );
+					}
+				}
+				else if( tr.viewent && !VectorIsNull( tr.viewent->origin ))
+				{
+					VectorMA( tr.viewent->origin, 18.0f, forward, start );
 				}
 				else
 				{
-					start[0] = RI.rvp.vieworigin[0] + world_dx;
-					start[1] = RI.rvp.vieworigin[1] + world_dy;
-					start[2] = RI.rvp.vieworigin[2] + world_dz;
+					vec3_t handBase;
+					handBase[0] = RI.rvp.vieworigin[0] + world_dx;
+					handBase[1] = RI.rvp.vieworigin[1] + world_dy;
+					handBase[2] = RI.rvp.vieworigin[2] + world_dz;
+
+					float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + 18.0f;
+					float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
+					float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f);
+
+					vec3_t fwd, rt, up;
+					AngleVectors( worldAngles, fwd, rt, up );
+					VectorMA( handBase, off_fwd, fwd, start );
+					VectorMA( start, off_rt, rt, start );
+					VectorMA( start, off_up, up, start );
 				}
 				VectorMA( start, 2048.0f, forward, end );
 
