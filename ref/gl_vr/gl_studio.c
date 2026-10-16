@@ -3147,7 +3147,7 @@ static int R_StudioDrawPlayer( int flags, entity_state_t *pplayer )
 	m_pPlayerInfo->renderframe = tr.realframecount;
 	m_pPlayerInfo = NULL;
 
-	if( flags & STUDIO_EVENTS )
+	if( (flags & STUDIO_EVENTS) || (RI.currententity == tr.viewent && XR_IsActive()) )
 	{
 		R_StudioCalcAttachments( );
 		R_StudioClientEvents( );

@@ -473,8 +473,59 @@ void R_SetupFrustum( void )
 	vec3_t eyeOrigin, eyeAngles;
 	R_ComputeEyeTransform( g_vr_eye, eyeOrigin, eyeAngles );
 
-	// build the transformation vectors for the active eye angles
-	AngleVectors( eyeAngles, RI.vforward, RI.vright, RI.vup );
+#ifdef XASH_OPENXR
+	if( g_vr_eye >= 0 && XR_IsActive() )
+	{
+		// Compute exact camera basis directly from OpenXR orientation quaternion
+		const XrQuaternionf *q = &g_xrViews[g_vr_eye].pose.orientation;
+		float qx = q->x, qy = q->y, qz = q->z, qw = q->w;
+
+		// Headset local axes rotated by OpenXR quaternion:
+		// Right: (1 - 2(y^2 + z^2), 2(xy + zw), 2(xz - yw))
+		// Up:    (2(xy - zw), 1 - 2(x^2 + z^2), 2(yz + xw))
+		// Fwd:  -(2(xz + yw), 2(yz - xw), 1 - 2(x^2 + y^2))
+		vec3_t rxr, uxr, fxr;
+		rxr[0] = 1.0f - 2.0f * (qy * qy + qz * qz);
+		rxr[1] = 2.0f * (qx * qy + qz * qw);
+		rxr[2] = 2.0f * (qx * qz - qy * qw);
+
+		uxr[0] = 2.0f * (qx * qy - qz * qw);
+		uxr[1] = 1.0f - 2.0f * (qx * qx + qz * qz);
+		uxr[2] = 2.0f * (qy * qz + qx * qw);
+
+		fxr[0] = -2.0f * (qx * qz + qy * qw);
+		fxr[1] = -2.0f * (qy * qz - qx * qw);
+		fxr[2] = -(1.0f - 2.0f * (qx * qx + qy * qy));
+
+		// Convert from OpenXR room tracking space to GoldSrc world space rotated by player turn yaw:
+		// GoldSrc: X = -Z_xr, Y = -X_xr, Z = Y_xr rotated by turn_yaw around Z
+		float turn_yaw = XR_GetPlayerTurnYaw();
+		float yaw_rad = DEG2RAD( turn_yaw );
+		float cy = cosf( yaw_rad );
+		float sy = sinf( yaw_rad );
+
+		RI.vforward[0] = (-fxr[2]) * cy + fxr[0] * sy;
+		RI.vforward[1] = (-fxr[2]) * sy - fxr[0] * cy;
+		RI.vforward[2] = fxr[1];
+
+		RI.vright[0] = (-rxr[2]) * cy + rxr[0] * sy;
+		RI.vright[1] = (-rxr[2]) * sy - rxr[0] * cy;
+		RI.vright[2] = rxr[1];
+
+		RI.vup[0] = (-uxr[2]) * cy + uxr[0] * sy;
+		RI.vup[1] = (-uxr[2]) * sy - uxr[0] * cy;
+		RI.vup[2] = uxr[1];
+
+		VectorNormalize( RI.vforward );
+		VectorNormalize( RI.vright );
+		VectorNormalize( RI.vup );
+	}
+	else
+#endif
+	{
+		// build the transformation vectors for the active eye angles
+		AngleVectors( eyeAngles, RI.vforward, RI.vright, RI.vup );
+	}
 
 	if( !r_lockfrustum.value )
 	{
@@ -564,6 +615,33 @@ static void R_SetupModelviewMatrix( matrix4x4 m )
 	vec3_t eyeOrigin;
 	vec3_t viewangles;
 	R_ComputeEyeTransform( g_vr_eye, eyeOrigin, viewangles );
+
+#ifdef XASH_OPENXR
+	if( g_vr_eye >= 0 && XR_IsActive() )
+	{
+		// Direct Singularity-Free Modelview Matrix constructed from orthonormal camera axes
+		m[0][0] = RI.vright[0];
+		m[0][1] = RI.vright[1];
+		m[0][2] = RI.vright[2];
+		m[0][3] = -DotProduct( RI.vright, eyeOrigin );
+
+		m[1][0] = RI.vup[0];
+		m[1][1] = RI.vup[1];
+		m[1][2] = RI.vup[2];
+		m[1][3] = -DotProduct( RI.vup, eyeOrigin );
+
+		m[2][0] = -RI.vforward[0];
+		m[2][1] = -RI.vforward[1];
+		m[2][2] = -RI.vforward[2];
+		m[2][3] = DotProduct( RI.vforward, eyeOrigin );
+
+		m[3][0] = 0.0f;
+		m[3][1] = 0.0f;
+		m[3][2] = 0.0f;
+		m[3][3] = 1.0f;
+		return;
+	}
+#endif
 
 	Matrix4x4_CreateModelview( m );
 	if( tr.rotation & 1 )
@@ -1134,35 +1212,50 @@ static void R_DrawEntitiesOnList( void )
 				vec3_t forward, start, end;
 				AngleVectors( worldAngles, forward, NULL, NULL );
 
+				vec3_t handBase;
+				handBase[0] = RI.rvp.vieworigin[0] + world_dx;
+				handBase[1] = RI.rvp.vieworigin[1] + world_dy;
+				handBase[2] = RI.rvp.vieworigin[2] + world_dz;
+
+				float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + 18.0f;
+				float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
+				float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f);
+
+				vec3_t fwd, rt, up;
+				AngleVectors( worldAngles, fwd, rt, up );
+
+				qboolean valid_start = false;
 				if( tr.viewent && !VectorIsNull( tr.viewent->attachment[0] ))
 				{
 					VectorCopy( tr.viewent->attachment[0], start );
 
-					// If attachment[0] happens to be unprojected (identical to viewent->origin within 3 units),
-					// project forward along the barrel axis so it emerges from the front
+					// If attachment[0] is too far from handBase (e.g. stale player simorg from events),
+					// or unprojected (identical to viewent->origin within 3 units), fallback to projected hand origin
 					float dist = VectorDistance( start, tr.viewent->origin );
-					if( dist < 3.0f )
+					float distHand = VectorDistance( start, handBase );
+					if( dist < 3.0f || distHand > 45.0f )
 					{
 						VectorMA( tr.viewent->origin, 18.0f, forward, start );
+						if( VectorDistance( start, handBase ) > 45.0f )
+						{
+							VectorMA( handBase, off_fwd, fwd, start );
+							VectorMA( start, off_rt, rt, start );
+							VectorMA( start, off_up, up, start );
+						}
 					}
+					valid_start = true;
 				}
 				else if( tr.viewent && !VectorIsNull( tr.viewent->origin ))
 				{
-					VectorMA( tr.viewent->origin, 18.0f, forward, start );
+					if( VectorDistance( tr.viewent->origin, handBase ) <= 45.0f )
+					{
+						VectorMA( tr.viewent->origin, 18.0f, forward, start );
+						valid_start = true;
+					}
 				}
-				else
+
+				if( !valid_start )
 				{
-					vec3_t handBase;
-					handBase[0] = RI.rvp.vieworigin[0] + world_dx;
-					handBase[1] = RI.rvp.vieworigin[1] + world_dy;
-					handBase[2] = RI.rvp.vieworigin[2] + world_dz;
-
-					float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + 18.0f;
-					float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
-					float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f);
-
-					vec3_t fwd, rt, up;
-					AngleVectors( worldAngles, fwd, rt, up );
 					VectorMA( handBase, off_fwd, fwd, start );
 					VectorMA( start, off_rt, rt, start );
 					VectorMA( start, off_up, up, start );
