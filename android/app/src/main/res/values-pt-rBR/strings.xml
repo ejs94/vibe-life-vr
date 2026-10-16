@@ -18,7 +18,7 @@
 	<string name="external_storage_required">Acesso ao armazenamento externo necessário</string>
 	<string name="external_storage_message">É necessário acesso ao armazenamento externo para que o aplicativo funcione corretamente.</string>
 	<string name="play_in_vr">JOGAR EM VR</string>
-	<string name="launch_test_map">TESTAR ARMAS</string>
+	<string name="launch_test_map">TESTAR JOGO</string>
 	<string name="test_map_title">Fase de Testes de Armas</string>
 	<string name="test_map_crossfire">Crossfire (Todas as armas no chão)</string>
 	<string name="test_map_hazard">Hazard Course (Campo de treinamento)</string>
