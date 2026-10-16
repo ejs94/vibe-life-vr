@@ -30,6 +30,7 @@ extern EXPORT convar_t *vr_weapon_offset_forward;
 extern EXPORT convar_t *vr_weapon_offset_right;
 extern EXPORT convar_t *vr_weapon_offset_up;
 extern EXPORT convar_t *vr_height_adjust;
+extern EXPORT convar_t *vr_hide_arms;
 
 extern EXPORT convar_t *vr_worldscale;
 extern EXPORT convar_t *vr_haptics_enabled;

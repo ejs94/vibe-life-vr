@@ -38,6 +38,7 @@ EXPORT convar_t *vr_weapon_offset_forward = NULL;
 EXPORT convar_t *vr_weapon_offset_right = NULL;
 EXPORT convar_t *vr_weapon_offset_up = NULL;
 EXPORT convar_t *vr_height_adjust = NULL;
+EXPORT convar_t *vr_hide_arms = NULL;
 EXPORT convar_t *vr_worldscale = NULL;
 EXPORT convar_t *vr_haptics_enabled = NULL;
 EXPORT convar_t *vr_haptics_intensity = NULL;
@@ -68,6 +69,7 @@ void XR_RegisterCVars( void )
     vr_weapon_offset_right = Cvar_Get("vr_weapon_offset_right", "0", FCVAR_ARCHIVE, "Weapon grip right offset (GoldSrc units)");
     vr_weapon_offset_up = Cvar_Get("vr_weapon_offset_up", "0", FCVAR_ARCHIVE, "Weapon grip up offset (GoldSrc units)");
     vr_height_adjust = Cvar_Get("vr_height_adjust", "0", FCVAR_ARCHIVE, "Player height adjust units");
+    vr_hide_arms = Cvar_Get("vr_hide_arms", "1", FCVAR_ARCHIVE, "Hide flat-screen HEV arm/glove meshes on viewmodel in VR");
     vr_worldscale = Cvar_Get("vr_worldscale", "40.0", FCVAR_ARCHIVE, "VR World Scale (units per meter)");
     vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
     vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");

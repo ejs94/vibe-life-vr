@@ -2127,6 +2127,29 @@ static void R_StudioDrawPoints( void )
 		pmesh = g_studio.meshes[j].mesh;
 		short *ptricmds = (short *)((byte *)m_pStudioHeader + pmesh->triindex);
 
+#ifdef XASH_OPENXR
+		if( RI.currententity == tr.viewent && XR_IsActive() )
+		{
+			static cvar_t *vr_hide_arms = NULL;
+			if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
+
+			if( !vr_hide_arms || vr_hide_arms->value > 0.0f )
+			{
+				const char *texname = ptexture[pskinref[pmesh->skinref]].name;
+				if( Q_stristr( texname, "glove" ) ||
+				    Q_stristr( texname, "sleeve" ) ||
+				    Q_stristr( texname, "forearm" ) ||
+				    Q_stristr( texname, "cuff" ) ||
+				    Q_stristr( texname, "knuckle" ) ||
+				    Q_stristr( texname, "handpak" ) ||
+				    (Q_stristr( texname, "hand" ) && !Q_stristr( texname, "handle" )) )
+				{
+					continue; // Skip rendering flat-screen arm and glove mesh in VR
+				}
+			}
+		}
+#endif
+
 		g_nFaceFlags = ptexture[pskinref[pmesh->skinref]].flags | g_nForceFaceFlags;
 
 		float s = 1.0f / (float)ptexture[pskinref[pmesh->skinref]].width;
