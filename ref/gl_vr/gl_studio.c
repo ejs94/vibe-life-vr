@@ -2133,18 +2133,31 @@ static void R_StudioDrawPoints( void )
 			static cvar_t *vr_hide_arms = NULL;
 			if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
 
-			if( !vr_hide_arms || vr_hide_arms->value > 0.0f )
+			float hide_mode = vr_hide_arms ? vr_hide_arms->value : 1.0f;
+			if( hide_mode > 0.0f )
 			{
 				const char *texname = ptexture[pskinref[pmesh->skinref]].name;
-				if( Q_stristr( texname, "glove" ) ||
-				    Q_stristr( texname, "sleeve" ) ||
+
+				// Mode 1: Hide the rigid flat forearm, sleeve and cuffs
+				if( Q_stristr( texname, "sleeve" ) ||
 				    Q_stristr( texname, "forearm" ) ||
 				    Q_stristr( texname, "cuff" ) ||
-				    Q_stristr( texname, "knuckle" ) ||
-				    Q_stristr( texname, "handpak" ) ||
-				    (Q_stristr( texname, "hand" ) && !Q_stristr( texname, "handle" )) )
+				    Q_stristr( texname, "arm1" ) ||
+				    Q_stristr( texname, "player_arm" ) )
 				{
-					continue; // Skip rendering flat-screen arm and glove mesh in VR
+					continue; // Hide flat sleeve/forearm
+				}
+
+				// Mode 2: Also hide the 3D hand and glove meshes
+				if( hide_mode >= 2.0f )
+				{
+					if( Q_stristr( texname, "glove" ) ||
+					    Q_stristr( texname, "knuckle" ) ||
+					    Q_stristr( texname, "handpak" ) ||
+					    (Q_stristr( texname, "hand" ) && !Q_stristr( texname, "handle" )) )
+					{
+						continue; // Hide hand/glove
+					}
 				}
 			}
 		}
