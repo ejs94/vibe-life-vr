@@ -647,29 +647,29 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
     if (!g_xrSessionRunning) return false;
 
-    if (!g_xrInputState.rightHandActive)
+    // Simulated hand pose override for testing and validation
+    if (vr_test_hands && vr_test_hands->value > 0.0f)
     {
-        if (vr_test_hands && vr_test_hands->value > 0.0f)
-        {
-            out_origin[0] = 0.22f;   // 22cm à frente
-            out_origin[1] = -0.06f;  // 6cm à direita (coordenadas GoldSrc)
-            out_origin[2] = -0.08f;  // 8cm abaixo dos olhos
+        out_origin[0] = 0.22f;   // 22cm forward
+        out_origin[1] = -0.06f;  // 6cm right (GoldSrc coordinates)
+        out_origin[2] = -0.08f;  // 8cm below eyes
 
-            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
-            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-            out_angles[2] = 0.0f;
+        out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+        out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+        out_angles[2] = 0.0f;
 
-            if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
-                out_angles[0] += vr_weapon_pitchadjust->value;
-            if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
-                out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
-            if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
-                out_angles[2] += vr_weapon_rolladjust->value;
+        if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
+            out_angles[0] += vr_weapon_pitchadjust->value;
+        if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+            out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+        if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+            out_angles[2] += vr_weapon_rolladjust->value;
 
-            return true;
-        }
-        return false;
+        return true;
     }
+
+    if (!g_xrInputState.rightHandActive)
+        return false;
 
     // Convert to GoldSrc coordinates:
     // X = forward (-Z), Y = left (-X), Z = up (Y)
@@ -718,29 +718,29 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
     if (!g_xrSessionRunning) return false;
 
-    if (!g_xrInputState.leftHandActive)
+    // Simulated hand pose override for testing and validation
+    if (vr_test_hands && vr_test_hands->value > 0.0f)
     {
-        if (vr_test_hands && vr_test_hands->value > 0.0f)
-        {
-            out_origin[0] = 0.22f;
-            out_origin[1] = 0.06f;   // 6cm to the left
-            out_origin[2] = -0.08f;
+        out_origin[0] = 0.22f;
+        out_origin[1] = 0.06f;   // 6cm to the left
+        out_origin[2] = -0.08f;
 
-            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
-            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-            out_angles[2] = 0.0f;
+        out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+        out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+        out_angles[2] = 0.0f;
 
-            if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
-                out_angles[0] += vr_weapon_pitchadjust->value;
-            if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
-                out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
-            if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
-                out_angles[2] += vr_weapon_rolladjust->value;
+        if (vr_weapon_pitchadjust && vr_weapon_pitchadjust->value != 0.0f)
+            out_angles[0] += vr_weapon_pitchadjust->value;
+        if (vr_weapon_yawadjust && vr_weapon_yawadjust->value != 0.0f)
+            out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
+        if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
+            out_angles[2] += vr_weapon_rolladjust->value;
 
-            return true;
-        }
-        return false;
+        return true;
     }
+
+    if (!g_xrInputState.leftHandActive)
+        return false;
 
     out_origin[0] = -g_xrInputState.leftHandPose.position.z;
     out_origin[1] = -g_xrInputState.leftHandPose.position.x;
@@ -1052,8 +1052,28 @@ void XR_UpdatePointerCursor( void )
 	qboolean hasPose = false;
 	float dx = 0.0f, dy = 0.0f, dz = -1.0f;
 
-	// 1. Locate physical controller directly in head-relative View Space (g_xrViewSpace)
-	if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE )
+	// 1. Check for simulated hand pose override first (test / validation mode)
+	if( vr_test_hands && vr_test_hands->value > 0.0f )
+	{
+		poseInView.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
+		poseInView.position.y = -0.15f;
+		poseInView.position.z = -0.30f;
+
+		float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+		float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+
+		float pitch_rad = DEG2RAD( pitch );
+		float yaw_rad   = DEG2RAD( yaw );
+
+		// View space: +X Right, +Y Up, -Z Forward
+		dx =  sinf( yaw_rad ) * cosf( pitch_rad );
+		dy = -sinf( pitch_rad ); // negative pitch in GoldSrc points up (+Y in View space)
+		dz = -cosf( yaw_rad ) * cosf( pitch_rad );
+
+		hasPose = true;
+	}
+	// 2. Locate physical controller directly in head-relative View Space (g_xrViewSpace)
+	else if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE )
 	{
 		XrTime syncTime = XR_GetPredictedDisplayTime();
 		XrSpaceLocation loc = {0};
@@ -1077,33 +1097,10 @@ void XR_UpdatePointerCursor( void )
 		}
 	}
 
-	// 2. Fallback to simulated hand pose for headless / simulator verification
 	if( !hasPose )
 	{
-		if( vr_test_hands && vr_test_hands->value > 0.0f )
-		{
-			poseInView.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
-			poseInView.position.y = -0.15f;
-			poseInView.position.z = -0.30f;
-
-			float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
-			float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-
-			float pitch_rad = DEG2RAD( pitch );
-			float yaw_rad   = DEG2RAD( yaw );
-
-			// View space: +X Right, +Y Up, -Z Forward
-			dx =  sinf( yaw_rad ) * cosf( pitch_rad );
-			dy = -sinf( pitch_rad ); // negative pitch in GoldSrc points up (+Y in View space)
-			dz = -cosf( yaw_rad ) * cosf( pitch_rad );
-
-			hasPose = true;
-		}
-		else
-		{
-			s_pointerState.active = false;
-			return;
-		}
+		s_pointerState.active = false;
+		return;
 	}
 
 	float len = sqrtf( dx * dx + dy * dy + dz * dz );
