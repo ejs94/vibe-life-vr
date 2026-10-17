@@ -5,7 +5,11 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
+if [ -d "${REPO_DIR}/../openxr-tooling/monado" ]; then
+    MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
+else
+    MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
+fi
 OUTPUT_DIR="${REPO_DIR}/out/evidence/regression_$(date +%Y%m%d_%H%M%S)"
 
 log_title() { echo -e "\n\033[1;35m==========================================================\033[0m\n\033[1;35m  $*\033[0m\n\033[1;35m==========================================================\033[0m"; }

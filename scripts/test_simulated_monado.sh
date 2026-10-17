@@ -14,7 +14,11 @@ set -euo pipefail
 REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
+if [ -d "${REPO_DIR}/../openxr-tooling/monado" ]; then
+    MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
+else
+    MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
+fi
 OUTPUT_DIR="${REPO_DIR}/out/evidence/monado_$(date +%Y%m%d_%H%M%S)"
 TIMEOUT_SECS="${TIMEOUT_SECS:-15}"
 TARGET_MAP="${1:-c1a0}"
