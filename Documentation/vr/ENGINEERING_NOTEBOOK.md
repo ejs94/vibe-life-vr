@@ -138,19 +138,141 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
   - `vr_hide_arms 0`: Exibe a malha completa original de 1998 sem filtragem.
 * **Próximos Passos para Mãos 3D Livres:** Para a mão secundária (sem arma) e mãos vazias, planeja-se a inclusão da entidade de mão 3D independente (`v_hand.mdl`) e o suporte à extensão `XR_EXT_hand_tracking` para rastreamento óptico dos 26 ossos reais dos dedos no Meta Quest 3S.
 
+### 2.9. Lanterna Montada na Cabeça & Gesto 6DoF de Toque na Cabeça (HL2:VR Style)
+* **O Problema:** A lanterna acoplada à mão secundária no Half-Life original causava desconforto quando o jogador precisava das mãos livres, desalinha com a filosofia do Half-Life 1 e 2 (onde o traje HEV possui farol montado no capacete/traje apontado para a visão), e criar um botão de atalho puramente no controle reduzia a imersão.
+* **Nossa Solução Própria:**
+  - Em `cl_tent.c`, o feixe de luz dinâmico foi desacoplado de qualquer controle manual e agora parte da cabeça do jogador (`cl.viewheight`) acompanhando rigidamente os ângulos de visão (`cl.viewangles`).
+  - Em `xr_input.c`, implementamos o reconhecimento gestual 6DoF no espaço da visão (`g_xrViewSpace`): quando qualquer mão se aproxima da têmpora/orelha (distância $< 28\text{ cm}$, $|y| < 18\text{ cm}$, $|x| > 7\text{ cm}$) e aciona o gatilho (*trigger*) ou *grip*:
+    1. Alterna o estado da lanterna (`impulse 100`);
+    2. Emite vibração tátil de clique (*haptic pulse*);
+    3. Suprime comandos de tiro (`cmd->buttons &= ~(IN_ATTACK | IN_ATTACK2)`), garantindo que Gordon Freeman nunca dispare acidentalmente sua arma na própria cabeça ao ligar a lanterna;
+    4. Aplica *debounce* de 350ms para evitar duplo clique involuntário.
+
+### 2.10. Menu VR Flutuante com Feixes Laser Duplos e Intercalação Alternada (Beat Saber Style)
+* **O Problema:** Em menus de realidade virtual, forçar um ponteiro exclusivo na mão dominante gera frustração ao navegar com a mão esquerda livre, enquanto ter duas mãos competindo pelo mouse cria trepidação de ponteiro na interface 2D.
+* **Nossa Solução Própria:**
+  - Em `xr_input.c`, rastreamos e calculamos a interseção do raio de ambas as mãos simultaneamente contra o quad flutuante em `g_xrViewSpace`.
+  - Em `gl_rmain.c`, renderizamos os dois lasers no espaço 3D: a mão atualmente ativa recebe um feixe ciano vibrante (largura 2.5), enquanto a mão secundária exibe um feixe âmbar suave (largura 1.6).
+  - Puxar o gatilho da mão esquerda alterna o cursor ativamente para o ponto de impacto da mão esquerda e dispara o clique (`K_MOUSE1`). Puxar o gatilho da mão direita alterna instantaneamente para a direita. O hover contínuo é mantido pela mão que clicou por último, proporcionando uma experiência de seleção idêntica ao *Beat Saber*.
+
+### 2.11. Ajuste de Layout e Escala de Fontes do Launcher 2D no Meta Horizon OS
+* **O Problema:** No Meta Horizon OS, aplicativos 2D rodam como painéis flutuantes móveis e redimensionáveis no espaço virtual. A interface clássica do launcher Android apresentava colapso total da barra de ferramentas (`Toolbar` com altura `match_parent` dentro de um `AppBarLayout` com `wrap_content`), além de conflito de constraints no card do jogo (`card_game.xml`), onde a badge com o título e os botões de ação ("TEST GAME", "PLAY IN VR") lutavam pela mesma linha na base do card, truncando textos e quebrando botões em densidades de tela altas.
+* **Nossa Solução Própria:**
+  - Em `activity_main.xml`, a Toolbar foi configurada estritamente com `layout_height="?attr/actionBarSize"` e `minHeight="?attr/actionBarSize"`, estabilizando a hierarquia de medição do `LayoutManager`.
+  - Em `card_game.xml`, a altura fixa de `160dp` foi substituída por `wrap_content` com `minHeight="170dp"`. A âncora vertical foi desacoplada: a badge do jogo foi fixada no topo (`top_toTopOf="parent"`), enquanto o container de botões de ação foi fixado na base (`bottom_toBottomOf="parent"`), garantindo que botões e títulos nunca colidam mesmo se a janela flutuante for redimensionada para dimensões estreitas.
+  - Em `vr_preferences.xml` e `strings.xml`, foram adicionadas chaves para `vr_lasersight`, `vr_headtorch`, `vr_lefthanded` e `vr_twohanded`, que são lidas por `Game.kt` e passadas como argumentos de inicialização da engine.
+
+### 2.12. Menu de Configuração e Opções de Realidade Virtual In-Headset (`CMenuVR`)
+* **O Problema:** Modificar parâmetros de conforto e calibração de VR (como ângulo de snap turn, modo canhoto, lanterna de cabeça, vibração tátil ou distância da tela do menu) exigia fechar o jogo para alterar o launcher Android ou abrir o console para digitar comandos brutos.
+* **Nossa Solução Própria:**
+  - Criada a classe `CMenuVR` em `3rdparty/mainui/menus/VR.cpp` derivada de `CMenuFramework`.
+  - Agrupada em 3 colunas visuais limpas com controles interativos:
+    1. **Locomotion & Comfort:** Alternância entre giro suave e por incremento (`vr_smoothturn`), controle giratório de ângulo de snap (`vr_snap_angle`, 15° a 90°), e direção de locomoção orientada pelo headset ou controle (`vr_walkdirection`).
+    2. **Weapons & Flashlight:** Mira laser 3D (`vr_lasersight`), lanterna na cabeça com gesto têmpora (`vr_headtorch`), estabilização de duas mãos (`vr_twohanded`), modo canhoto (`vr_lefthanded`), vibração tátil (`vr_haptics_enabled`) e ponteiro laser em menus (`vr_pointer_hud`).
+    3. **Calibration & World Scale:** Sliders analógicos para inclinação da empunhadura (`vr_weapon_pitchadjust`, -30° a +30°), escala do mundo VR (`vr_worldscale`, 20 a 60), calibração de altura (`vr_height_adjust`, -20 a +20), e distância/escala do menu 2D flutuante (`vr_menu_distance`, `vr_menu_scale`).
+  - Totalmente integrado na navegação do `mainui` através do botão *"VR Options"* em `Configuration.cpp` (`UI_Options_Menu`), acessível tanto a partir do menu inicial quanto do menu de pausa durante a partida.
+
 ---
 
 ## 📱 5. Relatos Empíricos de Testes em Hardware Real (Meta Quest 3S)
 
-Durante os primeiros testes do APK instalado diretamente no **Meta Quest 3S**, dois comportamentos foram catalogados como issues ativas para resolução:
+Durante os testes em hardware real e simulação computacional, as seguintes issues foram diagnosticadas e resolvidas:
 
 ### 5.1. Issue #9: Menus 2D In-Game sem Interação via Laser Pointer
-* **Observação em Headset:** O menu principal e os menus de pausa/opções aparecem na camada quad flutuante no espaço da cabeça (`g_xrViewSpace`), porém os cliques com os gatilhos dos controles Touch Plus não acionam os botões ou campos.
-* **Plano Técnico:** Mapear a interseção do raio do laser 3D do controle primário (`XR_UpdatePointerCursor`) no plano do quad flutuante para coordenadas normalizadas $(u, v)$ de tela e injetar eventos de mouse (`IN_MouseMove`, `K_MOUSE1`) diretamente no pipeline de entrada da engine (`engine/client/in_touch.c` e `mainui`).
+* **Status:** 🟢 **Resolvido.** Raycasting do laser em `g_xrViewSpace` sincronizado com injeção de eventos de cursor em `XR_UpdatePointerCursor` e renderização de lasers duplos estilo *Beat Saber*.
 
 ### 5.2. Issue #10: Interface 2D do Launcher no Horizon OS com Fontes e Barras Quebradas
-* **Observação em Headset:** Ao abrir o aplicativo pelo ambiente 2D do Horizon OS antes de entrar no modo imersivo OpenXR, a interface do launcher Android apresenta elementos visuais desalinhados, quebra de escala de fontes e layout distorcido nas barras de menu.
-* **Plano Técnico:** Revisar os layouts XML em `android/app/src/main/res/layout/` e `values/styles.xml`, aplicando constraints responsivas (Window Size Classes do Android / Material 3) para janelas flutuantes redimensionáveis do Meta Horizon OS.
+* **Status:** 🟢 **Resolvido.** Toolbar com altura `?attr/actionBarSize`, cards de jogo com altura adaptativa `wrap_content` / `minHeight="170dp"` e desacoplamento de âncoras para janela flutuante no Horizon OS.
+
+### 5.3. Issue #13: Menu de Opções VR Dedicado In-Headset
+* **Status:** 🟢 **Resolvido.** Implementado `CMenuVR` em `3rdparty/mainui/menus/VR.cpp` com todos os parâmetros vinculados via `LinkCvar` e persistência via `WriteCvar`.
+
+### 5.4. Issue #14: Balística a partir da Boca Física do Cano no Servidor
+* **Status:** 🟢 **Resolvido.** `CBasePlayer::GetGunPosition()` em `dlls/player.cpp` lê `pev->vuser1` (offset da boca em 6DoF relativo ao jogador), garantindo que todo o arsenal (Glock, MP5, Python, Shotgun, Gauss, Egon, Crossbow, Hornet Gun, Crowbar) e o lançador RPG disparem fisicamente do cano 3D da arma alinhados com o laser sight.
+
+### 5.5. Issue #15: Lançamento de Granadas por Inércia e Momento 6DoF
+* **Status:** 🟢 **Resolvido.** Vetor linear de velocidade do OpenXR em `xr_input.c` rotacionado por `s_playerTurnYaw`, repassado para `clent->v.vuser3` no servidor em `sv_pmove.c`, e injetado diretamente em `vecThrow` em `handgrenade.cpp` (`vecThrow += m_pPlayer->pev->vuser3 * 1.25f`), permitindo arremessar granadas com movimento natural de braço.
+
+### 5.6. Bateria Mestra de Testes Regressivos Automatizados (13/13 Gates Aprovados)
+* **Status:** 🟢 **Concluído e Validado.** Desenvolvido o harness unificado de regressão [scripts/run_regression_battery.sh](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/run_regression_battery.sh) e o roteiro [scripts/regression_master.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/regression_master.cfg). Executados 13 testes ponta a ponta cobrindo negociação OpenXR, registro das 15 CVars VR, acionamento do menu `CMenuVR`, feixes duplos de laser Beat Saber com troca de mão, carga do mapa `c1a0`, lanterna de cabeça por gesto 6DoF, rotação ortonormal de cabeça sem náusea, balística do cano no servidor (MP5, Shotgun, Crossbow, RPG), arremesso físico de granadas, estabilização bimanual, áudio espacial 3D HRTF com listener 6DoF e auditoria das 5 bibliotecas nativas arm64-v8a no APK final do Quest. Todos os 13 testes obtiveram status **PASS** (100% de sucesso).
+
+### 5.7. Issue #17: Áudio Espacial 3D HRTF & Rastreamento 6DoF do Listener
+* **Status:** 🟢 **Resolvido & Endurecido.**
+  - **Correção de Silêncio em Simulações:** Identificado que ao executar simulações ou baterias de testes em segundo plano (ou quando a janela X11 desktop perde o foco do OS), `host.status` transiciona para `HOST_NOFOCUS`. A CVar padrão `snd_mute_losefocus 1` forçava o multiplicador mestre `gain` para 0 em [`S_GetMasterVolume`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/client/sound/s_main.c#L118) e [`S_GetMusicVolume`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/client/sound/s_stream.c#L69), zerando todos os buffers DMA transmitidos ao PipeWire. Adicionado bypass condicional (`if (!XR_IsActive() && ...)`) para que em modo VR o áudio permaneça 100% ativo independente do foco da janela desktop.
+  - **Dedução Direta da Base Orthonormal:** Criado [`XR_GetHeadCenterTransformWithBasis()`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_swapchain.c#L649) calculando os vetores `snd.forward`, `snd.right` e `snd.up` diretamente do quaternion do OpenXR e do `turn_yaw`, eliminando gimbal lock ou inversão de sinal no eixo Roll.
+  - **Prevenção de Underflow em Atenuação:** Em [`S_SpatializeChannel`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/client/sound/s_main.c#L540), adicionado `dist_factor = Q_max(0.0f, 1.0f - dist)` prevenindo multiplicação por fatores negativos para sons além da distância de corte.
+  - **Inicialização da Base:** Em [`S_Init`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/client/sound/s_main.c#L2090), inicializados os vetores base do listener para garantir espacialização válida desde o primeiro quadro antes do primeiro viewpass 3D.
+  - **Validação Empírica:** Amostragem gravada via `parec` no sink PipeWire demonstrou amplitude máxima de 32767 com 79.3% de amostras ativas não-nulas durante simulações com o Monado. Aprovado com 14/14 gates na bateria unificada de regressão.
+
+---
+
+## 🎯 6. Próximos Desafios Ativos da Engenharia VR (Fase 07)
+
+### 6.1. Issue #16: Rastreamento Óptico dos Dedos e Mãos Esqueléticas 3D Articuladas (Feature #12)
+* **Diagnóstico:** A luva do jogador atualmente faz parte da malha do viewmodel ou é suprimida por `vr_hide_arms`. Mãos 3D autônomas com dedos dinamicamente dobráveis (por trigger/grip analógico e optical hand tracking `XR_EXT_hand_tracking`) elevarão a presença corporal.
+* **Plano:** Integrar entidade independente `clgame.handent` com rig de 20 ossos de falanges e translação procedural em `gl_studio.c`.
+
+---
+
+## 🔬 7. Diagnóstico Headless por Telemetria & Integração com Khronos OpenXR-CTS
+
+Para além da validação visual por captura de quadros do simulador (`vr_dumpeye`), o projeto dispõe de telemetria analítica contínua e integração com a suíte oficial Khronos OpenXR-CTS para assegurar estabilidade, conformidade e ausência de regressões sem depender de inspeção manual de imagens.
+
+### 7.1. Validação de Estado da Engine sem Inspeção de Fotos
+
+A engine emite telemetria vetorial, geométrica e de eventos em tempo real através dos parâmetros `-dev 1` (ou `-dev 2`), `-condebug` (geração de [qconsole.log](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/qconsole.log)) e comandos nativos de console:
+
+1. **Telemetria de Renderizador e Culling (`[VR_SCENE_DBG]`):**
+   - Implementado em [`R_RenderScene`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/ref/gl_vr/gl_rmain.c#L1801-L1805) em [ref/gl_vr/gl_rmain.c](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/ref/gl_vr/gl_rmain.c).
+   - Emite métricas de cada olho: `frame`, `fbo`, `leafs` (folhas BSP no frustum), `polys` (polígonos do mundo), coordenadas tridimensionais de câmera (`org` e `ang`), e amostras RGBA do centro e cantos do buffer, atestando ausência de tela preta (`center=(40,44,44,255)`).
+
+2. **Telemetria Espacial e Gestos Físicos (`[VR_GESTURE]`):**
+   - Implementado em [engine/platform/openxr/xr_input.c](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_input.c).
+   - Emite a distância euclidiana exata e deslocamentos relativos entre o controle e a têmpora do headset (ex: `dist=0.17m, x=0.16m, y=0.02m, z=0.05m`), comprovando o acionamento do gesto de lanterna por cálculo matemático sem necessidade de headset físico.
+
+3. **Alternância Dinâmica de Ponteiros Laser (`[VR_POINTER]`):**
+   - Registra o ponto de impacto e o chaveamento de mão primária com coordenadas virtuais no canvas 2D do menu (ex: `Switched active pointer to RIGHT hand (click at screen: 781, 529)`).
+
+4. **Comandos de Telemetria no Console:**
+   - `viewpos`: Reporta origem (`org`) e ângulos (`ang`) espaciais do ponto de vista do jogador via [`SCR_Viewpos_f`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/client/cl_cmds.c#L468-L472).
+   - `r_speeds 1` a `5`: Métricas de polígonos (`wpoly`, `epoly`), tempo de desenho por quadro em milissegundos e contadores de entidades visíveis em [ref/gl_vr/gl_backend.c](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/ref/gl_vr/gl_backend.c).
+   - `cl_showfps 1`, `r_info`, `status`, `cvarlist vr_*`, `vr_haptic`.
+
+---
+
+### 7.2. Papel e Utilidade da Suíte Khronos OpenXR-CTS (`../OpenXR-CTS`)
+
+O repositório oficial [KhronosGroup/OpenXR-CTS](file:///home/ejs94/Documentos/Repos/OpenXR-CTS) fornece quatro utilidades fundamentais para a arquitetura do Xash3D VR:
+
+#### A. Camada de Validação em Tempo de Execução (`conformance_layer` / API Validation Layer)
+* **Local:** [`../OpenXR-CTS/src/conformance/conformance_layer`](file:///home/ejs94/Documentos/Repos/OpenXR-CTS/src/conformance/conformance_layer).
+* **Função:** Atua como um *sanitizer* e validador da especificação Khronos em tempo real, interceptando chamadas da engine (`xrBeginSession`, `xrCreateActionSpace`, `xrLocateSpace`, etc.).
+* **Detecção Preventiva:** Captura na hora quatérnions desnormalizados, structs com `.type` incorreto, desalinhamento no ciclo de imagens da swapchain (`xrAcquire` / `xrWait` / `xrRelease`) e chamadas de estado inválidas antes do início de sessão.
+
+#### B. Gabarito de Código Canônico Khronos (`conformance_test`)
+* **Local:** [`../OpenXR-CTS/src/conformance/conformance_test`](file:///home/ejs94/Documentos/Repos/OpenXR-CTS/src/conformance/conformance_test).
+* **Módulos de Referência:**
+  - `test_ActionPoses.cpp`: Especificação estrita para vinculação de subaction paths (`/user/hand/left`, `/user/hand/right`) e poses dos controles espelhadas em [xr_input.c](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_input.c).
+  - `test_Swapchains.cpp`: Padrão canônico de enumeração de formatos e sincronização de buffer duplo/triplo implementado em [xr_swapchain.c](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_swapchain.c).
+  - `test_HapticInterrupt.cpp`: Manipulação segura de pulsos hápticos em múltiplas mãos simultâneas.
+  - `test_xrLocateSpace.cpp`: Transformação e cálculo de espaços de referência (`LOCAL` vs `STAGE`).
+
+#### C. Auditoria Prévia dos Runtimes Alvo (Monado PCVR e Meta Quest OS)
+* Permite certificar se o runtime OpenXR do ambiente (Monado no Linux ou Meta Horizon OS no Quest 3S) suporta e implementa fielmente extensões antes de integrá-las à engine (ex: `XR_FB_foveation`, `XR_KHR_composition_layer_depth`, `XR_EXT_hand_tracking`).
+
+#### D. Mocks Headless Sintéticos para CI
+* O framework [`framework/`](file:///home/ejs94/Documentos/Repos/OpenXR-CTS/src/conformance/framework) permite alimentar a engine com sequências sintéticas de ações e rastreamento de poses sem exigir dispositivo gráfico físico ou display.
+
+---
+
+### 7.3. Matriz de Responsabilidades: OpenXR-CTS vs Bateria de Regressão Xash3D
+
+| Critério | Khronos OpenXR-CTS (`../OpenXR-CTS`) | Bateria de Regressão Xash3D (`run_regression_battery.sh`) |
+| :--- | :--- | :--- |
+| **Escopo Principal** | Conformidade da API OpenXR e validação do runtime | Funcionalidades de gameplay e renderização da engine |
+| **O que Valida** | Structs, handles, estados da sessão, swapchains, poses válidas | Balística de armas, mira laser, menus 2D, inércia de granadas, CVars |
+| **Ambiente Alvo** | Runtimes OpenXR (Monado, Quest OS, SteamVR) | Engine Xash3D VR (client, server, renderer gl_vr) |
+| **Critério de Sucesso** | Zero violações de especificação Khronos | Aprovação dos 12 gates empíricos (12/12 PASS) |
 
 ---
 

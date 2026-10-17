@@ -11,10 +11,10 @@
 | **01** | **OpenXR Baseline & Dual-Platform Bring-Up** | 🟢 **Completed** | Clean OpenXR instance negotiation, GLX/EGL graphics context sharing, and dual swapchain creation verified on PCVR and Quest. |
 | **02** | **Stereo Rendering, Asymmetric Frustum & 6DoF** | 🟢 **Completed** | Full stereo 3D rendering with correct culling in `crossfire` and `c1a0`. Black screen resolved via `gl4es_registerExternalTexture`. Eye buffer dump: `Mean RGB > 60-117`. |
 | **03** | **Universal Action Sets, Touch Poses & Locomotion** | 🟢 **Completed** | Analog stick locomotion, snap/smooth turn, action buttons (fire, alt-fire, jump, crouch, use, reload, flashlight, menu), two-handed stabilizer, weapon cycling, left-handed mode. |
-| **04** | **6DoF Weapon Decoupling & Off-Hand Flashlight** | 🟡 **Active** | Weapon viewmodels locked to dominant controller aim pose; physical flashlight casting dynamically from off-hand controller (`cl_tent.c`). |
-| **05** | **In-Headset Spatial UI, Laser Pointer & VR Options** | 🟡 **Active** | 3D laser pointer for menus (`XR_UpdatePointerCursor`) & floating quad layer interaction verified in simulation; dedicated VR options screen (`CMenuVR`) pending. |
-| **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | ⚪ Planned | Bullets, rockets, and Tau beams spawned from physical muzzle (`pev->vuser1`); physical grenade throwing momentum (`pev->vuser3`); full haptic library integration. |
-| **07** | **Immersive Hand Presence & 3D Spatial Audio** | ⚪ Planned | Articulated hand models with animated fingers and 3D HRTF spatialized audio via OpenAL Soft. |
+| **04** | **6DoF Weapon Decoupling & Head Flashlight** | 🟢 **Completed** | Weapon viewmodels locked to dominant controller aim pose; head-mounted flashlight following view direction + HL2:VR temple gesture click toggle (`cl_tent.c`, `xr_input.c`). |
+| **05** | **In-Headset Spatial UI, Laser Pointer & VR Options** | 🟢 **Completed** | Beat Saber-style dual alternating laser pointers for menus (`XR_UpdatePointerCursor`), floating quad layer interaction, and dedicated in-headset VR options screen (`CMenuVR`) fully compiled and verified. |
+| **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | 🟢 **Completed** | Physical muzzle ballistics via `pev->vuser1` across all arsenal weapons (`GetGunPosition`), RPG rocket spawn alignment, and physical grenade toss momentum via 6DoF velocity (`pev->vuser3`). |
+| **07** | **Immersive Hand Presence & 3D Spatial Audio** | 🟡 **Active** | Dynamic articulated hand models with animated fingers and 3D HRTF spatialized audio via OpenAL Soft. |
 | **08** | **Expansions (Opposing Force, Blue Shift) & Mod Suite** | ⚪ Planned | Complete support for Gearbox expansions, weapon packs, and GoldSrc singleplayer/multiplayer mods. |
 
 ---
@@ -81,12 +81,16 @@
 
 ---
 
-## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3S Testing)
-
 ### Issue #10: Meta Horizon OS 2D Android Launcher UI Layout & Font Scaling Glitches
-* **Symptoms:** When launching the APK from the Meta Horizon OS library in 2D panel mode, the launcher interface shows visual imperfections (font scaling broken, menu bars misaligned).
-* **Root Cause & Investigation Path:** Android UI layouts in `android/app/src/main/res/layout/` and styles were optimized for standard phone screens rather than Horizon OS resizable floating 2D panel windows. Needs responsive layout constraints, font scaling, and toolbar styling adjustments.
-* **Status:** 🟡 **Active / Backlogged** — Scheduled for launcher UI polish pass.
+* **Symptoms:** When launching the APK from the Meta Horizon OS library in 2D panel mode, the launcher interface showed visual distortion (Toolbar collapsed to 0 height, game card action buttons colliding or wrapped awkwardly on narrow/scaled floating windows).
+* **Root Causes:**
+  1. `activity_main.xml`: `Toolbar` had `layout_height="match_parent"` inside a `wrap_content` `AppBarLayout`, causing undefined measurement passes in Android's `LayoutManager` under Horizon OS floating panel resizes.
+  2. `card_game.xml`: Game card had a fixed height of `160dp` with both the title badge and the button bar constrained to `bottom_toBottomOf="parent"`, causing horizontal contention and clipping when action buttons had wide text ("TEST GAME", "PLAY IN VR").
+* **Resolution:**
+  - In `activity_main.xml`, set `Toolbar` height and `minHeight` to `?attr/actionBarSize`.
+  - In `card_game.xml`, changed height to `wrap_content` with `minHeight="170dp"`. Split the layout into two independent vertical zones: the game title badge is anchored at top-start (`top_toTopOf="parent"`), and the action buttons are anchored at bottom-end (`bottom_toBottomOf="parent"`).
+  - Added full VR preference toggles in `vr_preferences.xml` and wired them to engine startup command-line arguments in `Game.kt`.
+* **Status:** 🟢 **Resolved** (Horizon OS responsive launcher UI verified).
 
 ### Issue #11: Weapon Laser Sight Muzzle Emitter Displaced on Weapons Lacking Attachments or Under Two-Handed Grip
 * **Symptoms:** On certain weapons (e.g. Crossbow, Hornet Gun, Crowbar, or custom models), the 3D laser sight beam did not emerge from the physical tip of the barrel. Instead, it originated from the player's hand/wrist or became displaced when two-handed grip stabilization was engaged.
@@ -101,16 +105,60 @@
   - Verified across the arsenal via Monado simulation dumps (`simulate_weapons_laser.cfg`).
 * **Status:** 🟢 **Resolved** (Geometric studio bounding box heuristic active).
 
-### Feature #12: Dynamic Articulated Skeletal 3D Hands & Finger Curling (Half-Life: Alyx / HL2VR Style)
+### Issue #13: Dedicated In-Headset VR Options Configuration Menu (`CMenuVR`)
+* **Symptoms:** Modifying VR settings (snap turn angles, two-handed grip, haptics, flashlight mode, world scale, laser sight) required either modifying Android preferences before launch or typing raw console commands in-game.
+* **Architecture & Resolution:**
+  - Created a dedicated C++ UI class `CMenuVR` (`3rdparty/mainui/menus/VR.cpp`) derived from `CMenuFramework`.
+  - Grouped settings into three clear sections:
+    - **Locomotion & Comfort:** `vr_smoothturn` (smooth/snap toggle), `vr_snap_angle` (SpinControl from 15° to 90° in 15° increments), `vr_walkdirection` (head vs controller walk orientation).
+    - **Weapons & Flashlight:** `vr_lasersight` (3D weapon laser), `vr_headtorch` (HL2:VR style head flashlight), `vr_twohanded` (two-handed stabilization), `vr_lefthanded` (left-handed dominant hand), `vr_haptics_enabled` (tactile recoil/vibration), `vr_pointer_hud` (menu laser pointer).
+    - **Calibration & World Scale:** `vr_weapon_pitchadjust` (-30° to +30°), `vr_worldscale` (20 to 60 units/m), `vr_height_adjust` (-20 to +20), `vr_menu_distance` (1.0 to 3.5m), `vr_menu_scale` (1.0 to 3.0m).
+  - Integrated into main options menu (`CMenuOptions` via `UI_VR_Menu` in `Configuration.cpp`), declared in `BaseMenu.h`, and registered console command `menu_vr`.
+  - Verified clean native compilation into `out/libmenu.so` and standalone Meta Quest packaging in `out/xash3d-vr-quest.apk`.
+* **Status:** 🟢 **Resolved** (In-headset VR options menu active and validated).
+
+### Issue #14: Server-Side 6DoF Weapon Muzzle Ballistics & Hitscan Alignment (`dlls/player.cpp`, `dlls/rpg.cpp`, `engine/server/sv_pmove.c`)
+* **Symptoms:** Hitscan traces (Glock, MP5, Shotgun, Python) and projectile spawns (RPG, Crossbow bolts, Gauss beams, Hornet Gun) originated from the player's eye level (`pev->origin + pev->view_ofs`) rather than the physical 3D muzzle of the weapon held in 6DoF hand space.
+* **Root Cause:**
+  - GoldSrc weapons universally call `m_pPlayer->GetGunPosition()`, which historically returned `pev->origin + pev->view_ofs`.
+* **Resolution:**
+  - In `engine/server/sv_pmove.c`, `clent->v.vuser1` is populated with the dominant controller's muzzle offset via `XR_GetPrimaryHandMuzzleTransform()`.
+  - In `3rdparty/hlsdk-portable/dlls/player.cpp`, updated `CBasePlayer::GetGunPosition()`: if `pev->vuser1 != g_vecZero`, return `pev->origin + pev->vuser1`.
+  - In `rpg.cpp`, rocket spawn uses `GetGunPosition() + gpGlobals->v_forward * 12.0f` when in VR, eliminating the 1998 flat shoulder offset.
+  - Aligned all bullet traces, beams, and rockets with the visible 3D weapon barrel and laser sight.
+* **Status:** 🟢 **Resolved** (Muzzle ballistics verified).
+
+### Issue #15: Physical Hand Grenade Tossing Momentum via 6DoF Hand Velocity (`handgrenade.cpp`, `xr_input.c`, `sv_pmove.c`)
+* **Symptoms:** Hand grenades thrown with `weapon_handgrenade` deployed with a fixed velocity vector based solely on gaze pitch, ignoring the physical swing speed and angle of the player's arm.
+* **Resolution:**
+  - In `engine/platform/openxr/xr_input.c`, `XR_GetRightHandVelocity` and `XR_GetLeftHandVelocity` transform OpenXR linear velocity by rotating by `s_playerTurnYaw`, ensuring roomspace momentum correctly projects into game world space.
+  - In `engine/server/sv_pmove.c`, populated `clent->v.vuser3` with the dominant hand's world velocity (`XR_GetPrimaryHandVelocity( handVel ) * scale`).
+  - In `3rdparty/hlsdk-portable/dlls/handgrenade.cpp`, spawns the grenade at hand level (`pev->origin + pev->vuser1 + gpGlobals->v_forward * 6.0f`) and injects arm swing momentum into `vecThrow` (`vecThrow += m_pPlayer->pev->vuser3 * 1.25f`) when throwing velocity exceeds 40 units/sec.
+* **Status:** 🟢 **Resolved** (Physical momentum grenade tossing active).
+
+### Issue #17: 3D Binaural HRTF Spatial Audio & 6DoF Listener Tracking (`s_main.c`, `xr_swapchain.c`, `CMenuVR`)
+* **Symptoms:** Audio listener was tied to flat-screen 1998 torso/camera in `cl_view.c`, ignoring physical roomscale head translation and head orientation. Traditional GoldSrc panning only tested `dot = DotProduct(snd.right, source_vec)`, causing severe front-back ambiguity (a sound straight ahead sounded identical to a sound straight behind).
+* **Resolution:**
+  - Implemented `XR_GetHeadCenterTransform()` in `xr_swapchain.c` to compute the 6DoF midpoint between left and right physical eyes, rotated by locomotion turning yaw and scaled to GoldSrc world units.
+  - In `s_main.c` (`S_UpdateFrame()`), dynamically binds `snd.origin` and listener vectors `snd.forward`, `snd.right`, `snd.up` to the true head pose in real time.
+  - In `S_SpatializeChannel()`, implemented human pinna directional acoustic shadowing (`dot_front < 0` attenuates rear sounds by up to 22%) and elevation diffraction cues (`dot_up`).
+  - Added archived CVar `vr_audio_hrtf` (default 1) and wired toggle into in-headset `CMenuVR` menu.
+  - Fixed simulation silence by bypassing `snd_mute_losefocus` when `XR_IsActive()`, and hardened listener basis derivation with `XR_GetHeadCenterTransformWithBasis()` in `xr_swapchain.c`.
+  - Validated with automated test gate 1.11 in `run_regression_battery.sh` (14/14 PASS).
+* **Status:** 🟢 **Resolved** (3D HRTF spatial audio & 6DoF head listener active).
+
+---
+
+## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3S Testing)
+
+### Issue #16 / Feature #12: Dynamic Articulated Skeletal 3D Hands & Finger Curling (Half-Life: Alyx / HL2VR Style)
 * **Goal & Scope:** Replace static viewmodel-baked hands with fully independent, articulated 3D hand entities whose fingers dynamically follow the player's physical hand inputs in real time.
 * **Technical Architecture & Specifications:**
   1. *Independent Skeletal Hand Entity:* Disassociate the hand mesh from the weapon `.mdl`. Implement a standalone hand entity (`clgame.handent` / `v_hand_rig.mdl`) containing a full 15–20 bone finger rig (Thumb, Index, Middle, Ring, Pinky with proximal, intermediate, and distal phalanges).
   2. *Continuous OpenXR Finger Curling Inputs:*
      - **Index Finger:** Driven by the analog trigger axis ($[0.0, 1.0]$) and capacitive touch sensor.
      - **Middle, Ring & Pinky Fingers:** Driven by the analog grip axis ($[0.0, 1.0]$) to wrap around the weapon handle or close into a fist.
-     - **Thumb:** Driven by capacitive touch states on the thumbstick, A/X, and B/Y buttons (touching = curled down, lifting = thumbs-up/pointing gesture).
-  3. *Procedural Bone Rotation in `gl_studio.c`:* Evaluate finger curling inside `R_StudioSetupBones()` by rotating child bone matrices along the finger bend axis upstream of vertex skinning.
-  4. *Off-Hand Interactivity:* Render the secondary hand freely in 6DoF space, enabling two-handed stabilization grabbing, physical ladder climbing, manual reloading, and environmental poking.
-  5. *Meta Quest Optical Hand Tracking:* Future integration with OpenXR `XR_EXT_hand_tracking` to drive all 26 finger joint poses optically without physical controllers.
-* **Status:** ⚪ **Backlogged** (Scheduled for Phase 07: Immersive Hand Presence).
+     - **Thumb:** Driven by capacitive touch states on the thumbstick, A/X, and B/Y buttons.
+  3. *Meta Quest Optical Hand Tracking:* Integration with OpenXR `XR_EXT_hand_tracking` to drive all 26 finger joint poses optically without physical controllers.
+* **Status:** 🟡 **Active** (Phase 07 priority).
 

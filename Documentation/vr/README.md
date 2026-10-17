@@ -157,6 +157,6 @@ adb install -r out/xash3d-vr-quest.apk
 
 ## 6. Documentação Relacionada
 
-- [Caderno de Engenharia & Anotações de Soluções](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md) — Soluções próprias vs adaptadas e decisões arquiteturais.
+- [Caderno de Engenharia & Anotações de Soluções](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md) — Soluções próprias vs adaptadas, decisões arquiteturais, telemetria headless e integração com Khronos OpenXR-CTS.
 - [Roadmap & Análise de Problemas](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ROADMAP.md) — Fases 01 a 08 e histórico de depuração.
 
