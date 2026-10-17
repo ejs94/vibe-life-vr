@@ -289,11 +289,17 @@ void XR_SyncInputs( void )
 
     getInfo.action = g_actionAttack;
     if (XR_SUCCEEDED(xrGetActionStateFloat(g_xrSession, &getInfo, &floatState)))
+    {
+        g_xrInputState.triggerRight = floatState.currentState;
         g_xrInputState.attack = (floatState.currentState > 0.5f);
+    }
 
     getInfo.action = g_actionAttack2;
     if (XR_SUCCEEDED(xrGetActionStateFloat(g_xrSession, &getInfo, &floatState)))
+    {
+        g_xrInputState.triggerLeft = floatState.currentState;
         g_xrInputState.attack2 = (floatState.currentState > 0.5f);
+    }
 
     if (g_actionGripRight != XR_NULL_HANDLE)
     {
@@ -380,6 +386,31 @@ void XR_SyncInputs( void )
         g_xrInputState.turnY = (fabsf(vecState.currentState.y) > deadzone) ? vecState.currentState.y : 0.0f;
     }
 
+    // Procedural thumb curling heuristic based on buttons and thumbstick touches/deflections
+    qboolean rightThumbActive = (g_xrInputState.jump || g_xrInputState.use || g_xrInputState.duck ||
+                                 fabsf(g_xrInputState.turnX) > 0.05f || fabsf(g_xrInputState.turnY) > 0.05f);
+    float targetThumbRight = rightThumbActive ? 1.0f : 0.0f;
+
+    qboolean leftThumbActive = (g_xrInputState.reload || g_xrInputState.flashlight || g_xrInputState.sprint || g_xrInputState.menu ||
+                                fabsf(g_xrInputState.moveX) > 0.05f || fabsf(g_xrInputState.moveY) > 0.05f);
+    float targetThumbLeft = leftThumbActive ? 1.0f : 0.0f;
+
+    // Smooth response (~100ms) to avoid instantaneous finger snapping
+    float curlLerp = 0.25f;
+    g_xrInputState.thumbRight += (targetThumbRight - g_xrInputState.thumbRight) * curlLerp;
+    g_xrInputState.thumbLeft  += (targetThumbLeft  - g_xrInputState.thumbLeft) * curlLerp;
+
+    // Simulated finger curling axes for headless regression testing
+    if (vr_test_finger_curl && vr_test_finger_curl->value > 0.0f)
+    {
+        g_xrInputState.triggerRight = 0.85f;
+        g_xrInputState.triggerLeft  = 0.75f;
+        g_xrInputState.gripRight    = 0.90f;
+        g_xrInputState.gripLeft     = 0.60f;
+        g_xrInputState.thumbRight   = 0.80f;
+        g_xrInputState.thumbLeft    = 0.70f;
+    }
+
     // Leitura das poses e velocidades das mãos (6DoF)
     XrTime syncTime = XR_GetPredictedDisplayTime();
     if (syncTime > 0)
@@ -442,7 +473,7 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
     qboolean attack  = lefthanded ? g_xrInputState.attack2 : g_xrInputState.attack;
     qboolean attack2 = lefthanded ? g_xrInputState.attack  : g_xrInputState.attack2;
 
-    // Aplicar botões de ação
+    // Apply action buttons
     if (attack)                 cmd->buttons |= IN_ATTACK;
     if (attack2)                cmd->buttons |= IN_ATTACK2;
     if (g_xrInputState.jump)    cmd->buttons |= IN_JUMP;
@@ -451,7 +482,130 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
     if (g_xrInputState.reload)  cmd->buttons |= IN_RELOAD;
     if (g_xrInputState.sprint)  cmd->buttons |= IN_RUN;
 
-    // Flashlight Toggle (impulse 100) via Y button (or Index B)
+    // Head-Click Flashlight Gesture (HL2:VR style):
+    // Bringing either hand near the side of the head (temple/ear area) and clicking (trigger or grip)
+    // toggles the head-mounted flashlight, triggers a haptic click, and suppresses weapon fire.
+    qboolean headGestureTriggered = false;
+    static qboolean s_headGestureDebounced = false;
+    static double s_nextHeadGestureTime = 0.0;
+
+    XrTime gestureSyncTime = XR_GetPredictedDisplayTime();
+
+    for( int h = 0; h < 2; h++ )
+    {
+        XrSpace handSpace = (h == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
+        XrVector3f posInView = {0};
+        qboolean hasViewPos = false;
+
+        // Automated test override for headless / simulated validation
+        if( vr_test_headgesture && vr_test_headgesture->value > 0.0f )
+        {
+            if(((int)vr_test_headgesture->value == 1 && h == VR_HAND_RIGHT) ||
+               ((int)vr_test_headgesture->value == 2 && h == VR_HAND_LEFT))
+            {
+                posInView.x = (h == VR_HAND_RIGHT) ? 0.16f : -0.16f;
+                posInView.y = 0.02f;
+                posInView.z = 0.05f;
+                hasViewPos = true;
+            }
+        }
+        else if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE && gestureSyncTime > 0 )
+        {
+            XrSpaceLocation loc = {0};
+            loc.type = XR_TYPE_SPACE_LOCATION;
+            if( XR_SUCCEEDED( xrLocateSpace( handSpace, g_xrViewSpace, gestureSyncTime, &loc ) ))
+            {
+                if( loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT )
+                {
+                    posInView = loc.pose.position;
+                    hasViewPos = true;
+                }
+            }
+        }
+        else
+        {
+            // Fallback: transform local-space hand pose to head view coordinates
+            const XrPosef *handPose = (h == VR_HAND_LEFT) ? &g_xrInputState.leftHandPose : &g_xrInputState.rightHandPose;
+            qboolean handActive = (h == VR_HAND_LEFT) ? g_xrInputState.leftHandActive : g_xrInputState.rightHandActive;
+            if( handActive )
+            {
+                float dx = handPose->position.x - g_xrViews[0].pose.position.x;
+                float dy = handPose->position.y - g_xrViews[0].pose.position.y;
+                float dz = handPose->position.z - g_xrViews[0].pose.position.z;
+
+                float qx = g_xrViews[0].pose.orientation.x;
+                float qy = g_xrViews[0].pose.orientation.y;
+                float qz = g_xrViews[0].pose.orientation.z;
+                float qw = g_xrViews[0].pose.orientation.w;
+
+                // Rotate by conjugate of head orientation: q_inv = (-qx, -qy, -qz, qw)
+                float t2 =   qw * dx + qy * dz - qz * dy;
+                float t3 =   qw * dy + qz * dx - qx * dz;
+                float t4 =   qw * dz + qx * dy - qy * dx;
+                float t1 =  -qx * dx - qy * dy - qz * dz;
+                posInView.x = t2 * qw - t1 * qx - t3 * qz + t4 * qy;
+                posInView.y = t3 * qw - t1 * qy - t4 * qx + t2 * qz;
+                posInView.z = t4 * qw - t1 * qz - t2 * qy + t3 * qx;
+                hasViewPos = true;
+            }
+        }
+
+        if( hasViewPos )
+        {
+            float dist = sqrtf( posInView.x * posInView.x + posInView.y * posInView.y + posInView.z * posInView.z );
+            // Ear/temple region:
+            // 1. Distance to head center < 0.28m
+            // 2. Lateral offset |x| > 0.07m (at the side of head, not in front of face)
+            // 3. Vertical level |y| < 0.18m (eye/ear level)
+            // 4. Longitudinal range -0.15m <= z <= 0.22m
+            if( dist < 0.28f && fabsf(posInView.x) > 0.07f && fabsf(posInView.y) < 0.18f && posInView.z > -0.15f && posInView.z < 0.22f )
+            {
+                qboolean handClicked = false;
+                if( h == VR_HAND_RIGHT )
+                {
+                    handClicked = (g_xrInputState.attack || g_xrInputState.gripRight > 0.5f);
+                    if( vr_test_click && vr_test_click->value > 0.0f )
+                        handClicked = true;
+                }
+                else
+                {
+                    handClicked = (g_xrInputState.attack2 || g_xrInputState.gripLeft > 0.5f);
+                    if( vr_test_click && vr_test_click->value == 2.0f )
+                        handClicked = true;
+                }
+
+                if( handClicked )
+                {
+                    // Suppress weapon firing to avoid accidental discharge when reaching for head
+                    cmd->buttons &= ~(IN_ATTACK | IN_ATTACK2);
+
+                    if( !s_headGestureDebounced && host.realtime >= s_nextHeadGestureTime )
+                    {
+                        s_headGestureDebounced = true;
+                        s_nextHeadGestureTime = host.realtime + 0.35;
+                        headGestureTriggered = true;
+
+                        Cbuf_AddText( "impulse 100\n" );
+                        XR_TriggerHapticEffect( h, VR_HAPTIC_UI_CLICK, 0.7f );
+                        Con_Printf( "^2[VR_GESTURE] Head flashlight toggled by %s hand gesture! (dist=%.2fm, x=%.2fm, y=%.2fm, z=%.2fm)\n",
+                            (h == VR_HAND_LEFT) ? "LEFT" : "RIGHT", dist, posInView.x, posInView.y, posInView.z );
+                    }
+                }
+            }
+        }
+    }
+
+    if( !headGestureTriggered )
+    {
+        qboolean anyClickHeld = (g_xrInputState.attack || g_xrInputState.attack2 ||
+                                 g_xrInputState.gripLeft > 0.5f || g_xrInputState.gripRight > 0.5f);
+        if( !anyClickHeld && (vr_test_click == NULL || vr_test_click->value == 0.0f))
+        {
+            s_headGestureDebounced = false;
+        }
+    }
+
+    // Flashlight Toggle (impulse 100) via button fallback (Y button or Index B)
     static qboolean s_prevFlashlight = false;
     if (g_xrInputState.flashlight && !s_prevFlashlight)
     {
@@ -613,6 +767,44 @@ qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity )
     if (vr_lefthanded && vr_lefthanded->value > 0.0f)
         return XR_GetLeftHandVelocity( out_velocity );
     return XR_GetRightHandVelocity( out_velocity );
+}
+
+qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles )
+{
+    if (vr_lefthanded && vr_lefthanded->value > 0.0f)
+        return XR_GetRightHandTransform( out_origin, out_angles );
+    return XR_GetLeftHandTransform( out_origin, out_angles );
+}
+
+void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float *out_thumb )
+{
+    float trg = 0.0f, grp = 0.0f, thm = 0.0f;
+
+    if (vr_test_finger_curl && vr_test_finger_curl->value > 0.0f)
+    {
+        trg = (hand == VR_HAND_LEFT) ? 0.75f : 0.85f;
+        grp = (hand == VR_HAND_LEFT) ? 0.60f : 0.90f;
+        thm = (hand == VR_HAND_LEFT) ? 0.70f : 0.80f;
+    }
+    else
+    {
+        if (hand == VR_HAND_LEFT)
+        {
+            trg = g_xrInputState.triggerLeft;
+            grp = g_xrInputState.gripLeft;
+            thm = g_xrInputState.thumbLeft;
+        }
+        else
+        {
+            trg = g_xrInputState.triggerRight;
+            grp = g_xrInputState.gripRight;
+            thm = g_xrInputState.thumbRight;
+        }
+    }
+
+    if (out_trigger) *out_trigger = bound(0.0f, trg, 1.0f);
+    if (out_grip)    *out_grip    = bound(0.0f, grp, 1.0f);
+    if (out_thumb)   *out_thumb   = bound(0.0f, thm, 1.0f);
 }
 
 qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles )
@@ -798,10 +990,21 @@ qboolean XR_GetRightHandVelocity( vec3_t out_velocity )
 {
     if (!g_xrSessionRunning || !g_xrInputState.rightHandActive) return false;
 
-    // Conversão de velocidade linear para coordenadas GoldSrc:
-    out_velocity[0] = -g_xrInputState.rightHandVelocity.z;
-    out_velocity[1] = -g_xrInputState.rightHandVelocity.x;
-    out_velocity[2] = g_xrInputState.rightHandVelocity.y;
+    // Linear velocity conversion to GoldSrc room coordinates:
+    // OpenXR room space: -Z is forward, +X is right, +Y is up
+    // GoldSrc room space: +X is forward (-Z), +Y is left (-X), +Z is up (+Y)
+    float roomX = -g_xrInputState.rightHandVelocity.z;
+    float roomY = -g_xrInputState.rightHandVelocity.x;
+    float roomZ = g_xrInputState.rightHandVelocity.y;
+
+    // Rotate horizontal velocity by player turn yaw
+    float rad = s_playerTurnYaw * (3.14159265f / 180.0f);
+    float cosYaw = cosf(rad);
+    float sinYaw = sinf(rad);
+
+    out_velocity[0] = roomX * cosYaw - roomY * sinYaw;
+    out_velocity[1] = roomX * sinYaw + roomY * cosYaw;
+    out_velocity[2] = roomZ;
     return true;
 }
 
@@ -809,9 +1012,17 @@ qboolean XR_GetLeftHandVelocity( vec3_t out_velocity )
 {
     if (!g_xrSessionRunning || !g_xrInputState.leftHandActive) return false;
 
-    out_velocity[0] = -g_xrInputState.leftHandVelocity.z;
-    out_velocity[1] = -g_xrInputState.leftHandVelocity.x;
-    out_velocity[2] = g_xrInputState.leftHandVelocity.y;
+    float roomX = -g_xrInputState.leftHandVelocity.z;
+    float roomY = -g_xrInputState.leftHandVelocity.x;
+    float roomZ = g_xrInputState.leftHandVelocity.y;
+
+    float rad = s_playerTurnYaw * (3.14159265f / 180.0f);
+    float cosYaw = cosf(rad);
+    float sinYaw = sinf(rad);
+
+    out_velocity[0] = roomX * cosYaw - roomY * sinYaw;
+    out_velocity[1] = roomX * sinYaw + roomY * cosYaw;
+    out_velocity[2] = roomZ;
     return true;
 }
 
@@ -1022,21 +1233,27 @@ static void XR_Haptic_f( void )
 	Con_Printf( "VR Haptic triggered: hand=%s dur=%.3fs freq=%.1fHz amp=%.2f\n", target, dur, freq, amp );
 }
 
-static struct {
+typedef struct {
 	qboolean active;
 	qboolean hit;
 	float u, v;
 	int x, y;
 	vec3_t rayStart;
 	vec3_t rayEnd;
-} s_pointerState = {0};
+} vr_pointer_hand_state_t;
+
+static vr_pointer_hand_state_t s_pointerHands[2] = {0};
+static int s_activePointerHand = VR_HAND_RIGHT;
+static qboolean s_prevHandTrigger[2] = {false, false};
 
 void XR_UpdatePointerCursor( void )
 {
 	if( !g_xrSessionRunning || !XR_IsActive() )
 	{
-		s_pointerState.active = false;
-		s_pointerState.hit = false;
+		s_pointerHands[0].active = false;
+		s_pointerHands[0].hit = false;
+		s_pointerHands[1].active = false;
+		s_pointerHands[1].hit = false;
 		return;
 	}
 
@@ -1044,8 +1261,10 @@ void XR_UpdatePointerCursor( void )
 	if( !in_menu )
 	{
 		XR_SetQuadHud( false );
-		s_pointerState.active = false;
-		s_pointerState.hit = false;
+		s_pointerHands[0].active = false;
+		s_pointerHands[0].hit = false;
+		s_pointerHands[1].active = false;
+		s_pointerHands[1].hit = false;
 		return;
 	}
 
@@ -1053,83 +1272,13 @@ void XR_UpdatePointerCursor( void )
 
 	if( vr_pointer_hud && vr_pointer_hud->value == 0.0f )
 	{
-		s_pointerState.active = false;
+		s_pointerHands[0].active = false;
+		s_pointerHands[1].active = false;
 		return;
 	}
 
-	int hand = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? VR_HAND_LEFT : VR_HAND_RIGHT;
-	XrSpace handSpace = (hand == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
-
-	XrPosef poseInView = {0};
-	qboolean hasPose = false;
-	float dx = 0.0f, dy = 0.0f, dz = -1.0f;
-
-	// 1. Check for simulated hand pose override first (test / validation mode)
-	if( vr_test_hands && vr_test_hands->value > 0.0f )
-	{
-		poseInView.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
-		poseInView.position.y = -0.15f;
-		poseInView.position.z = -0.30f;
-
-		float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
-		float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-
-		float pitch_rad = DEG2RAD( pitch );
-		float yaw_rad   = DEG2RAD( yaw );
-
-		// View space: +X Right, +Y Up, -Z Forward
-		dx =  sinf( yaw_rad ) * cosf( pitch_rad );
-		dy = -sinf( pitch_rad ); // negative pitch in GoldSrc points up (+Y in View space)
-		dz = -cosf( yaw_rad ) * cosf( pitch_rad );
-
-		hasPose = true;
-	}
-	// 2. Locate physical controller directly in head-relative View Space (g_xrViewSpace)
-	else if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE )
-	{
-		XrTime syncTime = XR_GetPredictedDisplayTime();
-		XrSpaceLocation loc = {0};
-		loc.type = XR_TYPE_SPACE_LOCATION;
-		if( syncTime > 0 && XR_SUCCEEDED( xrLocateSpace( handSpace, g_xrViewSpace, syncTime, &loc ) ))
-		{
-			if( loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT )
-			{
-				poseInView = loc.pose;
-				hasPose = true;
-
-				float qx = poseInView.orientation.x;
-				float qy = poseInView.orientation.y;
-				float qz = poseInView.orientation.z;
-				float qw = poseInView.orientation.w;
-
-				dx = -2.0f * (qx * qz + qw * qy);
-				dy = -2.0f * (qy * qz - qw * qx);
-				dz = -1.0f + 2.0f * (qx * qx + qy * qy);
-			}
-		}
-	}
-
-	if( !hasPose )
-	{
-		s_pointerState.active = false;
-		return;
-	}
-
-	float len = sqrtf( dx * dx + dy * dy + dz * dz );
-	if( len > 0.0001f )
-	{
-		dx /= len;
-		dy /= len;
-		dz /= len;
-	}
-
-	// Floating menu quad plane is anchored at Z = -vr_menu_distance in View Space
 	float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 2.1f;
 	float planeZ = -menuDist;
-	qboolean hit = false;
-	float u = 0.5f, v = 0.5f;
-	int px = 0, py = 0;
-
 	float worldScale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 
 	// Dimensions of the floating menu quad layer matching XR_EndMenuFrame
@@ -1139,60 +1288,196 @@ void XR_UpdatePointerCursor( void )
 	float halfW = quadWidth * 0.5f;
 	float halfH = quadHeight * 0.5f;
 
-	// Controller origin in head-relative GoldSrc coordinates
-	vec3_t rayStart, rayEnd;
-	rayStart[0] = -poseInView.position.z * worldScale;
-	rayStart[1] = -poseInView.position.x * worldScale;
-	rayStart[2] =  poseInView.position.y * worldScale;
+	XrTime syncTime = XR_GetPredictedDisplayTime();
 
-	float hit_x = poseInView.position.x + 2.0f * dx;
-	float hit_y = poseInView.position.y + 2.0f * dy;
-	float hit_z = poseInView.position.z + 2.0f * dz;
-
-	if( dz < -0.01f )
+	// Process both left and right hands for dual-pointer support (Beat Saber style)
+	for( int hand = 0; hand < 2; hand++ )
 	{
-		float t = (planeZ - poseInView.position.z) / dz;
-		if( t > 0.0f )
+		XrSpace handSpace = (hand == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
+		XrPosef poseInView = {0};
+		qboolean hasPose = false;
+		float dx = 0.0f, dy = 0.0f, dz = -1.0f;
+
+		// 1. Simulated hand pose override (for automated test environments)
+		if( vr_test_hands && vr_test_hands->value > 0.0f )
 		{
-			float ix = poseInView.position.x + t * dx;
-			float iy = poseInView.position.y + t * dy;
+			poseInView.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
+			poseInView.position.y = -0.15f;
+			poseInView.position.z = -0.30f;
 
-			if( ix >= -halfW && ix <= halfW && iy >= -halfH && iy <= halfH )
+			float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+			float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+
+			float pitch_rad = DEG2RAD( pitch );
+			float yaw_rad   = DEG2RAD( yaw );
+
+			// View space: +X Right, +Y Up, -Z Forward
+			dx =  sinf( yaw_rad ) * cosf( pitch_rad );
+			dy = -sinf( pitch_rad );
+			dz = -cosf( yaw_rad ) * cosf( pitch_rad );
+
+			hasPose = true;
+		}
+		// 2. Locate physical controller in head-relative View Space (g_xrViewSpace)
+		else if( handSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE )
+		{
+			XrSpaceLocation loc = {0};
+			loc.type = XR_TYPE_SPACE_LOCATION;
+			if( syncTime > 0 && XR_SUCCEEDED( xrLocateSpace( handSpace, g_xrViewSpace, syncTime, &loc ) ))
 			{
-				u = (ix + halfW) / quadWidth;
-				v = (halfH - iy) / quadHeight; // top of screen (v=0) is +halfH
-				u = bound( 0.0f, u, 1.0f );
-				v = bound( 0.0f, v, 1.0f );
-
-				if( refState.width > 0 && refState.height > 0 )
+				if( loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT )
 				{
-					px = bound( 0, (int)(u * (float)refState.width), refState.width - 1 );
-					py = bound( 0, (int)(v * (float)refState.height), refState.height - 1 );
+					poseInView = loc.pose;
+					hasPose = true;
 
-					UI_MouseMove( px, py );
-					VGui_MouseMove( px, py );
+					float qx = poseInView.orientation.x;
+					float qy = poseInView.orientation.y;
+					float qz = poseInView.orientation.z;
+					float qw = poseInView.orientation.w;
+
+					dx = -2.0f * (qx * qz + qw * qy);
+					dy = -2.0f * (qy * qz - qw * qx);
+					dz = -1.0f + 2.0f * (qx * qx + qy * qy);
 				}
-
-				hit = true;
-				hit_x = ix;
-				hit_y = iy;
-				hit_z = planeZ;
 			}
 		}
+
+		if( !hasPose )
+		{
+			s_pointerHands[hand].active = false;
+			s_pointerHands[hand].hit = false;
+			continue;
+		}
+
+		float len = sqrtf( dx * dx + dy * dy + dz * dz );
+		if( len > 0.0001f )
+		{
+			dx /= len;
+			dy /= len;
+			dz /= len;
+		}
+
+		qboolean hit = false;
+		float u = 0.5f, v = 0.5f;
+		int px = 0, py = 0;
+
+		// Controller origin in head-relative GoldSrc coordinates
+		vec3_t rayStart, rayEnd;
+		rayStart[0] = -poseInView.position.z * worldScale;
+		rayStart[1] = -poseInView.position.x * worldScale;
+		rayStart[2] =  poseInView.position.y * worldScale;
+
+		float hit_x = poseInView.position.x + 2.0f * dx;
+		float hit_y = poseInView.position.y + 2.0f * dy;
+		float hit_z = poseInView.position.z + 2.0f * dz;
+
+		if( dz < -0.01f )
+		{
+			float t = (planeZ - poseInView.position.z) / dz;
+			if( t > 0.0f )
+			{
+				float ix = poseInView.position.x + t * dx;
+				float iy = poseInView.position.y + t * dy;
+
+				if( ix >= -halfW && ix <= halfW && iy >= -halfH && iy <= halfH )
+				{
+					u = (ix + halfW) / quadWidth;
+					v = (halfH - iy) / quadHeight; // top of screen (v=0) is +halfH
+					u = bound( 0.0f, u, 1.0f );
+					v = bound( 0.0f, v, 1.0f );
+
+					if( refState.width > 0 && refState.height > 0 )
+					{
+						px = bound( 0, (int)(u * (float)refState.width), refState.width - 1 );
+						py = bound( 0, (int)(v * (float)refState.height), refState.height - 1 );
+					}
+
+					hit = true;
+					hit_x = ix;
+					hit_y = iy;
+					hit_z = planeZ;
+				}
+			}
+		}
+
+		rayEnd[0] = -hit_z * worldScale;
+		rayEnd[1] = -hit_x * worldScale;
+		rayEnd[2] =  hit_y * worldScale;
+
+		s_pointerHands[hand].active = true;
+		s_pointerHands[hand].hit = hit;
+		s_pointerHands[hand].u = u;
+		s_pointerHands[hand].v = v;
+		s_pointerHands[hand].x = px;
+		s_pointerHands[hand].y = py;
+		VectorCopy( rayStart, s_pointerHands[hand].rayStart );
+		VectorCopy( rayEnd, s_pointerHands[hand].rayEnd );
 	}
 
-	rayEnd[0] = -hit_z * worldScale;
-	rayEnd[1] = -hit_x * worldScale;
-	rayEnd[2] =  hit_y * worldScale;
+	// Beat Saber style alternating pointer:
+	// Clicking with either the left or right hand immediately switches active pointer control to that hand.
+	qboolean triggerLeft = g_xrInputState.attack2;
+	qboolean triggerRight = g_xrInputState.attack;
 
-	s_pointerState.active = true;
-	s_pointerState.hit = hit;
-	s_pointerState.u = u;
-	s_pointerState.v = v;
-	s_pointerState.x = px;
-	s_pointerState.y = py;
-	VectorCopy( rayStart, s_pointerState.rayStart );
-	VectorCopy( rayEnd, s_pointerState.rayEnd );
+	if( vr_test_click && vr_test_click->value > 0.0f )
+	{
+		if( (int)vr_test_click->value == 2 )
+			triggerLeft = true;
+		else
+			triggerRight = true;
+	}
+
+	// Left Hand Trigger Edge Detection
+	if( triggerLeft && !s_prevHandTrigger[VR_HAND_LEFT] )
+	{
+		s_activePointerHand = VR_HAND_LEFT;
+		if( s_pointerHands[VR_HAND_LEFT].hit && refState.width > 0 && refState.height > 0 )
+		{
+			UI_MouseMove( s_pointerHands[VR_HAND_LEFT].x, s_pointerHands[VR_HAND_LEFT].y );
+			VGui_MouseMove( s_pointerHands[VR_HAND_LEFT].x, s_pointerHands[VR_HAND_LEFT].y );
+		}
+		XR_TriggerHapticEffect( VR_HAND_LEFT, VR_HAPTIC_UI_CLICK, 0.6f );
+		Con_Printf( "^2[VR_POINTER] Switched active pointer to LEFT hand (click at screen: %d, %d)\n",
+			s_pointerHands[VR_HAND_LEFT].x, s_pointerHands[VR_HAND_LEFT].y );
+		Key_Event( K_MOUSE1, true );
+	}
+	else if( !triggerLeft && s_prevHandTrigger[VR_HAND_LEFT] )
+	{
+		if( s_activePointerHand == VR_HAND_LEFT )
+			Key_Event( K_MOUSE1, false );
+	}
+	s_prevHandTrigger[VR_HAND_LEFT] = triggerLeft;
+
+	// Right Hand Trigger Edge Detection
+	if( triggerRight && !s_prevHandTrigger[VR_HAND_RIGHT] )
+	{
+		s_activePointerHand = VR_HAND_RIGHT;
+		if( s_pointerHands[VR_HAND_RIGHT].hit && refState.width > 0 && refState.height > 0 )
+		{
+			UI_MouseMove( s_pointerHands[VR_HAND_RIGHT].x, s_pointerHands[VR_HAND_RIGHT].y );
+			VGui_MouseMove( s_pointerHands[VR_HAND_RIGHT].x, s_pointerHands[VR_HAND_RIGHT].y );
+		}
+		XR_TriggerHapticEffect( VR_HAND_RIGHT, VR_HAPTIC_UI_CLICK, 0.6f );
+		Con_Printf( "^2[VR_POINTER] Switched active pointer to RIGHT hand (click at screen: %d, %d)\n",
+			s_pointerHands[VR_HAND_RIGHT].x, s_pointerHands[VR_HAND_RIGHT].y );
+		Key_Event( K_MOUSE1, true );
+	}
+	else if( !triggerRight && s_prevHandTrigger[VR_HAND_RIGHT] )
+	{
+		if( s_activePointerHand == VR_HAND_RIGHT )
+			Key_Event( K_MOUSE1, false );
+	}
+	s_prevHandTrigger[VR_HAND_RIGHT] = triggerRight;
+
+	// Continuous hover updates driven by the active pointer hand
+	if( s_pointerHands[s_activePointerHand].active && s_pointerHands[s_activePointerHand].hit )
+	{
+		if( refState.width > 0 && refState.height > 0 )
+		{
+			UI_MouseMove( s_pointerHands[s_activePointerHand].x, s_pointerHands[s_activePointerHand].y );
+			VGui_MouseMove( s_pointerHands[s_activePointerHand].x, s_pointerHands[s_activePointerHand].y );
+		}
+	}
 
 	static int s_ptrDbgTimer = 0;
 	if( ++s_ptrDbgTimer >= 30 )
@@ -1200,32 +1485,15 @@ void XR_UpdatePointerCursor( void )
 		s_ptrDbgTimer = 0;
 		if( vr_test_hands && vr_test_hands->value > 0.0f )
 		{
-			Con_Printf( "^3[VR_POINTER] hit=%d screen=(%d, %d) uv=(%.2f, %.2f) hand_angles=(pitch=%.1f, yaw=%.1f)\n",
-				hit, px, py, u, v,
-				vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f,
-				vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f );
+			Con_Printf( "^3[VR_POINTER] activeHand=%s L_hit=%d R_hit=%d screen=(%d, %d) uv=(%.2f, %.2f)\n",
+				(s_activePointerHand == VR_HAND_LEFT) ? "LEFT" : "RIGHT",
+				s_pointerHands[VR_HAND_LEFT].hit,
+				s_pointerHands[VR_HAND_RIGHT].hit,
+				s_pointerHands[s_activePointerHand].x,
+				s_pointerHands[s_activePointerHand].y,
+				s_pointerHands[s_activePointerHand].u,
+				s_pointerHands[s_activePointerHand].v );
 		}
-	}
-
-	// Dominant hand trigger click -> K_MOUSE1
-	static qboolean s_prevTrigger = false;
-	qboolean trigger = (hand == VR_HAND_LEFT) ? g_xrInputState.attack2 : g_xrInputState.attack;
-	if( vr_test_click && vr_test_click->value > 0.0f )
-		trigger = true;
-	if( trigger && !s_prevTrigger )
-	{
-		s_prevTrigger = true;
-		if( hit )
-		{
-			Con_Printf( "^2[VR_POINTER] Trigger CLICK at screen=(%d, %d) uv=(%.2f, %.2f)\n", px, py, u, v );
-			XR_TriggerHapticEffect( hand, VR_HAPTIC_UI_CLICK, 0.6f );
-			Key_Event( K_MOUSE1, true );
-		}
-	}
-	else if( !trigger && s_prevTrigger )
-	{
-		s_prevTrigger = false;
-		Key_Event( K_MOUSE1, false );
 	}
 
 	// Menu / Back button -> K_ESCAPE
@@ -1234,7 +1502,7 @@ void XR_UpdatePointerCursor( void )
 	if( back && !s_prevBack )
 	{
 		s_prevBack = true;
-		XR_TriggerHapticEffect( hand, VR_HAPTIC_UI_CLICK, 0.4f );
+		XR_TriggerHapticEffect( s_activePointerHand, VR_HAPTIC_UI_CLICK, 0.4f );
 		Key_Event( K_ESCAPE, true );
 	}
 	else if( !back && s_prevBack )
@@ -1260,27 +1528,39 @@ void XR_UpdatePointerCursor( void )
 	}
 }
 
-qboolean XR_GetPointerLaserRay( vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v )
+qboolean XR_GetPointerLaserRayHand( int hand, vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v )
 {
-	if( !s_pointerState.active )
+	if( hand < 0 || hand > 1 )
+		return false;
+	if( !s_pointerHands[hand].active )
 		return false;
 
-	if( out_start ) VectorCopy( s_pointerState.rayStart, out_start );
-	if( out_end ) VectorCopy( s_pointerState.rayEnd, out_end );
-	if( out_hit ) *out_hit = s_pointerState.hit;
-	if( out_u ) *out_u = s_pointerState.u;
-	if( out_v ) *out_v = s_pointerState.v;
+	if( out_start ) VectorCopy( s_pointerHands[hand].rayStart, out_start );
+	if( out_end ) VectorCopy( s_pointerHands[hand].rayEnd, out_end );
+	if( out_hit ) *out_hit = s_pointerHands[hand].hit;
+	if( out_u ) *out_u = s_pointerHands[hand].u;
+	if( out_v ) *out_v = s_pointerHands[hand].v;
 	return true;
+}
+
+qboolean XR_GetPointerLaserRay( vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v )
+{
+	return XR_GetPointerLaserRayHand( s_activePointerHand, out_start, out_end, out_hit, out_u, out_v );
+}
+
+int XR_GetActivePointerHand( void )
+{
+	return s_activePointerHand;
 }
 
 qboolean XR_GetPointerCursorPos( int *out_x, int *out_y, qboolean *out_hit )
 {
-	if( !s_pointerState.active )
+	if( !s_pointerHands[s_activePointerHand].active )
 		return false;
 
-	if( out_x ) *out_x = s_pointerState.x;
-	if( out_y ) *out_y = s_pointerState.y;
-	if( out_hit ) *out_hit = s_pointerState.hit;
+	if( out_x ) *out_x = s_pointerHands[s_activePointerHand].x;
+	if( out_y ) *out_y = s_pointerHands[s_activePointerHand].y;
+	if( out_hit ) *out_hit = s_pointerHands[s_activePointerHand].hit;
 	return true;
 }
 

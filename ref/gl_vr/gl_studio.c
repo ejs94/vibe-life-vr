@@ -36,6 +36,11 @@ typedef struct
 // never gonna change, just shut up const warning
 CVAR_DEFINE_AUTO( r_shadows, "0", 0, "draw ugly shadows" );
 
+#ifdef XASH_OPENXR
+static cl_entity_t s_offhandEnt;
+static qboolean    s_viewmodel_has_offhand = false;
+#endif
+
 static const vec3_t hullcolor[8] =
 {
 { 1.0f, 1.0f, 1.0f },
@@ -585,6 +590,34 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			VectorCopy( angles, e->angles );
 		}
 	}
+	else if( e == &s_offhandEnt && XR_IsActive() )
+	{
+		vec3_t handOrigin, handAngles;
+		if( XR_GetSecondaryHandTransform( handOrigin, handAngles ))
+		{
+			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+			float turn_yaw = XR_GetPlayerTurnYaw();
+			float yaw_rad = DEG2RAD( turn_yaw );
+			float cy = cosf( yaw_rad );
+			float sy = sinf( yaw_rad );
+
+			// Rotate local hand displacement by the player's world yaw orientation
+			float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
+			float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
+			float world_dz = handOrigin[2] * scale;
+
+			origin[0] = RI.rvp.vieworigin[0] + world_dx;
+			origin[1] = RI.rvp.vieworigin[1] + world_dy;
+			origin[2] = RI.rvp.vieworigin[2] + world_dz;
+
+			angles[0] = handAngles[0];
+			angles[1] = anglemod( handAngles[1] + turn_yaw );
+			angles[2] = handAngles[2];
+
+			VectorCopy( origin, e->origin );
+			VectorCopy( angles, e->angles );
+		}
+	}
 #endif
 
 	Matrix3x4_CreateFromEntity( g_studio.rotationmatrix, angles, origin, 1.0f );
@@ -851,6 +884,142 @@ static void R_StudioMergeBones( cl_entity_t *e, model_t *m_pSubModel )
 	}
 }
 
+#ifdef XASH_OPENXR
+/*
+====================
+R_StudioApplyFingerCurling
+
+Applies procedural finger bone curling based on OpenXR analog triggers (index finger),
+grips (middle/ring/pinky fingers), and thumb touch/button states.
+====================
+*/
+static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobone_t *pbones, vec4_t *q )
+{
+	if( !XR_IsActive() )
+		return;
+
+	if( vr_finger_curling && vr_finger_curling->value <= 0.0f )
+		return;
+
+	float scale = (vr_finger_curl_scale && vr_finger_curl_scale->value > 0.0f) ? vr_finger_curl_scale->value : 1.0f;
+
+	float trigL = 0.0f, gripL = 0.0f, thmbL = 0.0f;
+	float trigR = 0.0f, gripR = 0.0f, thmbR = 0.0f;
+	XR_GetFingerCurlAxes( VR_HAND_LEFT,  &trigL, &gripL, &thmbL );
+	XR_GetFingerCurlAxes( VR_HAND_RIGHT, &trigR, &gripR, &thmbR );
+
+	int curls_applied = 0;
+
+	for( int i = 0; i < numbones; i++ )
+	{
+		const char *name = pbones[i].name;
+		if( !name ) continue;
+
+		// Check if this bone is a finger or thumb
+		if( !Q_stristr( name, "Finger" ) && !Q_stristr( name, "Thumb" ) )
+			continue;
+
+		// Identify Left vs Right hand
+		qboolean is_left = false;
+		if( Q_stristr( name, "L " ) || Q_stristr( name, "L_" ) || Q_stristr( name, "Left" ) || Q_stristr( name, "L Finger" ) )
+			is_left = true;
+		else if( Q_stristr( name, "R " ) || Q_stristr( name, "R_" ) || Q_stristr( name, "Right" ) || Q_stristr( name, "R Finger" ) )
+			is_left = false;
+		else
+		{
+			// Default based on dominant hand if not specified
+			is_left = (vr_lefthanded && vr_lefthanded->value > 0.0f);
+		}
+
+		float trg = is_left ? trigL : trigR;
+		float grp = is_left ? gripL : gripR;
+		float thm = is_left ? thmbL : thmbR;
+
+		float curl_angle = 0.0f;
+
+		// Thumb: Finger0, Finger01, Finger02
+		if( Q_stristr( name, "Finger0" ) || Q_stristr( name, "Thumb" ) )
+		{
+			if( Q_stristr( name, "02" ) )
+				curl_angle = 0.50f * thm * scale;
+			else if( Q_stristr( name, "01" ) )
+				curl_angle = 0.55f * thm * scale;
+			else
+				curl_angle = 0.35f * thm * scale;
+		}
+		// Index finger: Finger1, Finger11, Finger12
+		else if( Q_stristr( name, "Finger1" ) || Q_stristr( name, "Index" ) )
+		{
+			if( Q_stristr( name, "12" ) )
+				curl_angle = 0.65f * trg * scale;
+			else if( Q_stristr( name, "11" ) )
+				curl_angle = 0.85f * trg * scale;
+			else
+				curl_angle = 0.55f * trg * scale;
+		}
+		// Middle finger: Finger2, Finger21, Finger22
+		else if( Q_stristr( name, "Finger2" ) || Q_stristr( name, "Middle" ) )
+		{
+			if( Q_stristr( name, "22" ) )
+				curl_angle = 0.65f * grp * scale;
+			else if( Q_stristr( name, "21" ) )
+				curl_angle = 0.85f * grp * scale;
+			else
+				curl_angle = 0.55f * grp * scale;
+		}
+		// Ring finger: Finger3, Finger31, Finger32
+		else if( Q_stristr( name, "Finger3" ) || Q_stristr( name, "Ring" ) )
+		{
+			if( Q_stristr( name, "32" ) )
+				curl_angle = 0.65f * grp * scale;
+			else if( Q_stristr( name, "31" ) )
+				curl_angle = 0.85f * grp * scale;
+			else
+				curl_angle = 0.55f * grp * scale;
+		}
+		// Pinky finger: Finger4, Finger41, Finger42
+		else if( Q_stristr( name, "Finger4" ) || Q_stristr( name, "Pinky" ) )
+		{
+			if( Q_stristr( name, "42" ) )
+				curl_angle = 0.65f * grp * scale;
+			else if( Q_stristr( name, "41" ) )
+				curl_angle = 0.85f * grp * scale;
+			else
+				curl_angle = 0.55f * grp * scale;
+		}
+
+		if( curl_angle > 0.001f )
+		{
+			float half_a = curl_angle * 0.5f;
+			float s = sinf( half_a );
+			float c = cosf( half_a );
+
+			// Post-multiply quaternion q[i] by delta_q = (0, 0, s, c) to apply rotation around local Z
+			float qx = q[i][0], qy = q[i][1], qz = q[i][2], qw = q[i][3];
+			q[i][0] = qx * c + qy * s;
+			q[i][1] = qy * c - qx * s;
+			q[i][2] = qz * c + qw * s;
+			q[i][3] = qw * c - qz * s;
+
+			curls_applied++;
+		}
+	}
+
+	static float s_lastDbgTime = -10.0f;
+	static float s_lastTrig = -1.0f, s_lastGrip = -1.0f;
+	qboolean changed = (fabsf(trigR - s_lastTrig) > 0.05f || fabsf(gripR - s_lastGrip) > 0.05f);
+
+	if( curls_applied > 0 && (changed || g_studio.time - s_lastDbgTime > 1.0f) )
+	{
+		s_lastDbgTime = g_studio.time;
+		s_lastTrig = trigR;
+		s_lastGrip = gripR;
+		gEngfuncs.Con_Printf( "^2[VR_HANDS_DBG] Finger curling active: %d bones curled (trigR=%.2f gripR=%.2f thmbR=%.2f | trigL=%.2f gripL=%.2f thmbL=%.2f)\n",
+			curls_applied, trigR, gripR, thmbR, trigL, gripL, thmbL );
+	}
+}
+#endif
+
 /*
 ====================
 StudioSetupBones
@@ -977,10 +1146,124 @@ static void R_StudioSetupBones( cl_entity_t *e )
 		}
 	}
 
+#ifdef XASH_OPENXR
+	// Apply procedural finger curling based on OpenXR analog axes (Trigger = Index, Grip = Middle/Ring/Pinky, Touch/Buttons = Thumb)
+	if( (e == tr.viewent || e == &s_offhandEnt) && XR_IsActive() )
+	{
+		R_StudioApplyFingerCurling( e, m_pStudioHeader->numbones, pbones, q );
+	}
+
+	qboolean is_viewent = (e == tr.viewent);
+	qboolean is_offhand_ent = (e == &s_offhandEnt);
+
+	if( is_viewent )
+		s_viewmodel_has_offhand = false;
+
+	// Decoupled 6DoF off-hand tracking setup
+	matrix3x4 offhand_matrix;
+	matrix3x4 offarm_matrix;
+	qboolean offhand_active = false;
+	const char *secHandName = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? "Bip01 R Hand" : "Bip01 L Hand";
+	const char *secArmName  = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? "Bip01 R Arm2" : "Bip01 L Arm2";
+
+	if( (is_viewent || is_offhand_ent) && XR_IsActive() && (!vr_offhand_render || vr_offhand_render->value > 0.0f) )
+	{
+		float trigSec = 0.0f, gripSec = 0.0f, thmbSec = 0.0f;
+		int secHandIdx = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? VR_HAND_RIGHT : VR_HAND_LEFT;
+		XR_GetFingerCurlAxes( secHandIdx, &trigSec, &gripSec, &thmbSec );
+
+		qboolean twohanded_gripping = (vr_twohanded && vr_twohanded->value > 0.0f && gripSec > 0.4f);
+
+		if( is_offhand_ent || !twohanded_gripping )
+		{
+			vec3_t offOrigin, offAngles;
+			if( XR_GetSecondaryHandTransform( offOrigin, offAngles ))
+			{
+				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+				float turn_yaw = XR_GetPlayerTurnYaw();
+				float yaw_rad = DEG2RAD( turn_yaw );
+				float cy = cosf( yaw_rad );
+				float sy = sinf( yaw_rad );
+
+				float world_dx = (offOrigin[0] * cy - offOrigin[1] * sy) * scale;
+				float world_dy = (offOrigin[0] * sy + offOrigin[1] * cy) * scale;
+				float world_dz = offOrigin[2] * scale;
+
+				vec3_t final_origin;
+				final_origin[0] = RI.rvp.vieworigin[0] + world_dx;
+				final_origin[1] = RI.rvp.vieworigin[1] + world_dy;
+				final_origin[2] = RI.rvp.vieworigin[2] + world_dz;
+
+				vec3_t final_angles;
+				final_angles[0] = offAngles[0];
+				final_angles[1] = anglemod( offAngles[1] + turn_yaw );
+				final_angles[2] = offAngles[2];
+
+				Matrix3x4_CreateFromEntity( offhand_matrix, final_angles, final_origin, 1.0f );
+
+				vec3_t fwd, cuff_origin;
+				AngleVectors( final_angles, fwd, NULL, NULL );
+				VectorMA( final_origin, -6.0f, fwd, cuff_origin );
+				Matrix3x4_CreateFromEntity( offarm_matrix, final_angles, cuff_origin, 1.0f );
+
+				offhand_active = true;
+			}
+		}
+	}
+#endif
+
 	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
 	{
 		matrix3x4 bonematrix;
 		Matrix3x4_FromOriginQuat( bonematrix, q[i], pos[i] );
+
+#ifdef XASH_OPENXR
+		if( is_viewent && (!Q_strcmp( pbones[i].name, secHandName ) || !Q_strcmp( pbones[i].name, "Bip01 L Hand" )) )
+		{
+			s_viewmodel_has_offhand = true;
+		}
+
+		if( offhand_active && !Q_strcmp( pbones[i].name, secHandName ) )
+		{
+			Matrix3x4_Copy( g_studio.bonestransform[i], offhand_matrix );
+			Matrix3x4_Copy( g_studio.lighttransform[i], offhand_matrix );
+			continue;
+		}
+		else if( offhand_active && !Q_strcmp( pbones[i].name, secArmName ) )
+		{
+			Matrix3x4_Copy( g_studio.bonestransform[i], offarm_matrix );
+			Matrix3x4_Copy( g_studio.lighttransform[i], offarm_matrix );
+			continue;
+		}
+		else if( is_offhand_ent )
+		{
+			// For dedicated off-hand entity, only render the secondary hand and its finger children
+			qboolean is_hand_child = false;
+			int p = pbones[i].parent;
+			while( p >= 0 )
+			{
+				if( !Q_strcmp( pbones[p].name, secHandName ) || !Q_strcmp( pbones[p].name, secArmName ) )
+				{
+					is_hand_child = true;
+					break;
+				}
+				p = pbones[p].parent;
+			}
+
+			if( is_hand_child )
+			{
+				Matrix3x4_ConcatTransforms( g_studio.bonestransform[i], g_studio.bonestransform[pbones[i].parent], bonematrix );
+				Matrix3x4_ConcatTransforms( g_studio.lighttransform[i], g_studio.lighttransform[pbones[i].parent], bonematrix );
+			}
+			else
+			{
+				// Collapse all non-hand bones to zero so they don't render
+				memset( g_studio.bonestransform[i], 0, sizeof( matrix3x4 ) );
+				memset( g_studio.lighttransform[i], 0, sizeof( matrix3x4 ) );
+			}
+			continue;
+		}
+#endif
 
 		if( pbones[i].parent == -1 )
 		{
@@ -2128,7 +2411,7 @@ static void R_StudioDrawPoints( void )
 		short *ptricmds = (short *)((byte *)m_pStudioHeader + pmesh->triindex);
 
 #ifdef XASH_OPENXR
-		if( RI.currententity == tr.viewent && XR_IsActive() )
+		if( (RI.currententity == tr.viewent || RI.currententity == &s_offhandEnt) && XR_IsActive() )
 		{
 			static cvar_t *vr_hide_arms = NULL;
 			if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
@@ -3317,8 +3600,8 @@ R_StudioDrawModelInternal
 static void R_StudioDrawModelInternal( cl_entity_t *e, int flags )
 {
 #ifdef XASH_OPENXR
-	// In VR, the viewmodel is a 6DoF hand-tracked entity that must use our decoupled studio renderer
-	if( (e == tr.viewent && XR_IsActive()) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
+	// In VR, the viewmodel and offhand are 6DoF hand-tracked entities that must use our decoupled studio renderer
+	if( ((e == tr.viewent || e == &s_offhandEnt) && XR_IsActive()) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
 #else
 	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
 #endif
@@ -3424,6 +3707,51 @@ void R_RunViewmodelEvents( void )
 	R_StudioDrawModelInternal( RI.currententity, STUDIO_EVENTS );
 }
 
+#ifdef XASH_OPENXR
+/*
+====================
+R_DrawOffHand
+
+Renders the independent 6DoF off-hand (secondary controller) model when
+the active weapon viewmodel doesn't contain the secondary hand.
+====================
+*/
+static void R_DrawOffHand( void )
+{
+	static model_t *s_handModel = NULL;
+	if( !s_handModel )
+	{
+		s_handModel = gEngfuncs.Mod_ForName( "models/v_9mmhandgun.mdl", false, true );
+		if( !s_handModel )
+			s_handModel = gEngfuncs.Mod_ForName( "models/v_grenade.mdl", false, true );
+	}
+
+	if( !s_handModel || s_handModel->type != mod_studio )
+		return;
+
+	vec3_t dummyOrigin, dummyAngles;
+	if( !XR_GetSecondaryHandTransform( dummyOrigin, dummyAngles ) )
+		return;
+
+	s_offhandEnt.model = s_handModel;
+	s_offhandEnt.curstate.sequence = 0;
+	s_offhandEnt.curstate.frame = 0;
+	s_offhandEnt.curstate.rendermode = kRenderNormal;
+
+	cl_entity_t *saved_current = RI.currententity;
+	model_t *saved_model = RI.currentmodel;
+
+	RI.currententity = &s_offhandEnt;
+	RI.currentmodel  = s_offhandEnt.model;
+
+	R_StudioSetupTimings();
+	R_StudioDrawModelInternal( &s_offhandEnt, STUDIO_RENDER );
+
+	RI.currententity = saved_current;
+	RI.currentmodel  = saved_model;
+}
+#endif
+
 /*
 =================
 R_DrawViewModel
@@ -3461,7 +3789,17 @@ void R_DrawViewModel( void )
 	RI.currententity = view;
 
 	if( !RI.currententity->model )
+	{
+#ifdef XASH_OPENXR
+		if( XR_IsActive() && (!vr_offhand_render || vr_offhand_render->value > 0.0f) )
+		{
+			pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+			R_DrawOffHand();
+			pglDepthRange( gldepthmin, gldepthmax );
+		}
+#endif
 		return;
+	}
 
 	// adjust the depth range to prevent view model from poking into walls
 	pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
@@ -3477,6 +3815,14 @@ void R_DrawViewModel( void )
 		R_StudioDrawModelInternal( RI.currententity, STUDIO_RENDER );
 		break;
 	}
+
+#ifdef XASH_OPENXR
+	// Render independent 6DoF off-hand (secondary controller) if current viewmodel lacks off-hand
+	if( XR_IsActive() && (!vr_offhand_render || vr_offhand_render->value > 0.0f) && !s_viewmodel_has_offhand )
+	{
+		R_DrawOffHand();
+	}
+#endif
 
 	// restore depth range
 	pglDepthRange( gldepthmin, gldepthmax );

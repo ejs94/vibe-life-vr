@@ -1,5 +1,6 @@
 #include "common.h"
 #include "xr_swapchain.h"
+#include "xr_input.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -567,5 +568,181 @@ void XR_GetEyeFrustum( int eye, float nearZ, float farZ, float *left, float *rig
     *top    = tanf(g_xrViews[eye].fov.angleUp) * nearZ;
 }
 
+static vec3_t s_vrHeadBaseOrigin = {0.0f, 1.65f, 0.0f};
+static qboolean s_vrHeadOriginCalibrated = false;
+
+/*
+=================
+XR_ResetHeadOriginCalibration
+
+Resets baseline head origin calibration for roomscale centering.
+=================
+*/
+void XR_ResetHeadOriginCalibration( void )
+{
+    s_vrHeadOriginCalibrated = false;
+    VectorSet( s_vrHeadBaseOrigin, 0.0f, 1.65f, 0.0f );
+}
+
+/*
+=================
+XR_GetHeadCenterTransform
+
+Calculates the 6DoF midpoint between the player's physical eyes, rotated by
+locomotion turning yaw and scaled to GoldSrc world units.
+Used by the 3D spatial audio listener and camera positioning.
+=================
+*/
+qboolean XR_GetHeadCenterTransform( vec3_t out_origin_offset, vec3_t out_angles )
+{
+    if (!g_xrSessionRunning || !g_xrSwapchainsReady)
+        return false;
+
+    // Head center in OpenXR space: midpoint between left and right eye tracking poses
+    float head_x = (g_xrViews[0].pose.position.x + g_xrViews[1].pose.position.x) * 0.5f;
+    float head_y = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
+    float head_z = (g_xrViews[0].pose.position.z + g_xrViews[1].pose.position.z) * 0.5f;
+
+    // Calibrate baseline head position when first non-zero tracking data arrives
+    if (!s_vrHeadOriginCalibrated && (fabsf(head_x) > 0.001f ||
+                                      fabsf(head_y) > 0.001f ||
+                                      fabsf(head_z) > 0.001f))
+    {
+        s_vrHeadBaseOrigin[0] = head_x;
+        s_vrHeadBaseOrigin[1] = head_y;
+        s_vrHeadBaseOrigin[2] = head_z;
+        s_vrHeadOriginCalibrated = true;
+    }
+
+    float worldscale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+    float turn_yaw = XR_GetPlayerTurnYaw();
+    float yaw_rad = turn_yaw * (3.14159265f / 180.0f);
+    float cy = cosf( yaw_rad );
+    float sy = sinf( yaw_rad );
+
+    // OpenXR room coordinates relative to calibrated player origin:
+    // +X = Right, +Y = Up, -Z = Forward
+    float room_forward = -(head_z - s_vrHeadBaseOrigin[2]);
+    float room_right   =  (head_x - s_vrHeadBaseOrigin[0]);
+    float room_up      =  (head_y - s_vrHeadBaseOrigin[1]);
+
+    if (vr_height_adjust)
+        room_up += vr_height_adjust->value / worldscale;
+
+    // Rotate room displacement by player locomotion turning yaw into GoldSrc world coordinates:
+    if (out_origin_offset)
+    {
+        out_origin_offset[0] = (room_forward * cy + room_right * sy) * worldscale;
+        out_origin_offset[1] = (room_forward * sy - room_right * cy) * worldscale;
+        out_origin_offset[2] = room_up * worldscale;
+    }
+
+    // Extract orientation from eye 0 quaternion (representing head pose orientation)
+    if (out_angles)
+    {
+        XR_QuatToEuler( &g_xrViews[0].pose.orientation, out_angles );
+        out_angles[1] = anglemod( out_angles[1] + turn_yaw );
+    }
+
+    return true;
+}
+
+/*
+=================
+XR_GetHeadCenterTransformWithBasis
+
+Calculates 6DoF head midpoint and exact listener basis vectors (forward, right, up)
+in GoldSrc coordinates directly from OpenXR orientation quaternion and locomotion turn yaw.
+Avoids Euler gimbal lock and aligns 100% with renderer frustum.
+=================
+*/
+qboolean XR_GetHeadCenterTransformWithBasis( vec3_t out_origin_offset, vec3_t out_forward, vec3_t out_right, vec3_t out_up )
+{
+    if (!g_xrSessionRunning || !g_xrSwapchainsReady)
+        return false;
+
+    // Head center in OpenXR space: midpoint between left and right eye tracking poses
+    float head_x = (g_xrViews[0].pose.position.x + g_xrViews[1].pose.position.x) * 0.5f;
+    float head_y = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
+    float head_z = (g_xrViews[0].pose.position.z + g_xrViews[1].pose.position.z) * 0.5f;
+
+    // Calibrate baseline head position when first non-zero tracking data arrives
+    if (!s_vrHeadOriginCalibrated && (fabsf(head_x) > 0.001f ||
+                                      fabsf(head_y) > 0.001f ||
+                                      fabsf(head_z) > 0.001f))
+    {
+        s_vrHeadBaseOrigin[0] = head_x;
+        s_vrHeadBaseOrigin[1] = head_y;
+        s_vrHeadBaseOrigin[2] = head_z;
+        s_vrHeadOriginCalibrated = true;
+    }
+
+    float worldscale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+    float turn_yaw = XR_GetPlayerTurnYaw();
+    float yaw_rad = turn_yaw * (3.14159265f / 180.0f);
+    float cy = cosf( yaw_rad );
+    float sy = sinf( yaw_rad );
+
+    // OpenXR room coordinates relative to calibrated player origin:
+    // +X = Right, +Y = Up, -Z = Forward
+    float room_forward = -(head_z - s_vrHeadBaseOrigin[2]);
+    float room_right   =  (head_x - s_vrHeadBaseOrigin[0]);
+    float room_up      =  (head_y - s_vrHeadBaseOrigin[1]);
+
+    if (vr_height_adjust)
+        room_up += vr_height_adjust->value / worldscale;
+
+    // Rotate room displacement by player locomotion turning yaw into GoldSrc world coordinates:
+    if (out_origin_offset)
+    {
+        out_origin_offset[0] = (room_forward * cy + room_right * sy) * worldscale;
+        out_origin_offset[1] = (room_forward * sy - room_right * cy) * worldscale;
+        out_origin_offset[2] = room_up * worldscale;
+    }
+
+    // Direct basis vector derivation from OpenXR orientation quaternion (matching R_SetupFrustum):
+    const XrQuaternionf *q = &g_xrViews[0].pose.orientation;
+    float qx = q->x, qy = q->y, qz = q->z, qw = q->w;
+
+    vec3_t rxr, uxr, fxr;
+    rxr[0] = 1.0f - 2.0f * (qy * qy + qz * qz);
+    rxr[1] = 2.0f * (qx * qy + qz * qw);
+    rxr[2] = 2.0f * (qx * qz - qy * qw);
+
+    uxr[0] = 2.0f * (qx * qy - qz * qw);
+    uxr[1] = 1.0f - 2.0f * (qx * qx + qz * qz);
+    uxr[2] = 2.0f * (qy * qz + qx * qw);
+
+    fxr[0] = -2.0f * (qx * qz + qy * qw);
+    fxr[1] = -2.0f * (qy * qz - qx * qw);
+    fxr[2] = -(1.0f - 2.0f * (qx * qx + qy * qy));
+
+    if (out_forward)
+    {
+        out_forward[0] = (-fxr[2]) * cy + fxr[0] * sy;
+        out_forward[1] = (-fxr[2]) * sy - fxr[0] * cy;
+        out_forward[2] = fxr[1];
+        VectorNormalize( out_forward );
+    }
+
+    if (out_right)
+    {
+        out_right[0] = (-rxr[2]) * cy + rxr[0] * sy;
+        out_right[1] = (-rxr[2]) * sy - rxr[0] * cy;
+        out_right[2] = rxr[1];
+        VectorNormalize( out_right );
+    }
+
+    if (out_up)
+    {
+        out_up[0] = (-uxr[2]) * cy + uxr[0] * sy;
+        out_up[1] = (-uxr[2]) * sy - uxr[0] * cy;
+        out_up[2] = uxr[1];
+        VectorNormalize( out_up );
+    }
+
+    return true;
+}
 
 #endif // XASH_OPENXR
+

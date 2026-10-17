@@ -54,6 +54,12 @@ EXPORT convar_t *vr_test_head = NULL;
 EXPORT convar_t *vr_test_head_pitch = NULL;
 EXPORT convar_t *vr_test_head_yaw = NULL;
 EXPORT convar_t *vr_test_head_roll = NULL;
+EXPORT convar_t *vr_test_headgesture = NULL;
+EXPORT convar_t *vr_audio_hrtf = NULL;
+EXPORT convar_t *vr_finger_curling = NULL;
+EXPORT convar_t *vr_finger_curl_scale = NULL;
+EXPORT convar_t *vr_offhand_render = NULL;
+EXPORT convar_t *vr_test_finger_curl = NULL;
 static XrDebugUtilsMessengerEXT g_xrDebugMessenger = XR_NULL_HANDLE;
 
 static qboolean s_cvarsRegistered = false;
@@ -67,7 +73,7 @@ void XR_RegisterCVars( void )
     vr_snap_angle = Cvar_Get("vr_snap_angle", "45", FCVAR_ARCHIVE, "Snap turn angle");
     vr_walkdirection = Cvar_Get("vr_walkdirection", "0", FCVAR_ARCHIVE, "0 = HMD direction, 1 = Controller orientation");
     vr_lasersight = Cvar_Get("vr_lasersight", "1", FCVAR_ARCHIVE, "Enable 3D weapon laser sight");
-    vr_headtorch = Cvar_Get("vr_headtorch", "0", FCVAR_ARCHIVE, "0 = Offhand physical flashlight, 1 = Headtorch");
+    vr_headtorch = Cvar_Get("vr_headtorch", "1", FCVAR_ARCHIVE, "Head-mounted flashlight following view direction (HL2:VR style)");
     vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon");
     vr_weapon_pitchadjust = Cvar_Get("vr_weapon_pitchadjust", "0", FCVAR_ARCHIVE, "Weapon barrel pitch adjust degrees");
     vr_weapon_yawadjust = Cvar_Get("vr_weapon_yawadjust", "0", FCVAR_ARCHIVE, "Weapon barrel yaw adjust degrees");
@@ -84,6 +90,11 @@ void XR_RegisterCVars( void )
     vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
     vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
     vr_pointer_hud = Cvar_Get("vr_pointer_hud", "1", FCVAR_ARCHIVE, "Enable VR laser pointer cursor in menus");
+    vr_audio_hrtf = Cvar_Get("vr_audio_hrtf", "1", FCVAR_ARCHIVE, "Enable 3D binaural HRTF spatial audio & pinna shadowing in VR");
+    vr_finger_curling = Cvar_Get("vr_finger_curling", "1", FCVAR_ARCHIVE, "Enable procedural finger curling driven by controller analog axes");
+    vr_finger_curl_scale = Cvar_Get("vr_finger_curl_scale", "1.0", FCVAR_ARCHIVE, "Multiplier for procedural finger curling angle");
+    vr_offhand_render = Cvar_Get("vr_offhand_render", "1", FCVAR_ARCHIVE, "Enable 6DoF secondary off-hand rendering and hand presence");
+    vr_test_finger_curl = Cvar_Get("vr_test_finger_curl", "0", 0, "Simulate finger curling axes for headless regression testing");
     vr_test_hands = Cvar_Get("vr_test_hands", "0", 0, "Simulate 6DoF hand pose when physical controllers unavailable");
     vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
     vr_test_hand_yaw = Cvar_Get("vr_test_hand_yaw", "0", 0, "Simulated hand aim yaw degrees");
@@ -92,6 +103,7 @@ void XR_RegisterCVars( void )
     vr_test_head_pitch = Cvar_Get("vr_test_head_pitch", "0", 0, "Simulated head pitch degrees");
     vr_test_head_yaw = Cvar_Get("vr_test_head_yaw", "0", 0, "Simulated head yaw degrees");
     vr_test_head_roll = Cvar_Get("vr_test_head_roll", "0", 0, "Simulated head roll degrees");
+    vr_test_headgesture = Cvar_Get("vr_test_headgesture", "0", 0, "Simulate head flashlight gesture (1 = right hand, 2 = left hand)");
 }
 
 #define OXR_CHECK(func, msg) \

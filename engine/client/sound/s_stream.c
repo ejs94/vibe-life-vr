@@ -17,6 +17,7 @@ GNU General Public License for more details.
 #include "sound.h"
 #include "client.h"
 #include "soundlib.h"
+#include "platform/openxr/xr_core.h"
 
 static struct
 {
@@ -68,7 +69,8 @@ S_GetMusicVolume
 */
 float S_GetMusicVolume( void )
 {
-	if( host.status == HOST_NOFOCUS && snd_mute_losefocus.value != 0.0f )
+	// In VR, the player/simulation is in the 3D VR environment, so losing desktop window focus must not mute audio
+	if( !XR_IsActive() && host.status == HOST_NOFOCUS && snd_mute_losefocus.value != 0.0f )
 	{
 		// we return zero volume to keep sounds running
 		return 0.0f;

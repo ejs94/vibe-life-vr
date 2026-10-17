@@ -48,6 +48,12 @@ extern EXPORT convar_t *vr_test_head;
 extern EXPORT convar_t *vr_test_head_pitch;
 extern EXPORT convar_t *vr_test_head_yaw;
 extern EXPORT convar_t *vr_test_head_roll;
+extern EXPORT convar_t *vr_test_headgesture;
+extern EXPORT convar_t *vr_audio_hrtf;
+extern EXPORT convar_t *vr_finger_curling;
+extern EXPORT convar_t *vr_finger_curl_scale;
+extern EXPORT convar_t *vr_offhand_render;
+extern EXPORT convar_t *vr_test_finger_curl;
 
 EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );
@@ -68,6 +74,9 @@ EXPORT void XR_GetHeadOrientation( vec3_t out_angles );
 EXPORT void XR_GetEyePosition( int eye, vec3_t out_origin );
 EXPORT void XR_GetEyeFrustum( int eye, float nearZ, float farZ, float *left, float *right, float *bottom, float *top );
 EXPORT void XR_QuatToEuler( const XrQuaternionf *q, vec3_t out_angles );
+EXPORT void XR_ResetHeadOriginCalibration( void );
+EXPORT qboolean XR_GetHeadCenterTransform( vec3_t out_origin_offset, vec3_t out_angles );
+EXPORT qboolean XR_GetHeadCenterTransformWithBasis( vec3_t out_origin_offset, vec3_t out_forward, vec3_t out_right, vec3_t out_up );
 
 #else // !XASH_OPENXR
 
@@ -88,6 +97,15 @@ static inline void XR_RunMenuFrame( void ) {}
 static inline void XR_GetHeadOrientation( vec3_t out_angles ) { if( out_angles ) VectorClear( out_angles ); }
 static inline void XR_GetEyePosition( int eye, vec3_t out_origin ) { if( out_origin ) VectorClear( out_origin ); }
 static inline void XR_GetEyeFrustum( int eye, float nearZ, float farZ, float *left, float *right, float *bottom, float *top ) { if( left ) *left = 0; if( right ) *right = 0; if( bottom ) *bottom = 0; if( top ) *top = 0; }
+static inline void XR_ResetHeadOriginCalibration( void ) {}
+static inline qboolean XR_GetHeadCenterTransform( vec3_t out_origin_offset, vec3_t out_angles ) { if( out_origin_offset ) VectorClear( out_origin_offset ); if( out_angles ) VectorClear( out_angles ); return false; }
+static inline qboolean XR_GetHeadCenterTransformWithBasis( vec3_t out_origin_offset, vec3_t out_forward, vec3_t out_right, vec3_t out_up ) {
+    if( out_origin_offset ) VectorClear( out_origin_offset );
+    if( out_forward ) { out_forward[0] = 1.0f; out_forward[1] = 0.0f; out_forward[2] = 0.0f; }
+    if( out_right ) { out_right[0] = 0.0f; out_right[1] = -1.0f; out_right[2] = 0.0f; }
+    if( out_up ) { out_up[0] = 0.0f; out_up[1] = 0.0f; out_up[2] = 1.0f; }
+    return false;
+}
 
 #endif // XASH_OPENXR
 

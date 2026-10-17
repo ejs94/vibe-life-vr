@@ -942,14 +942,14 @@ void SV_RunCmd( sv_client_t *cl, usercmd_t *ucmd, int random_seed )
 	if( XR_IsActive() )
 	{
 		vec3_t muzzleOffset, aimAngles, handVel;
-		if( XR_GetRightHandMuzzleTransform( muzzleOffset, aimAngles ))
+		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ))
 		{
 			// vuser1: Muzzle offset relative to player origin (including view_ofs)
 			VectorAdd( clent->v.view_ofs, muzzleOffset, clent->v.vuser1 );
 			// vuser2: Controller 6DoF aim angles
 			VectorCopy( aimAngles, clent->v.vuser2 );
 			// vuser3: Physical controller throw velocity in world units/sec
-			if( XR_GetRightHandVelocity( handVel ))
+			if( XR_GetPrimaryHandVelocity( handVel ))
 			{
 				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 				VectorScale( handVel, scale, clent->v.vuser3 );

@@ -355,6 +355,7 @@ void R_VR_ResetCalibration( void )
 {
 	s_vrOriginCalibrated = false;
 	VectorSet( s_vrBaseOrigin, 0.0f, 1.65f, 0.0f );
+	XR_ResetHeadOriginCalibration();
 }
 
 void R_VR_Recenter_f( void )
@@ -1281,34 +1282,49 @@ static void R_DrawEntitiesOnList( void )
 
 		if( XR_IsActive() && XR_IsQuadHudActive() )
 		{
-			vec3_t start, end;
-			qboolean hit;
-			float u, v;
-			if( XR_GetPointerLaserRay( start, end, &hit, &u, &v ))
+			int activeHand = XR_GetActivePointerHand();
+			pglDisable( GL_TEXTURE_2D );
+			pglEnable( GL_BLEND );
+			pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
+
+			for( int h = 0; h < 2; h++ )
 			{
-				vec3_t worldStart, worldEnd;
-				VectorAdd( RI.rvp.vieworigin, start, worldStart );
-				VectorAdd( RI.rvp.vieworigin, end, worldEnd );
+				vec3_t start, end;
+				qboolean hit;
+				float u, v;
+				if( XR_GetPointerLaserRayHand( h, start, end, &hit, &u, &v ))
+				{
+					vec3_t worldStart, worldEnd;
+					VectorAdd( RI.rvp.vieworigin, start, worldStart );
+					VectorAdd( RI.rvp.vieworigin, end, worldEnd );
 
-				pglDisable( GL_TEXTURE_2D );
-				pglEnable( GL_BLEND );
-				pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
-				pglLineWidth( 2.5f );
+					if( h == activeHand )
+					{
+						pglLineWidth( 2.5f );
+						if( hit )
+							pglColor4f( 0.2f, 0.8f, 1.0f, 0.85f ); // Bright cyan active
+						else
+							pglColor4f( 0.2f, 0.6f, 0.9f, 0.40f ); // Translucent cyan off-target
+					}
+					else
+					{
+						pglLineWidth( 1.6f );
+						if( hit )
+							pglColor4f( 1.0f, 0.65f, 0.2f, 0.75f ); // Amber secondary (Beat Saber style)
+						else
+							pglColor4f( 0.6f, 0.5f, 0.4f, 0.30f );  // Translucent secondary off-target
+					}
 
-				if( hit )
-					pglColor4f( 0.2f, 0.8f, 1.0f, 0.85f ); // Glowing cyan
-				else
-					pglColor4f( 0.5f, 0.5f, 0.5f, 0.3f );  // Translucent gray off-target
-
-				pglBegin( GL_LINES );
-				pglVertex3fv( worldStart );
-				pglVertex3fv( worldEnd );
-				pglEnd();
-
-				pglDisable( GL_BLEND );
-				pglEnable( GL_TEXTURE_2D );
-				pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+					pglBegin( GL_LINES );
+					pglVertex3fv( worldStart );
+					pglVertex3fv( worldEnd );
+					pglEnd();
+				}
 			}
+
+			pglDisable( GL_BLEND );
+			pglEnable( GL_TEXTURE_2D );
+			pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 		}
 #endif
 	}

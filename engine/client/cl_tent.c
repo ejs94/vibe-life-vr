@@ -2614,22 +2614,9 @@ static void CL_UpdateFlashlight( cl_entity_t *ent )
 
 	if( ent->index == ( cl.playernum + 1 ))
 	{
-		// local player case
-#ifdef XASH_OPENXR
-		vec3_t handOrigin, handAngles;
-		if( XR_IsActive() && (!vr_headtorch || vr_headtorch->value == 0.0f) && XR_GetLeftHandTransform( handOrigin, handAngles ))
-		{
-			AngleVectors( handAngles, forward, NULL, NULL );
-			float scale = 40.0f;
-			VectorScale( handOrigin, scale, handOrigin );
-			VectorAdd( cl.viewheight, handOrigin, view_ofs );
-		}
-		else
-#endif
-		{
-			AngleVectors( cl.viewangles, forward, NULL, NULL );
-			VectorCopy( cl.viewheight, view_ofs );
-		}
+		// Local player case: Flashlight is head-mounted following player viewangles (HL1 & HL2:VR style)
+		AngleVectors( cl.viewangles, forward, NULL, NULL );
+		VectorCopy( cl.viewheight, view_ofs );
 	}
 	else	// non-local player case
 	{

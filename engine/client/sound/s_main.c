@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include "con_nprint.h"
 #include "pm_local.h"
 #include "platform/platform.h"
+#include "platform/openxr/xr_core.h"
 
 // structure used for fading in and out client sound volume.
 struct
@@ -118,7 +119,8 @@ float S_GetMasterVolume( void )
 {
 	float	scale = 1.0f;
 
-	if( host.status == HOST_NOFOCUS && snd_mute_losefocus.value != 0.0f )
+	// In VR, the player/simulation is in the 3D VR environment, so losing desktop window focus must not mute audio
+	if( !XR_IsActive() && host.status == HOST_NOFOCUS && snd_mute_losefocus.value != 0.0f )
 	{
 		// we return zero volume to keep sounds running
 		return 0.0f;
@@ -530,21 +532,49 @@ static int S_AlterChannel( int entnum, int channel, const sfx_t *sfx, int vol, i
 /*
 =================
 S_SpatializeChannel
+
+Calculates left/right volumes based on 3D spatial vectors.
+In VR with vr_audio_hrtf active, applies human pinna acoustic shadowing
+for rear sounds and elevation diffraction cues.
 =================
 */
-static void S_SpatializeChannel( short *left_vol, short *right_vol, int master_vol, float dot, float dist )
+static void S_SpatializeChannel( short *left_vol, short *right_vol, int master_vol, float dot_right, float dot_front, float dot_up, float dist )
 {
-	float scale;
+	float rscale = ( 1.0f + dot_right );
+	float lscale = ( 1.0f - dot_right );
 
-	// add in distance effect
-	scale = ( 1.0f - dist ) * ( 1.0f + dot );
-	float rvol = round( master_vol * scale );
+#ifdef XASH_OPENXR
+	// Issue #17: 3D Binaural HRTF Spatial Audio & Pinna Shadowing
+	if( vr_audio_hrtf && vr_audio_hrtf->value > 0.0f )
+	{
+		// Human pinna (ear flap) directional acoustic shadowing:
+		// Sounds coming from behind (dot_front < 0.0) are naturally shadowed and attenuated
+		// by up to 22% (factor 0.78x direct sound)
+		if( dot_front < 0.0f )
+		{
+			float rear_factor = 1.0f + (dot_front * 0.22f); // 0.0 -> 1.0, -1.0 -> 0.78
+			rscale *= rear_factor;
+			lscale *= rear_factor;
+		}
 
-	scale = ( 1.0f - dist ) * ( 1.0f - dot );
-	float lvol = round( master_vol * scale );
+		// Vertical elevation cue: sounds coming from high above or below
+		// have acoustic diffraction over the head and shoulders
+		float abs_up = fabsf( dot_up );
+		if( abs_up > 0.3f )
+		{
+			float vert_factor = 1.0f - (abs_up - 0.3f) * 0.15f;
+			rscale *= vert_factor;
+			lscale *= vert_factor;
+		}
+	}
+#endif
 
-	*right_vol = (int)( bound( 0.0f, rvol, 255.0f ));
-	*left_vol = (int)( bound( 0.0f, lvol, 255.0f ));
+	float dist_factor = Q_max( 0.0f, 1.0f - dist );
+	float rvol = round( (float)master_vol * dist_factor * rscale );
+	float lvol = round( (float)master_vol * dist_factor * lscale );
+
+	*right_vol = (short)( bound( 0.0f, rvol, 255.0f ));
+	*left_vol = (short)( bound( 0.0f, lvol, 255.0f ));
 }
 
 /*
@@ -588,16 +618,23 @@ static void SND_Spatialize( channel_t *ch )
 
 	// normalize source_vec and get distance from listener to source
 	float dist = VectorNormalizeLength( source_vec );
-	float dot = DotProduct( snd.right, source_vec );
+	float dot_right = DotProduct( snd.right, source_vec );
+	float dot_front = DotProduct( snd.forward, source_vec );
+	float dot_up    = DotProduct( snd.up, source_vec );
 
 	if( !FBitSet( host.bugcomp, BUGCOMP_SPATIALIZE_SOUND_WITH_ATTN_NONE ))
 	{
 		// don't pan sounds with no attenuation
-		if( ch->dist_mult <= 0.0f ) dot = 0.0f;
+		if( ch->dist_mult <= 0.0f )
+		{
+			dot_right = 0.0f;
+			dot_front = 1.0f;
+			dot_up = 0.0f;
+		}
 	}
 
 	// fill out channel volumes for single location
-	S_SpatializeChannel( &ch->leftvol, &ch->rightvol, ch->master_vol, dot, dist * ch->dist_mult );
+	S_SpatializeChannel( &ch->leftvol, &ch->rightvol, ch->master_vol, dot_right, dot_front, dot_up, dist * ch->dist_mult );
 
 	// if playing a word, set volume
 	VOX_SetChanVol( ch );
@@ -1398,13 +1435,20 @@ static void S_SpatializeRawChannels( void )
 
 				// normalize source_vec and get distance from listener to source
 				float dist = VectorNormalizeLength( source_vec );
-				float dot = DotProduct( snd.right, source_vec );
+				float dot_right = DotProduct( snd.right, source_vec );
+				float dot_front = DotProduct( snd.forward, source_vec );
+				float dot_up    = DotProduct( snd.up, source_vec );
 
 				// don't pan sounds with no attenuation
-				if( ch->dist_mult <= 0.0f ) dot = 0.0f;
+				if( ch->dist_mult <= 0.0f )
+				{
+					dot_right = 0.0f;
+					dot_front = 1.0f;
+					dot_up = 0.0f;
+				}
 
 				// fill out channel volumes for single location
-				S_SpatializeChannel( &ch->leftvol, &ch->rightvol, ch->master_vol, dot, dist * ch->dist_mult );
+				S_SpatializeChannel( &ch->leftvol, &ch->rightvol, ch->master_vol, dot_right, dot_front, dot_up, dist * ch->dist_mult );
 			}
 		}
 		else
@@ -1596,6 +1640,32 @@ void S_UpdateFrame( struct ref_viewpass_s *rvp )
 		return;
 
 	VectorCopy( rvp->vieworigin, snd.origin );
+
+#ifdef XASH_OPENXR
+	// Issue #17: Bind audio listener to true 6DoF head center and orientation in VR
+	if( XR_IsActive() )
+	{
+		vec3_t headOffset;
+		if( XR_GetHeadCenterTransformWithBasis( headOffset, snd.forward, snd.right, snd.up ))
+		{
+			VectorAdd( snd.origin, headOffset, snd.origin );
+			snd.entnum = rvp->viewentity;
+
+			static int s_audioDbg = 3;
+			if( s_audioDbg > 0 )
+			{
+				s_audioDbg--;
+				Con_Printf( "^2[VR_AUDIO_DBG] 6DoF Listener: org=(%.1f, %.1f, %.1f) fwd=(%.2f, %.2f, %.2f) rgt=(%.2f, %.2f, %.2f) hrtf=%d\n",
+					snd.origin[0], snd.origin[1], snd.origin[2],
+					snd.forward[0], snd.forward[1], snd.forward[2],
+					snd.right[0], snd.right[1], snd.right[2],
+					(vr_audio_hrtf && vr_audio_hrtf->value > 0.0f) ? 1 : 0 );
+			}
+			return;
+		}
+	}
+#endif
+
 	AngleVectors( rvp->viewangles, snd.forward, snd.right, snd.up );
 	snd.entnum = rvp->viewentity; // can be camera entity too
 }
@@ -2024,6 +2094,11 @@ qboolean S_Init( void )
 
 	snd.soundtime = 0;
 	snd.paintedtime = 0;
+
+	// initialize default listener basis so initial sounds are not unspatialized
+	snd.forward[0] = 1.0f; snd.forward[1] = 0.0f; snd.forward[2] = 0.0f;
+	snd.right[0] = 0.0f;   snd.right[1] = -1.0f; snd.right[2] = 0.0f;
+	snd.up[0] = 0.0f;      snd.up[1] = 0.0f;     snd.up[2] = 1.0f;
 
 	// clear ambient sounds
 	memset( snd.ambient_sfx, 0, sizeof( snd.ambient_sfx ));
