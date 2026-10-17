@@ -173,6 +173,10 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 		val haptics = vrPref.getBoolean("vr_haptics", true)
 		val refreshRate = vrPref.getString("vr_refresh_rate", "90") ?: "90"
 		val resScale = vrPref.getString("vr_resolution_scale", "1.0") ?: "1.0"
+		val lasersight = vrPref.getBoolean("vr_lasersight", true)
+		val headtorch = vrPref.getBoolean("vr_headtorch", true)
+		val lefthanded = vrPref.getBoolean("vr_lefthanded", false)
+		val twohanded = vrPref.getBoolean("vr_twohanded", false)
 		val vignette = vrPref.getBoolean("vr_vignette", false)
 
 		val vrArgs = buildString {
@@ -181,6 +185,10 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 			append("+vr_snap_angle ").append(snapAngle).append(" ")
 			append("+vr_weapon_pitchadjust ").append(pitchOffset).append(" ")
 			append("+vr_haptics_enabled ").append(if (haptics) "1" else "0").append(" ")
+			append("+vr_lasersight ").append(if (lasersight) "1" else "0").append(" ")
+			append("+vr_headtorch ").append(if (headtorch) "1" else "0").append(" ")
+			append("+vr_lefthanded ").append(if (lefthanded) "1" else "0").append(" ")
+			append("+vr_twohanded ").append(if (twohanded) "1" else "0").append(" ")
 			append("+vr_refresh_rate ").append(refreshRate).append(" ")
 			append("+vr_resolution_scale ").append(resScale).append(" ")
 			append("+vr_vignette ").append(if (vignette) "1" else "0").append(" ")

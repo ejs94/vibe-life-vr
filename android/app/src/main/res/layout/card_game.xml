@@ -14,35 +14,45 @@
 
 	<androidx.constraintlayout.widget.ConstraintLayout
 		android:layout_width="match_parent"
-		android:layout_height="160dp">
+		android:layout_height="wrap_content"
+		android:minHeight="170dp">
 
 		<ImageView
 			android:id="@+id/gameCover"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
+			android:layout_width="0dp"
+			android:layout_height="0dp"
 			android:adjustViewBounds="true"
 			android:scaleType="centerCrop"
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
 			tools:src="@android:mipmap/sym_def_app_icon" />
 
 		<View
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			android:background="#99181A1D" />
+			android:layout_width="0dp"
+			android:layout_height="0dp"
+			android:background="#99181A1D"
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintEnd_toEndOf="parent" />
 
+		<!-- Top Row: Game Title & Icon (Independent Anchor) -->
 		<com.google.android.material.card.MaterialCardView
 			style="@style/Widget.Material3.CardView.Filled"
 			android:layout_width="wrap_content"
-			android:layout_height="56dp"
+			android:layout_height="52dp"
 			android:layout_marginStart="16dp"
-			android:layout_marginBottom="16dp"
+			android:layout_marginTop="16dp"
 			app:cardBackgroundColor="#CC22262C"
 			app:cardCornerRadius="12dp"
-			app:contentPadding="10dp"
+			app:contentPadding="8dp"
 			app:layout_constrainedWidth="true"
-			app:layout_constraintBottom_toBottomOf="parent"
-			app:layout_constraintEnd_toStartOf="@id/buttonsContainer"
-			app:layout_constraintHorizontal_bias="0"
-			app:layout_constraintStart_toStartOf="parent">
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintHorizontal_bias="0">
 
 			<androidx.constraintlayout.widget.ConstraintLayout
 				android:layout_width="wrap_content"
@@ -79,16 +89,22 @@
 			</androidx.constraintlayout.widget.ConstraintLayout>
 		</com.google.android.material.card.MaterialCardView>
 
+		<!-- Bottom Row: Launch Action Buttons (Independent Anchor) -->
 		<LinearLayout
 			android:id="@+id/buttonsContainer"
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
+			android:layout_marginStart="16dp"
 			android:layout_marginEnd="16dp"
+			android:layout_marginTop="20dp"
 			android:layout_marginBottom="16dp"
 			android:orientation="horizontal"
 			android:gravity="center_vertical"
+			app:layout_constrainedWidth="true"
 			app:layout_constraintBottom_toBottomOf="parent"
-			app:layout_constraintEnd_toEndOf="parent">
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintHorizontal_bias="1.0">
 
 			<com.google.android.material.button.MaterialButton
 				android:id="@+id/btnTestMap"

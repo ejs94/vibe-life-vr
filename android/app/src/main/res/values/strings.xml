@@ -89,6 +89,14 @@
 	<string name="vr_weapon_pitch_summary">Vertical angle offset (+10° recommended for Quest Touch Plus)</string>
 	<string name="vr_haptics_title">Controller Haptic Feedback</string>
 	<string name="vr_haptics_summary">Enable vibration on gunshots and damage</string>
+	<string name="vr_lasersight_title">3D Weapon Laser Sight</string>
+	<string name="vr_lasersight_summary">Show visible 3D laser pointer emitting from the barrel</string>
+	<string name="vr_headtorch_title">Head-Mounted Flashlight</string>
+	<string name="vr_headtorch_summary">Flashlight follows gaze with temple-click gesture (HL2:VR style)</string>
+	<string name="vr_lefthanded_title">Left-Handed Primary Weapon</string>
+	<string name="vr_lefthanded_summary">Swap dominant aiming hand and controller sticks</string>
+	<string name="vr_twohanded_title">Two-Handed Stabilization</string>
+	<string name="vr_twohanded_summary">Grip secondary controller near primary to stabilize long weapons</string>
 	<string name="vr_performance_category">Display &amp; Performance</string>
 	<string name="vr_refresh_rate_title">Display Refresh Rate</string>
 	<string name="vr_refresh_rate_summary">Target display frequency for Quest (90 Hz recommended)</string>

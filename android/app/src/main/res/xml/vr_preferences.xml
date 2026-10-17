@@ -49,6 +49,34 @@
 			app:layout="@layout/switch_preference"
 			app:summary="@string/vr_haptics_summary"
 			app:title="@string/vr_haptics_title" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="true"
+			app:key="vr_lasersight"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_lasersight_summary"
+			app:title="@string/vr_lasersight_title" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="true"
+			app:key="vr_headtorch"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_headtorch_summary"
+			app:title="@string/vr_headtorch_title" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="false"
+			app:key="vr_lefthanded"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_lefthanded_summary"
+			app:title="@string/vr_lefthanded_title" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="false"
+			app:key="vr_twohanded"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_twohanded_summary"
+			app:title="@string/vr_twohanded_title" />
 	</PreferenceCategory>
 
 	<PreferenceCategory
