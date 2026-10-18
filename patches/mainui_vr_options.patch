@@ -1,304 +1,1583 @@
-diff --git a/BaseMenu.h b/BaseMenu.h
-index ae05457..10fc09b 100755
---- a/BaseMenu.h
-+++ b/BaseMenu.h
-@@ -306,6 +306,7 @@ void UI_AdvUserOptions_Menu( void );
- bool UI_AdvServerOptions_IsAvailable( void );
- void UI_AdvServerOptions_Menu( void );
- void UI_InputDevices_Menu( void );
-+void UI_VR_Menu( void );
+diff --git a/controls/Slider.cpp b/controls/Slider.cpp
+index 1159ec9..4bd240f 100644
+--- a/controls/Slider.cpp
++++ b/controls/Slider.cpp
+@@ -18,14 +18,16 @@ GNU General Public License for more details.
+ #include "BaseMenu.h"
+ #include "Slider.h"
+ #include "Utils.h"
++#include <math.h>
  
- void UI_OpenUpdatePage(bool engine , bool preferstore);
- 
-diff --git a/menus/Configuration.cpp b/menus/Configuration.cpp
-index 6e0a981..3e38c95 100644
---- a/menus/Configuration.cpp
-+++ b/menus/Configuration.cpp
-@@ -65,6 +65,8 @@ void CMenuOptions::_Init( void )
- 		PC_TOUCH, UI_Touch_Menu, QMF_NOTIFY, 't' );
- 	AddButton( L( "GameUI_Joystick" ), L( "Change gamepad axis and button settings" ),
- 		PC_GAMEPAD, UI_GamePad_Menu, QMF_NOTIFY, 'g' );
-+	AddButton( L( "VR Options" ), L( "Virtual Reality and comfort settings" ),
-+		PC_ADV_CONTROLS, UI_VR_Menu, QMF_NOTIFY );
- 	AddButton( L( "Update" ), L( "Check for updates" ),
- 		PC_UPDATE, msgBox.MakeOpenEvent(), QMF_NOTIFY );
- 	AddButton( L( "Done" ), L( "Go back to the Main menu" ),
-diff --git a/menus/Main.cpp b/menus/Main.cpp
-index 4d1a382..6479782 100644
---- a/menus/Main.cpp
-+++ b/menus/Main.cpp
-@@ -87,6 +87,12 @@ private:
- 
- void CMenuMain::QuitDialogCb()
+-CMenuSlider::CMenuSlider() : BaseClass(), m_flMinValue(), m_flMaxValue(), m_flCurValue(),
+-	m_flDrawStep(), m_iNumSteps(), m_flRange(), m_iKeepSlider()
++CMenuSlider::CMenuSlider() : BaseClass(), m_flMinValue( 0.0f ), m_flMaxValue( 1.0f ), m_flCurValue( 0.0f ),
++	m_flDrawStep( 1.0f ), m_iNumSteps( 1 ), m_flRange( 1.0f ), m_iKeepSlider( 0 ),
++	m_bEditing( false ), m_bEditFirstChar( false )
  {
-+	if( EngFuncs::GetCvarFloat( "cl_confirmquit" ) == 0.0f )
+-	m_iSliderOutlineWidth = 6;
++	m_iSliderOutlineWidth = 3;
+ 
+ 	size.w = 200;
+-	size.h = 2 + m_iSliderOutlineWidth * 2;
++	size.h = 22;
+ 
+ 	m_flRange = 1.0f;
+ 
+@@ -36,111 +38,391 @@ CMenuSlider::CMenuSlider() : BaseClass(), m_flMinValue(), m_flMaxValue(), m_flCu
+ 	imgSlider = UI_SLIDER_MAIN;
+ 
+ 	iFlags |= QMF_DROPSHADOW;
++
++	memset( m_szEditBuffer, 0, sizeof( m_szEditBuffer ) );
++}
++
++void CMenuSlider::Setup( float minValue, float maxValue, float range )
++{
++	m_flMinValue = minValue;
++	m_flMaxValue = maxValue;
++	m_flRange = range;
++	if( m_flRange < 0.001f )
++		m_flRange = 0.001f;
++
++	m_flCurValue = SnapAndBound( m_flCurValue );
++}
++
++void CMenuSlider::SetCurrentValue( float curValue )
++{
++	m_flCurValue = SnapAndBound( curValue );
++	if( !m_bEditing )
 +	{
-+		EngFuncs::ClientCmd( false, "quit \"menu\"\n" );
++		FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
++	}
++}
++
++float CMenuSlider::SnapAndBound( float val )
++{
++	float clamped = bound( m_flMinValue, val, m_flMaxValue );
++	if( m_flRange <= 0.0001f )
++		return clamped;
++
++	float steps = roundf( ( clamped - m_flMinValue ) / m_flRange );
++	float snapped = m_flMinValue + steps * m_flRange;
++	snapped = bound( m_flMinValue, snapped, m_flMaxValue );
++
++	// Avoid IEEE 754 precision drift (e.g. 89.799999 or 90.000008)
++	if( m_flRange >= 1.0f )
++		snapped = roundf( snapped );
++	else if( m_flRange >= 0.1f )
++		snapped = roundf( snapped * 10.0f ) / 10.0f;
++	else if( m_flRange >= 0.01f )
++		snapped = roundf( snapped * 100.0f ) / 100.0f;
++	else
++		snapped = roundf( snapped * 1000.0f ) / 1000.0f;
++
++	return snapped;
++}
++
++void CMenuSlider::FormatValue( float val, char *buffer, size_t bufSize )
++{
++	if( m_flRange >= 1.0f )
++		V_snprintf( buffer, bufSize, "%.0f", val );
++	else if( m_flRange >= 0.1f )
++		V_snprintf( buffer, bufSize, "%.1f", val );
++	else if( m_flRange >= 0.01f )
++		V_snprintf( buffer, bufSize, "%.2f", val );
++	else
++		V_snprintf( buffer, bufSize, "%.3f", val );
++}
++
++void CMenuSlider::UpdateLayout()
++{
++	if( m_scSize.h < 20 * uiStatic.scaleY )
++		m_scSize.h = 20 * uiStatic.scaleY;
++
++	int H = m_scSize.h;
++	int W = m_scSize.w;
++	int Y = m_scPos.y;
++	int gap = (int)( 6 * uiStatic.scaleX );
++	if( gap < 4 ) gap = 4;
++
++	int btnW = H;
++	int valBoxW = (int)( 62 * uiStatic.scaleX );
++	if( valBoxW < 56 ) valBoxW = 56;
++
++	// Scale down buttons and numeric box if row width is constrained
++	if( btnW * 2 + valBoxW + gap * 3 > W - 40 )
++	{
++		btnW = Q_max( 16, W / 8 );
++		valBoxW = Q_max( 46, W / 4 );
++	}
++
++	m_scLeftArrowPos = Point( m_scPos.x, Y );
++	m_scLeftArrowSize = Size( btnW, H );
++
++	int trackX = m_scLeftArrowPos.x + btnW + gap;
++	int trackW = ( m_scPos.x + W ) - trackX - ( btnW + gap + valBoxW + gap );
++	if( trackW < 30 ) trackW = 30;
++
++	m_scTrackPos = Point( trackX, Y );
++	m_scTrackSize = Size( trackW, H );
++
++	int rightX = trackX + trackW + gap;
++	m_scRightArrowPos = Point( rightX, Y );
++	m_scRightArrowSize = Size( btnW, H );
++
++	int valX = rightX + btnW + gap;
++	m_scValBoxPos = Point( valX, Y );
++	m_scValBoxSize = Size( ( m_scPos.x + W ) - valX, H );
++
++	// Scale the center thumb box
++	m_scCenterBox.w = (int)( 24 * uiStatic.scaleX );
++	if( m_scCenterBox.w < 16 ) m_scCenterBox.w = 16;
++	m_scCenterBox.h = H - m_iSliderOutlineWidth * 2;
++	if( m_scCenterBox.h < 4 ) m_scCenterBox.h = 4;
++
++	m_iNumSteps = ( m_flMaxValue - m_flMinValue ) / m_flRange + 1;
++	m_flDrawStep = (float)( m_scTrackSize.w - m_scCenterBox.w ) / (float)m_iNumSteps;
+ }
+ 
+ /*
+ =================
+-CMenuSlider::Init
++CMenuSlider::VidInit
+ =================
+ */
+-void CMenuSlider::VidInit(  )
++void CMenuSlider::VidInit( void )
+ {
+-	if( m_flRange < 0.05f )
+-		m_flRange = 0.05f;
++	if( m_flRange < 0.001f )
++		m_flRange = 0.001f;
+ 
+ 	colorBase.SetDefault( uiColorWhite );
+ 	colorFocus.SetDefault( uiColorWhite );
+ 
+ 	BaseClass::VidInit();
+ 
+-	// scale the center box
+-	m_scCenterBox.w = 40 * uiStatic.scaleX;
+-	m_scCenterBox.h = m_scSize.h - m_iSliderOutlineWidth * 2;
++	UpdateLayout();
++
++	if( !m_bEditing )
++	{
++		FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
++	}
++}
++
++void CMenuSlider::StepLeft()
++{
++	if( m_flCurValue <= m_flMinValue )
++	{
++		PlayLocalSound( uiStatic.sounds[SND_BUZZ] );
 +		return;
 +	}
 +
- 	if( CL_IsActive() && EngFuncs::GetCvarFloat( "host_serverstate" ) && EngFuncs::GetCvarFloat( "maxplayers" ) == 1.0f )
- 		dialog.SetMessage( L( "StringsList_235" ) );
- 	else
-diff --git a/menus/VR.cpp b/menus/VR.cpp
-new file mode 100644
-index 0000000..d5a4749
---- /dev/null
-+++ b/menus/VR.cpp
-@@ -0,0 +1,256 @@
-+/*
-+VR.cpp - In-Headset Virtual Reality configuration menu
-+Copyright (C) 2026 FWGS / Xash3D VR contributors
++	float steps = roundf( ( m_flCurValue - m_flMinValue ) / m_flRange );
++	float nextVal = m_flMinValue + ( steps - 1.0f ) * m_flRange;
++	m_flCurValue = SnapAndBound( nextVal );
 +
-+This program is free software: you can redistribute it and/or modify
-+it under the terms of the GNU General Public License as published by
-+the Free Software Foundation, either version 3 of the License, or
-+(at your option) any later version.
++	SetCvarValue( m_flCurValue );
++	_Event( QM_CHANGED );
++	PlayLocalSound( uiStatic.sounds[SND_KEY] );
++}
 +
-+This program is distributed in the hope that it will be useful,
-+but WITHOUT ANY WARRANTY; without even the implied warranty of
-+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-+GNU General Public License for more details.
-+*/
-+
-+#include "build.h"
-+#include "Framework.h"
-+#include "Bitmap.h"
-+#include "PicButton.h"
-+#include "Slider.h"
-+#include "CheckBox.h"
-+#include "SpinControl.h"
-+#include "Action.h"
-+
-+#define ART_BANNER "gfx/shell/head_advanced"
-+
-+class CMenuVR : public CMenuFramework
++void CMenuSlider::StepRight()
 +{
-+public:
-+	CMenuVR() : CMenuFramework( "CMenuVR" ) { }
++	if( m_flCurValue >= m_flMaxValue )
++	{
++		PlayLocalSound( uiStatic.sounds[SND_BUZZ] );
++		return;
++	}
+ 
+-	m_iNumSteps = (m_flMaxValue - m_flMinValue) / m_flRange + 1;
+-	m_flDrawStep = (float)(m_scSize.w - m_iSliderOutlineWidth - m_scCenterBox.w) / (float)m_iNumSteps;
++	float steps = roundf( ( m_flCurValue - m_flMinValue ) / m_flRange );
++	float nextVal = m_flMinValue + ( steps + 1.0f ) * m_flRange;
++	m_flCurValue = SnapAndBound( nextVal );
 +
-+private:
-+	void _Init() override;
-+	void _VidInit() override;
-+	void GetConfig();
-+	void SaveAndPopMenu() override;
++	SetCvarValue( m_flCurValue );
++	_Event( QM_CHANGED );
++	PlayLocalSound( uiStatic.sounds[SND_KEY] );
++}
 +
-+	void ToggleSmoothTurn();
++void CMenuSlider::StartEditing()
++{
++	m_bEditing = true;
++	m_bEditFirstChar = true;
++	FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
++	PlayLocalSound( uiStatic.sounds[SND_KEY] );
++}
 +
-+	// Section labels
-+	CMenuAction labelLocomotion;
-+	CMenuAction labelWeapons;
-+	CMenuAction labelCalibration;
++void CMenuSlider::CommitEdit()
++{
++	if( !m_bEditing )
++		return;
 +
-+	// Locomotion & Comfort
-+	CMenuCheckBox smoothturn;
-+	CMenuSpinControl snapAngle;
-+	CMenuCheckBox walkdirection;
++	m_bEditing = false;
++	if( m_szEditBuffer[0] != '\0' && strcmp( m_szEditBuffer, "-" ) != 0 )
++	{
++		float val = (float)atof( m_szEditBuffer );
++		m_flCurValue = SnapAndBound( val );
++		SetCvarValue( m_flCurValue );
++		_Event( QM_CHANGED );
++		PlayLocalSound( uiStatic.sounds[SND_KEY] );
++	}
++	else
++	{
++		FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
++	}
++}
 +
-+	// Immersion & Weapons
-+	CMenuCheckBox lasersight;
-+	CMenuCheckBox headtorch;
-+	CMenuCheckBox lefthanded;
++void CMenuSlider::CancelEdit()
++{
++	m_bEditing = false;
++	FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
+ }
+ 
+ bool CMenuSlider::KeyUp( int key )
+ {
+ 	if( m_iKeepSlider )
+ 	{
+-		// tell menu about changes
+ 		SetCvarValue( m_flCurValue );
+ 		_Event( QM_CHANGED );
+-		m_iKeepSlider = false; // button released
++		m_iKeepSlider = false;
+ 	}
+ 	return true;
+-
+ }
+ 
+ /*
+ =================
+-CMenuSlider::Key
++CMenuSlider::KeyDown
+ =================
+ */
+ bool CMenuSlider::KeyDown( int key )
+ {
+-	if( UI::Key::IsLeftMouse( key ))
++	if( m_scTrackSize.w <= 0 )
++		UpdateLayout();
++
++	if( m_bEditing )
+ 	{
+-		if( !UI_CursorInRect( m_scPos, m_scSize ) )
++		if( UI::Key::IsEnter( key ) )
+ 		{
+-			m_iKeepSlider = false;
++			CommitEdit();
+ 			return true;
+ 		}
++		if( UI::Key::IsEscape( key ) )
++		{
++			CancelEdit();
++			return true;
++		}
++		if( UI::Key::IsBackspace( key ) )
++		{
++			m_bEditFirstChar = false;
++			int len = strlen( m_szEditBuffer );
++			if( len > 0 )
++			{
++				m_szEditBuffer[len - 1] = '\0';
++				PlayLocalSound( uiStatic.sounds[SND_KEY] );
++			}
++			return true;
++		}
++		if( UI::Key::IsDelete( key, true ) )
++		{
++			m_bEditFirstChar = false;
++			m_szEditBuffer[0] = '\0';
++			PlayLocalSound( uiStatic.sounds[SND_KEY] );
++			return true;
++		}
++		if( UI::Key::IsNavigationKey( key ) )
++		{
++			return true;
++		}
++	}
+ 
+-		m_iKeepSlider = true;
+-
+-		// immediately move slider into specified place
+-		int	dist, numSteps;
++	if( UI::Key::IsLeftMouse( key ) )
++	{
++		if( !UI_CursorInRect( m_scPos, m_scSize ) )
++		{
++			if( m_bEditing )
++				CommitEdit();
++			m_iKeepSlider = false;
++			return false;
++		}
+ 
+-		dist = uiStatic.cursorX - (m_scPos.x + m_iSliderOutlineWidth + m_scCenterBox.w);
+-		numSteps = floor(dist / m_flDrawStep);
+-		m_flCurValue = bound( m_flMinValue, numSteps * m_flRange + m_flMinValue, m_flMaxValue );
++		// Check value box click -> toggle or begin edit mode
++		if( UI_CursorInRect( m_scValBoxPos, m_scValBoxSize ) )
++		{
++			if( !m_bEditing )
++				StartEditing();
++			return true;
++		}
+ 
+-		// tell menu about changes
+-		SetCvarValue( m_flCurValue );
+-		_Event( QM_CHANGED );
++		// If editing and clicked elsewhere on slider, commit first
++		if( m_bEditing )
++			CommitEdit();
+ 
+-		return true;
+-	}
+-	else if( UI::Key::IsLeftArrow( key ))
+-	{
+-		m_flCurValue -= m_flRange;
++		// Check Left Arrow [ < ]
++		if( UI_CursorInRect( m_scLeftArrowPos, m_scLeftArrowSize ) )
++		{
++			StepLeft();
++			return true;
++		}
+ 
+-		if( m_flCurValue < m_flMinValue )
++		// Check Right Arrow [ > ]
++		if( UI_CursorInRect( m_scRightArrowPos, m_scRightArrowSize ) )
+ 		{
+-			m_flCurValue = m_flMinValue;
+-			PlayLocalSound( uiStatic.sounds[SND_BUZZ] );
++			StepRight();
+ 			return true;
+ 		}
+ 
+-		// tell menu about changes
+-		SetCvarValue( m_flCurValue );
+-		_Event( QM_CHANGED );
++		// Check Track -> begin dragging and snap immediately
++		if( UI_CursorInRect( m_scTrackPos, m_scTrackSize ) )
++		{
++			m_iKeepSlider = true;
++			int cursorX = uiStatic.cursorX;
++			int availTrackW = m_scTrackSize.w - m_scCenterBox.w;
++			if( availTrackW > 0 )
++			{
++				float fraction = (float)( cursorX - ( m_scTrackPos.x + m_scCenterBox.w / 2 ) ) / (float)availTrackW;
++				fraction = bound( 0.0f, fraction, 1.0f );
++				float rawVal = m_flMinValue + fraction * ( m_flMaxValue - m_flMinValue );
++				m_flCurValue = SnapAndBound( rawVal );
++				SetCvarValue( m_flCurValue );
++				_Event( QM_CHANGED );
++			}
++			return true;
++		}
+ 
+-		PlayLocalSound( uiStatic.sounds[SND_KEY] );
+ 		return true;
+ 	}
+-	else if( UI::Key::IsRightArrow( key ))
++	else if( UI::Key::IsLeftArrow( key ) )
++	{
++		StepLeft();
++		return true;
++	}
++	else if( UI::Key::IsRightArrow( key ) )
++	{
++		StepRight();
++		return true;
++	}
++	else if( UI::Key::IsEnter( key ) )
++	{
++		StartEditing();
++		return true;
++	}
++	else if( UI::Key::IsMouseWheel( key ) )
+ 	{
+-		m_flCurValue += m_flRange;
++		if( key == K_MWHEELUP )
++			StepRight();
++		else if( key == K_MWHEELDOWN )
++			StepLeft();
++		return true;
++	}
++
++	return false;
++}
+ 
+-		if( m_flCurValue > m_flMaxValue )
++void CMenuSlider::Char( int key )
++{
++	if( !m_bEditing )
++		return;
++
++	// Allowed characters for numeric input: digits, decimal point, minus sign
++	if( ( key >= '0' && key <= '9' ) || key == '.' || key == '-' )
++	{
++		if( m_bEditFirstChar )
+ 		{
+-			m_flCurValue = m_flMaxValue;
+-			PlayLocalSound( uiStatic.sounds[SND_BUZZ] );
+-			return true;
++			m_szEditBuffer[0] = '\0';
++			m_bEditFirstChar = false;
+ 		}
+ 
+-		// tell menu about changes
+-		SetCvarValue( m_flCurValue );
+-		_Event( QM_CHANGED );
+-		PlayLocalSound( uiStatic.sounds[SND_KEY] );
+-		return true;
++		int len = strlen( m_szEditBuffer );
++		if( len < (int)sizeof( m_szEditBuffer ) - 2 )
++		{
++			// Minus only permitted as the first character
++			if( key == '-' && len > 0 )
++				return;
++			// Only a single decimal point permitted
++			if( key == '.' && strchr( m_szEditBuffer, '.' ) )
++				return;
++
++			m_szEditBuffer[len] = (char)key;
++			m_szEditBuffer[len + 1] = '\0';
++			PlayLocalSound( uiStatic.sounds[SND_KEY] );
++		}
+ 	}
++}
+ 
+-	return false;
++VGUI_DefaultCursor CMenuSlider::CursorAction()
++{
++	if( UI_CursorInRect( m_scValBoxPos, m_scValBoxSize ) )
++		return dc_ibeam;
++	return dc_arrow;
++}
++
++void CMenuSlider::_Event( int ev )
++{
++	if( ev == QM_LOSTFOCUS && m_bEditing )
++	{
++		CommitEdit();
++	}
++	BaseClass::_Event( ev );
+ }
+ 
+ /*
+@@ -150,18 +432,19 @@ CMenuSlider::Draw
+ */
+ void CMenuSlider::Draw( void )
+ {
+-	int	textHeight, sliderX;
++	if( m_scTrackSize.w <= 0 )
++		UpdateLayout();
++
++	int textHeight;
+ 	uint textflags = ( iFlags & QMF_DROPSHADOW ) ? ETF_SHADOW : 0;
+ 
+-	if( szStatusText && iFlags & QMF_NOTIFY )
++	if( szStatusText && ( iFlags & QMF_NOTIFY ) )
+ 	{
+ 		Point coord;
+-
+ 		coord.x = m_scPos.x + 16 * uiStatic.scaleX;
+ 		coord.y = m_scPos.y + m_scSize.h / 2 - EngFuncs::ConsoleCharacterHeight() / 2;
+ 
+-		int	r, g, b;
+-
++		int r, g, b;
+ 		UnpackRGB( r, g, b, uiColorHelp );
+ 		EngFuncs::DrawSetTextColor( r, g, b );
+ 		EngFuncs::DrawConsoleString( coord, szStatusText );
+@@ -170,45 +453,96 @@ void CMenuSlider::Draw( void )
+ 	if( m_iKeepSlider )
+ 	{
+ 		if( !UI_CursorInRect( m_scPos.x, m_scPos.y - 40, m_scSize.w, m_scSize.h + 80 ) )
++		{
+ 			m_iKeepSlider = false;
++		}
+ 		else
+ 		{
+-			int	dist, numSteps;
+-
+-			// move slider follow the holded mouse button
+-			dist = uiStatic.cursorX - m_scPos.x - m_iSliderOutlineWidth - (m_scCenterBox.w/2);
+-			numSteps = floor(dist / m_flDrawStep);
+-			m_flCurValue = bound( m_flMinValue, numSteps * m_flRange + m_flMinValue, m_flMaxValue );
+-
+-			// tell menu about changes
+-			SetCvarValue( m_flCurValue );
+-			_Event( QM_CHANGED );
++			int cursorX = uiStatic.cursorX;
++			int availTrackW = m_scTrackSize.w - m_scCenterBox.w;
++			if( availTrackW > 0 )
++			{
++				float fraction = (float)( cursorX - ( m_scTrackPos.x + m_scCenterBox.w / 2 ) ) / (float)availTrackW;
++				fraction = bound( 0.0f, fraction, 1.0f );
++				float rawVal = m_flMinValue + fraction * ( m_flMaxValue - m_flMinValue );
++				m_flCurValue = SnapAndBound( rawVal );
++
++				SetCvarValue( m_flCurValue );
++				_Event( QM_CHANGED );
++			}
+ 		}
+ 	}
+ 
+-	// keep value in range
+ 	m_flCurValue = bound( m_flMinValue, m_flCurValue, m_flMaxValue );
+ 
+-	// calc slider position
+-	sliderX = m_scPos.x + (m_iSliderOutlineWidth/2) // start
+-		+ ( ( m_flCurValue - m_flMinValue ) / ( m_flMaxValue - m_flMinValue ) )  // calc fractional part
+-		* ( m_scSize.w - m_iSliderOutlineWidth - (m_scCenterBox.w) );
++	bool isHovered = ( this == m_pParent->ItemAtCursor() );
++	bool leftHover = isHovered && UI_CursorInRect( m_scLeftArrowPos, m_scLeftArrowSize );
++	bool rightHover = isHovered && UI_CursorInRect( m_scRightArrowPos, m_scRightArrowSize );
++	bool valBoxHover = isHovered && UI_CursorInRect( m_scValBoxPos, m_scValBoxSize );
++	bool trackHover = isHovered && UI_CursorInRect( m_scTrackPos, m_scTrackSize );
++
++	// 1. Draw Left Arrow Button [ < ]
++	UI_FillRect( m_scLeftArrowPos, m_scLeftArrowSize, uiColorBlack );
++	UI_DrawRectangle( m_scLeftArrowPos, m_scLeftArrowSize, leftHover ? uiColorHelp : uiInputFgColor );
++	UI_DrawString( font, m_scLeftArrowPos, m_scLeftArrowSize, "<", leftHover ? uiColorHelp : uiColorWhite, m_scChSize, QM_CENTER, textflags | ETF_FORCECOL );
++
++	// 2. Draw Track Groove & Thumb
++	int availTrackW = m_scTrackSize.w - m_scCenterBox.w;
++	float fraction = ( m_flMaxValue > m_flMinValue ) ?
++		( ( m_flCurValue - m_flMinValue ) / ( m_flMaxValue - m_flMinValue ) ) : 0.0f;
++	fraction = bound( 0.0f, fraction, 1.0f );
++
++	int sliderX = m_scTrackPos.x + (int)( fraction * availTrackW );
++
++	UI_DrawRectangleExt( m_scTrackPos.x + m_iSliderOutlineWidth / 2,
++	                     m_scTrackPos.y + m_iSliderOutlineWidth,
++	                     m_scTrackSize.w - m_iSliderOutlineWidth,
++	                     m_scCenterBox.h,
++	                     uiInputBgColor,
++	                     m_iSliderOutlineWidth );
++
++	if( isHovered && ( trackHover || m_iKeepSlider ) )
++		UI_DrawPic( sliderX, m_scTrackPos.y, m_scCenterBox.w, m_scSize.h, uiColorHelp, imgSlider );
++	else
++		UI_DrawPic( sliderX, m_scTrackPos.y, m_scCenterBox.w, m_scSize.h, uiColorWhite, imgSlider );
+ 
++	// 3. Draw Right Arrow Button [ > ]
++	UI_FillRect( m_scRightArrowPos, m_scRightArrowSize, uiColorBlack );
++	UI_DrawRectangle( m_scRightArrowPos, m_scRightArrowSize, rightHover ? uiColorHelp : uiInputFgColor );
++	UI_DrawString( font, m_scRightArrowPos, m_scRightArrowSize, ">", rightHover ? uiColorHelp : uiColorWhite, m_scChSize, QM_CENTER, textflags | ETF_FORCECOL );
+ 
+-	UI_DrawRectangleExt( m_scPos.x + m_iSliderOutlineWidth / 2, m_scPos.y + m_iSliderOutlineWidth, m_scSize.w - m_iSliderOutlineWidth, m_scCenterBox.h, uiInputBgColor, m_iSliderOutlineWidth );
+-	if( eFocusAnimation == QM_HIGHLIGHTIFFOCUS && this == m_pParent->ItemAtCursor())
+-		UI_DrawPic( sliderX, m_scPos.y, m_scCenterBox.w, m_scSize.h, uiColorHelp, imgSlider );
++	// 4. Draw Numeric Value / Edit Box [ 90.0 ]
++	char displayStr[64];
++	if( m_bEditing )
++	{
++		bool showCursor = ( ( uiStatic.realTime / 400 ) % 2 == 0 );
++		V_snprintf( displayStr, sizeof( displayStr ), "%s%s", m_szEditBuffer, showCursor ? "_" : "" );
++	}
+ 	else
+-		UI_DrawPic( sliderX, m_scPos.y, m_scCenterBox.w, m_scSize.h, uiColorWhite, imgSlider );
++	{
++		FormatValue( m_flCurValue, displayStr, sizeof( displayStr ) );
++	}
+ 
++	UI_FillRect( m_scValBoxPos, m_scValBoxSize, uiColorBlack );
++	int boxBorderCol = m_bEditing ? PackRGBA( 255, 220, 60, 255 ) :
++	                   ( valBoxHover ? uiColorHelp : uiInputFgColor );
++	UI_DrawRectangle( m_scValBoxPos, m_scValBoxSize, boxBorderCol );
+ 
+-	textHeight = m_scPos.y - (m_scChSize * 1.5f);
++	int textColor = m_bEditing ? PackRGBA( 255, 240, 100, 255 ) :
++	                ( valBoxHover ? uiColorHelp : uiColorWhite );
++	UI_DrawString( font, m_scValBoxPos, m_scValBoxSize, displayStr, textColor, m_scChSize, QM_CENTER, textflags | ETF_FORCECOL );
++
++	// 5. Draw Title szName
++	textHeight = m_scPos.y - ( m_scChSize * 1.5f );
+ 	UI_DrawString( font, m_scPos.x, textHeight, m_scSize.w, m_scChSize, szName, uiColorHelp, m_scChSize, eTextAlignment, textflags | ETF_FORCECOL );
+ }
+ 
+ void CMenuSlider::UpdateEditable()
+ {
+ 	float flValue = CvarValue();
+-
+ 	m_flCurValue = flValue;
++	if( !m_bEditing )
++	{
++		FormatValue( m_flCurValue, m_szEditBuffer, sizeof( m_szEditBuffer ) );
++	}
+ }
+diff --git a/controls/Slider.h b/controls/Slider.h
+index 23fb0a9..8753f01 100644
+--- a/controls/Slider.h
++++ b/controls/Slider.h
+@@ -29,32 +29,37 @@ public:
+ 	void VidInit( void ) override;
+ 	bool KeyUp( int key ) override;
+ 	bool KeyDown( int key ) override;
++	void Char( int key ) override;
+ 	void Draw( void ) override;
+ 	void UpdateEditable() override;
++	void _Event( int ev ) override;
++	VGUI_DefaultCursor CursorAction() override;
++
+ 	void LinkCvar(const char *name) override
+ 	{
+ 		CMenuEditable::LinkCvar(name, CVAR_VALUE);
+ 	}
+ 
+-	void Setup( float minValue, float maxValue, float range )
+-	{
+-		m_flMinValue = minValue;
+-		m_flMaxValue = maxValue;
+-		m_flRange = range;
+-	}
+-	void SetCurrentValue( float curValue )
+-	{
+-		m_flCurValue = curValue > m_flMaxValue ? m_flMaxValue :
+-						( curValue < m_flMinValue ? m_flMinValue : curValue );
+-	}
+-
++	void Setup( float minValue, float maxValue, float range );
++	void SetCurrentValue( float curValue );
+ 	float GetCurrentValue() { return m_flCurValue; }
+-	// void SetDrawStep( float drawStep, int numSteps );
+ 
+ 	void SetKeepSlider( int keepSlider ) { m_iKeepSlider = keepSlider; }
+ 
++	// Fine-tuning and direct numeric input helpers
++	void StepLeft();
++	void StepRight();
++	void StartEditing();
++	void CommitEdit();
++	void CancelEdit();
++	float SnapAndBound( float val );
++	void FormatValue( float val, char *buffer, size_t bufSize );
++	bool IsEditing() const { return m_bEditing; }
++
+ 	CImage imgSlider;
+ private:
++	void UpdateLayout();
++
+ 	float	m_flMinValue;
+ 	float	m_flMaxValue;
+ 	float	m_flCurValue;
+@@ -65,6 +70,21 @@ private:
+ 
+ 	int m_iSliderOutlineWidth;
+ 	Size m_scCenterBox;
++
++	// Sub-components for fine-tuning buttons and numeric input box
++	Point	m_scLeftArrowPos;
++	Size	m_scLeftArrowSize;
++	Point	m_scRightArrowPos;
++	Size	m_scRightArrowSize;
++	Point	m_scTrackPos;
++	Size	m_scTrackSize;
++	Point	m_scValBoxPos;
++	Size	m_scValBoxSize;
++
++	// Direct numeric typing state
++	bool	m_bEditing;
++	bool	m_bEditFirstChar;
++	char	m_szEditBuffer[32];
+ };
+ 
+ #endif // MENU_SLIDER_H
+diff --git a/controls/TabView.cpp b/controls/TabView.cpp
+index 171dc86..3c8a5e0 100644
+--- a/controls/TabView.cpp
++++ b/controls/TabView.cpp
+@@ -25,7 +25,7 @@ CMenuTabView::CMenuTabView() : BaseClass()
+ Point CMenuTabView::GetPositionOffset() const
+ {
+ 	Point ret = m_scPos;
+-	ret.y += m_scChSize * 1.5f;
++	ret.y += m_scChSize * 1.8f;
+ 
+ 	return ret;
+ }
+@@ -38,23 +38,27 @@ void CMenuTabView::VidInit()
+ 	_VidInit();
+ 	VidInitItems();
+ 
+-	m_szTab.w = m_scSize.w / m_pItems.Count();
+-	m_szTab.h = m_scChSize * 1.5f;
++	if( m_pItems.Count() > 0 )
++		m_szTab.w = m_scSize.w / m_pItems.Count();
++	else
++		m_szTab.w = m_scSize.w;
++	m_szTab.h = m_scChSize * 1.8f;
+ }
+ 
+ void CMenuTabView::DrawTab(Point pt, const char *name, bool isEnd, bool isSelected, bool isHighlighted)
+ {
+-	uint textColor = uiInputTextColor;
++	uint textColor = uiColorHelp; // Default crisp amber
+ 	uint fillColor = uiColorBlack;
+ 	uint textflags = ( iFlags & QMF_DROPSHADOW ) ? ETF_SHADOW : 0;
+ 
+-	if( isSelected && !isHighlighted )
++	if( isSelected )
+ 	{
+-		fillColor = uiInputBgColor;
+-		textColor = uiInputFgColor;
++		fillColor = PackRGBA( 65, 65, 65, 255 ); // Distinct elevated grey background
++		textColor = uiPromptFocusColor;         // Bright gold focus highlight
+ 	}
+ 	else if( isHighlighted )
+ 	{
++		fillColor = PackRGBA( 40, 40, 40, 255 );
+ 		textColor = uiPromptFocusColor;
+ 	}
+ 
+@@ -90,8 +94,8 @@ void CMenuTabView::Draw()
+ 		tabOffset.x += m_szTab.w;
+ 	}
+ 
+-	Point contentOffset = Point( m_scPos.x, m_scPos.y + m_scChSize * 1.5f );
+-	Size contentSize = Size( m_scSize.w, m_scSize.h - m_scChSize * 1.5f );
++	Point contentOffset = GetPositionOffset();
++	Size contentSize = Size( m_scSize.w, m_scSize.h - ( contentOffset.y - m_scPos.y ) );
+ 
+ 	// draw line after tab
+ 	UI_FillRect( contentOffset.x, contentOffset.y,
+@@ -108,3 +112,109 @@ void CMenuTabView::Draw()
+ 		UI::Scissor::PopScissor();
+ 	}
+ }
++
++bool CMenuTabView::MouseMove( int x, int y )
++{
++	// Check if cursor is hovering over the tab headers
++	Point tabOffset = m_scPos;
++	FOR_EACH_VEC( m_pItems, i )
++	{
++		if( UI_CursorInRect( tabOffset, m_szTab ) )
++		{
++			return true;
++		}
++		tabOffset.x += m_szTab.w;
++	}
++
++	// Forward mouse move only to the currently active tab item
++	if( m_iCursor >= 0 && m_iCursor < m_pItems.Count() )
++	{
++		CMenuBaseItem *activeItem = m_pItems[m_iCursor];
++		if( activeItem && activeItem->IsVisible() && !FBitSet( activeItem->iFlags, QMF_INACTIVE ) )
++		{
++			return activeItem->MouseMove( x, y );
++		}
++	}
++
++	return false;
++}
++
++bool CMenuTabView::KeyDown( int key )
++{
++	// Click on tab header bar
++	if( key == K_MOUSE1 )
++	{
++		Point tabOffset = m_scPos;
++		FOR_EACH_VEC( m_pItems, i )
++		{
++			if( UI_CursorInRect( tabOffset, m_szTab ) )
++			{
++				if( m_iCursor != i )
++				{
++					SetCursor( i );
++					PlayLocalSound( uiStatic.sounds[SND_LAUNCH] );
++				}
++				return true;
++			}
++			tabOffset.x += m_szTab.w;
++		}
++	}
++
++	// Tab cycle hotkeys (PageUp / PageDown or brackets)
++	if( key == K_PGDN || key == ']' )
++	{
++		if( m_pItems.Count() > 1 )
++		{
++			SetCursor( ( m_iCursor + 1 ) % m_pItems.Count() );
++			PlayLocalSound( uiStatic.sounds[SND_LAUNCH] );
++			return true;
++		}
++	}
++	else if( key == K_PGUP || key == '[' )
++	{
++		if( m_pItems.Count() > 1 )
++		{
++			SetCursor( ( m_iCursor - 1 + m_pItems.Count() ) % m_pItems.Count() );
++			PlayLocalSound( uiStatic.sounds[SND_LAUNCH] );
++			return true;
++		}
++	}
++
++	// Forward to active tab item
++	if( m_iCursor >= 0 && m_iCursor < m_pItems.Count() )
++	{
++		CMenuBaseItem *activeItem = m_pItems[m_iCursor];
++		if( activeItem && activeItem->IsVisible() && !FBitSet( activeItem->iFlags, QMF_INACTIVE ) )
++		{
++			if( activeItem->KeyDown( key ) )
++				return true;
++		}
++	}
++
++	return false;
++}
++
++bool CMenuTabView::KeyUp( int key )
++{
++	if( m_iCursor >= 0 && m_iCursor < m_pItems.Count() )
++	{
++		CMenuBaseItem *activeItem = m_pItems[m_iCursor];
++		if( activeItem && activeItem->IsVisible() && !FBitSet( activeItem->iFlags, QMF_INACTIVE ) )
++		{
++			return activeItem->KeyUp( key );
++		}
++	}
++	return false;
++}
++
++void CMenuTabView::Char( int key )
++{
++	if( m_iCursor >= 0 && m_iCursor < m_pItems.Count() )
++	{
++		CMenuBaseItem *activeItem = m_pItems[m_iCursor];
++		if( activeItem && activeItem->IsVisible() && !FBitSet( activeItem->iFlags, QMF_INACTIVE ) )
++		{
++			activeItem->Char( key );
++		}
++	}
++}
+diff --git a/controls/TabView.h b/controls/TabView.h
+index f106457..bb7e3d8 100644
+--- a/controls/TabView.h
++++ b/controls/TabView.h
+@@ -27,6 +27,11 @@ public:
+ 	void Draw() override;
+ 	Point GetPositionOffset() const override;
+ 
++	bool KeyDown( int key ) override;
++	bool KeyUp( int key ) override;
++	bool MouseMove( int x, int y ) override;
++	void Char( int key ) override;
++
+ 	inline void SetTabName( int idx, const char *name )
+ 	{
+ 		if( m_pItems.IsValidIndex( idx ))
+diff --git a/menus/VR.cpp b/menus/VR.cpp
+index 28cb715..72dcc9f 100644
+--- a/menus/VR.cpp
++++ b/menus/VR.cpp
+@@ -1,5 +1,5 @@
+ /*
+-VR.cpp - In-Headset Virtual Reality configuration menu
++VR.cpp - In-Headset Virtual Reality configuration menu with category tabs & dedicated VR Debug tab
+ Copyright (C) 2026 FWGS / Xash3D VR contributors
+ 
+ This program is free software: you can redistribute it and/or modify
+@@ -21,6 +21,7 @@ GNU General Public License for more details.
+ #include "CheckBox.h"
+ #include "SpinControl.h"
+ #include "Action.h"
++#include "TabView.h"
+ 
+ #define ART_BANNER "gfx/shell/head_advanced"
+ 
+@@ -32,41 +33,74 @@ public:
+ private:
+ 	void _Init() override;
+ 	void _VidInit() override;
++	void Think() override;
+ 	void GetConfig();
+ 	void SaveAndPopMenu() override;
+ 
+ 	void ToggleSmoothTurn();
+-
+-	// Section labels
+-	CMenuAction labelLocomotion;
+-	CMenuAction labelWeapons;
+-	CMenuAction labelCalibration;
+-
+-	// Locomotion & Comfort
++	void RecordImpactCb();
++	void ClearImpactsCb();
++	void ResetCalibrationCb();
++	void DumpProfileCb();
++	void OpenConsoleCb();
++
++	// Tab container
++	CMenuTabView tabView;
++
++	// Tab 1: Locomotion & Comfort
++	CMenuItemsHolder tabLocomotion;
++	CMenuAction headerLocomotion;
+ 	CMenuCheckBox smoothturn;
+ 	CMenuSpinControl snapAngle;
+ 	CMenuCheckBox walkdirection;
++	CMenuCheckBox physicalCrouch;
++	CMenuSlider menuDistance;
++	CMenuSlider menuScale;
++	CMenuAction noteLocomotion;
+ 
+-	// Immersion & Weapons
++	// Tab 2: Weapons & Combat
++	CMenuItemsHolder tabWeapons;
++	CMenuAction headerWeapons;
+ 	CMenuCheckBox lasersight;
+ 	CMenuCheckBox headtorch;
+ 	CMenuCheckBox twohanded;
+ 	CMenuCheckBox lefthanded;
+-	CMenuCheckBox haptics;
+-	CMenuCheckBox pointerHud;
+-	CMenuCheckBox audioHrtf;
++	CMenuCheckBox proximityScope;
++	CMenuCheckBox meleeSwing;
++	CMenuSlider weaponPitch;
++	CMenuCheckBox calibrationStick;
++	CMenuAction btnDumpProfile;
++	CMenuAction noteWeapons;
+ 
+-	// Hands & Presence
+-	CMenuAction labelHands;
++	// Tab 3: Presence & Audio
++	CMenuItemsHolder tabPresence;
++	CMenuAction headerPresence;
+ 	CMenuCheckBox fingerCurling;
+ 	CMenuCheckBox offhandRender;
+-
+-	// Calibration & World Scale
+-	CMenuSlider weaponPitch;
++	CMenuCheckBox gestureUse;
 +	CMenuCheckBox haptics;
 +	CMenuCheckBox pointerHud;
++	CMenuCheckBox audioHrtf;
+ 	CMenuSlider worldscale;
+ 	CMenuSlider heightAdjust;
+-	CMenuSlider menuDistance;
+-	CMenuSlider menuScale;
++	CMenuAction notePresence;
 +
-+	// Calibration & World Scale
-+	CMenuSlider weaponPitch;
-+	CMenuSlider worldscale;
-+	CMenuSlider heightAdjust;
-+};
-+
++	// Tab 4: VR Debug (Dedicated Tab)
++	CMenuItemsHolder tabDebug;
++	CMenuAction headerDebug;
++	CMenuCheckBox debugImpacts;
++	CMenuCheckBox testHands;
++	CMenuCheckBox testHead;
++	CMenuCheckBox testFingerCurl;
++	CMenuAction btnRecordImpact;
++	CMenuAction btnClearImpacts;
++	CMenuAction btnResetCalibration;
++	CMenuAction btnConsole;
++	CMenuAction lblDeviceProfile;
++	CMenuAction lblTrackingInfo;
++	CMenuAction lblRoomscaleInfo;
++	CMenuAction lblRendererInfo;
++	CMenuAction lblImpactsInfo;
+ };
+ 
+ /*
+@@ -79,6 +113,58 @@ void CMenuVR::ToggleSmoothTurn( void )
+ 	snapAngle.SetGrayed( smoothturn.bChecked );
+ }
+ 
 +/*
 +=================
-+CMenuVR::ToggleSmoothTurn
++CMenuVR::RecordImpactCb
 +=================
 +*/
-+void CMenuVR::ToggleSmoothTurn( void )
++void CMenuVR::RecordImpactCb( void )
 +{
-+	snapAngle.SetGrayed( smoothturn.bChecked );
++	EngFuncs::ClientCmd( false, "vr_record_impact\n" );
 +}
 +
 +/*
 +=================
-+CMenuVR::GetConfig
++CMenuVR::ClearImpactsCb
 +=================
 +*/
-+void CMenuVR::GetConfig( void )
++void CMenuVR::ClearImpactsCb( void )
 +{
-+	smoothturn.LinkCvar( "vr_smoothturn" );
-+	snapAngle.LinkCvar( "vr_snap_angle", CMenuEditable::CVAR_VALUE );
-+	walkdirection.LinkCvar( "vr_walkdirection" );
++	EngFuncs::ClientCmd( false, "vr_clear_impacts\n" );
++}
 +
-+	lasersight.LinkCvar( "vr_lasersight" );
-+	headtorch.LinkCvar( "vr_headtorch" );
-+	lefthanded.LinkCvar( "vr_lefthanded" );
++/*
++=================
++CMenuVR::ResetCalibrationCb
++=================
++*/
++void CMenuVR::ResetCalibrationCb( void )
++{
++	EngFuncs::ClientCmd( false, "vr_worldscale 40; vr_weapon_pitchadjust 0; vr_height_adjust 0; vr_menu_distance 1.5; vr_menu_scale 1.4\n" );
++	GetConfig();
++}
++
++/*
++=================
++CMenuVR::DumpProfileCb
++=================
++*/
++void CMenuVR::DumpProfileCb( void )
++{
++	EngFuncs::ClientCmd( false, "vr_dump_weapon_profile\n" );
++}
++
++/*
++=================
++CMenuVR::OpenConsoleCb
++=================
++*/
++void CMenuVR::OpenConsoleCb( void )
++{
++	UI_SetActiveMenu( false );
++	EngFuncs::KEY_SetDest( KEY_CONSOLE );
++}
++
+ /*
+ =================
+ CMenuVR::GetConfig
+@@ -86,26 +172,39 @@ CMenuVR::GetConfig
+ */
+ void CMenuVR::GetConfig( void )
+ {
++	// Tab 1: Locomotion & Comfort
+ 	smoothturn.LinkCvar( "vr_smoothturn" );
+ 	snapAngle.LinkCvar( "vr_snap_angle", CMenuEditable::CVAR_VALUE );
+ 	walkdirection.LinkCvar( "vr_walkdirection" );
++	physicalCrouch.LinkCvar( "vr_physical_crouch" );
++	menuDistance.LinkCvar( "vr_menu_distance" );
++	menuScale.LinkCvar( "vr_menu_scale" );
+ 
++	// Tab 2: Weapons & Combat
+ 	lasersight.LinkCvar( "vr_lasersight" );
+ 	headtorch.LinkCvar( "vr_headtorch" );
+ 	twohanded.LinkCvar( "vr_twohanded" );
+ 	lefthanded.LinkCvar( "vr_lefthanded" );
+-	haptics.LinkCvar( "vr_haptics_enabled" );
+-	pointerHud.LinkCvar( "vr_pointer_hud" );
+-	audioHrtf.LinkCvar( "vr_audio_hrtf" );
++	proximityScope.LinkCvar( "vr_proximity_scope" );
++	meleeSwing.LinkCvar( "vr_melee_swing" );
++	weaponPitch.LinkCvar( "vr_weapon_pitchadjust" );
++	calibrationStick.LinkCvar( "vr_calibration_stick" );
+ 
++	// Tab 3: Presence & Audio
+ 	fingerCurling.LinkCvar( "vr_finger_curling" );
+ 	offhandRender.LinkCvar( "vr_offhand_render" );
+-
+-	weaponPitch.LinkCvar( "vr_weapon_pitchadjust" );
++	gestureUse.LinkCvar( "vr_gesture_use" );
 +	haptics.LinkCvar( "vr_haptics_enabled" );
 +	pointerHud.LinkCvar( "vr_pointer_hud" );
++	audioHrtf.LinkCvar( "vr_audio_hrtf" );
+ 	worldscale.LinkCvar( "vr_worldscale" );
+ 	heightAdjust.LinkCvar( "vr_height_adjust" );
+-	menuDistance.LinkCvar( "vr_menu_distance" );
+-	menuScale.LinkCvar( "vr_menu_scale" );
 +
-+	weaponPitch.LinkCvar( "vr_weapon_pitchadjust" );
-+	worldscale.LinkCvar( "vr_worldscale" );
-+	heightAdjust.LinkCvar( "vr_height_adjust" );
-+
-+	ToggleSmoothTurn();
-+}
-+
-+/*
-+=================
-+CMenuVR::SaveAndPopMenu
-+=================
-+*/
-+void CMenuVR::SaveAndPopMenu( void )
-+{
-+	smoothturn.WriteCvar();
-+	snapAngle.WriteCvar();
-+	walkdirection.WriteCvar();
-+
-+	lasersight.WriteCvar();
-+	headtorch.WriteCvar();
-+	lefthanded.WriteCvar();
++	// Tab 4: VR Debug
++	debugImpacts.LinkCvar( "vr_debug_impacts" );
++	testHands.LinkCvar( "vr_test_hands" );
++	testHead.LinkCvar( "vr_test_head" );
++	testFingerCurl.LinkCvar( "vr_test_finger_curl" );
+ 
+ 	ToggleSmoothTurn();
+ }
+@@ -120,27 +219,53 @@ void CMenuVR::SaveAndPopMenu( void )
+ 	smoothturn.WriteCvar();
+ 	snapAngle.WriteCvar();
+ 	walkdirection.WriteCvar();
++	physicalCrouch.WriteCvar();
++	menuDistance.WriteCvar();
++	menuScale.WriteCvar();
+ 
+ 	lasersight.WriteCvar();
+ 	headtorch.WriteCvar();
+ 	twohanded.WriteCvar();
+ 	lefthanded.WriteCvar();
+-	haptics.WriteCvar();
+-	pointerHud.WriteCvar();
+-	audioHrtf.WriteCvar();
++	proximityScope.WriteCvar();
++	meleeSwing.WriteCvar();
++	weaponPitch.WriteCvar();
++	calibrationStick.WriteCvar();
+ 
+ 	fingerCurling.WriteCvar();
+ 	offhandRender.WriteCvar();
+-
+-	weaponPitch.WriteCvar();
++	gestureUse.WriteCvar();
 +	haptics.WriteCvar();
 +	pointerHud.WriteCvar();
++	audioHrtf.WriteCvar();
+ 	worldscale.WriteCvar();
+ 	heightAdjust.WriteCvar();
+-	menuDistance.WriteCvar();
+-	menuScale.WriteCvar();
 +
-+	weaponPitch.WriteCvar();
-+	worldscale.WriteCvar();
-+	heightAdjust.WriteCvar();
-+
-+	CMenuFramework::SaveAndPopMenu();
-+}
-+
++	debugImpacts.WriteCvar();
++	testHands.WriteCvar();
++	testHead.WriteCvar();
++	testFingerCurl.WriteCvar();
+ 
+ 	CMenuFramework::SaveAndPopMenu();
+ }
+ 
 +/*
 +=================
-+CMenuVR::_Init
++CMenuVR::Think
 +=================
 +*/
-+void CMenuVR::_Init( void )
++void CMenuVR::Think( void )
 +{
-+	banner.SetPicture( ART_BANNER );
++	CMenuFramework::Think();
 +
-+	// Headers
-+	labelLocomotion.szName = L( "Locomotion & Comfort" );
-+	labelLocomotion.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
-+	labelLocomotion.colorBase = uiColorHelp;
++	// Support programmatic or console-driven tab selection via vr_menu_tab
++	int tabVal = (int)EngFuncs::GetCvarFloat( "vr_menu_tab" );
++	if( tabVal >= 0 && tabVal < 4 && tabVal != tabView.GetCursor() )
++	{
++		tabView.SetCursor( tabVal );
++	}
++}
 +
-+	labelWeapons.szName = L( "Weapons & Flashlight" );
-+	labelWeapons.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
-+	labelWeapons.colorBase = uiColorHelp;
-+
-+	labelCalibration.szName = L( "Calibration & Scale" );
-+	labelCalibration.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
-+	labelCalibration.colorBase = uiColorHelp;
-+
-+	// Locomotion & Comfort controls
-+	smoothturn.SetNameAndStatus( L( "Smooth Turning" ), L( "Continuous smooth turning instead of snap turning" ) );
-+	smoothturn.onChanged = VoidCb( &CMenuVR::ToggleSmoothTurn );
-+
-+	snapAngle.SetNameAndStatus( L( "Snap Turn Angle" ), L( "Degrees turned per snap turn flick (15 to 90 deg)" ) );
-+	snapAngle.Setup( 15.0f, 90.0f, 15.0f );
-+	snapAngle.SetDisplayPrecision( 0 );
-+
-+	walkdirection.SetNameAndStatus( L( "Controller Walk Direction" ), L( "Move toward controller orientation instead of head gaze" ) );
-+
-+	// Immersion & Weapon controls
-+	lasersight.SetNameAndStatus( L( "3D Weapon Laser Sight" ), L( "Visible laser pointer projected from weapon barrel" ) );
-+	headtorch.SetNameAndStatus( L( "Head-Mounted Flashlight" ), L( "Flashlight attaches to head instead of off-hand" ) );
-+	lefthanded.SetNameAndStatus( L( "Left-Handed Primary Weapon" ), L( "Hold primary weapon in left hand" ) );
-+	haptics.SetNameAndStatus( L( "Haptic Vibration Feedback" ), L( "Tactile recoil and environmental sensations in controllers" ) );
-+	pointerHud.SetNameAndStatus( L( "Menu Laser Pointer" ), L( "Interact with VR menus using laser pointer virtual cursor" ) );
-+
-+	// Calibration & World scale sliders
-+	weaponPitch.SetNameAndStatus( L( "Weapon Pitch Offset" ), L( "Adjust weapon barrel angle in degrees (-30 to +30)" ) );
-+	weaponPitch.Setup( -30.0f, 30.0f, 1.0f );
-+
-+	worldscale.SetNameAndStatus( L( "VR World Scale" ), L( "World scale units per meter (default: 40)" ) );
-+	worldscale.Setup( 20.0f, 60.0f, 1.0f );
-+
-+	heightAdjust.SetNameAndStatus( L( "Player Height Offset" ), L( "Vertical player height calibration (-20 to +20)" ) );
-+	heightAdjust.Setup( -20.0f, 20.0f, 1.0f );
-+
+ /*
+ =================
+ CMenuVR::_Init
+@@ -150,20 +275,25 @@ void CMenuVR::_Init( void )
+ {
+ 	banner.SetPicture( ART_BANNER );
+ 
+-	// Headers
+-	labelLocomotion.szName = L( "Locomotion & Comfort" );
+-	labelLocomotion.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
+-	labelLocomotion.colorBase = uiColorHelp;
 +	// Side buttons
 +	AddItem( banner );
 +	AddButton( L( "Done" ), nullptr, PC_DONE, VoidCb( &CMenuVR::SaveAndPopMenu ) );
 +	AddButton( L( "GameUI_Cancel" ), nullptr, PC_CANCEL, VoidCb( &CMenuFramework::Hide ) );
+ 
+-	labelWeapons.szName = L( "Weapons & Flashlight" );
+-	labelWeapons.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
+-	labelWeapons.colorBase = uiColorHelp;
++	// Tab container registration
++	tabView.AddTabItem( tabLocomotion, L( "Locomotion" ) );
++	tabView.AddTabItem( tabWeapons, L( "Weapons" ) );
++	tabView.AddTabItem( tabPresence, L( "Immersion" ) );
++	tabView.AddTabItem( tabDebug, L( "VR Debug" ) );
++	AddItem( tabView );
+ 
+-	labelCalibration.szName = L( "Calibration & Scale" );
+-	labelCalibration.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
+-	labelCalibration.colorBase = uiColorHelp;
++	// ==========================================
++	// Tab 1: Locomotion & Comfort
++	// ==========================================
++	headerLocomotion.szName = L( "Locomotion & Comfort Settings" );
++	headerLocomotion.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	headerLocomotion.colorBase = uiColorHelp;
+ 
+-	// Locomotion & Comfort controls
+ 	smoothturn.SetNameAndStatus( L( "Smooth Turning" ), L( "Continuous smooth turning instead of snap turning" ) );
+ 	smoothturn.onChanged = VoidCb( &CMenuVR::ToggleSmoothTurn );
+ 
+@@ -172,70 +302,168 @@ void CMenuVR::_Init( void )
+ 	snapAngle.SetDisplayPrecision( 0 );
+ 
+ 	walkdirection.SetNameAndStatus( L( "Controller Walk Direction" ), L( "Move toward controller orientation instead of head gaze" ) );
++	physicalCrouch.SetNameAndStatus( L( "Physical Roomscale Crouch" ), L( "Duck automatically when squatting below roomscale threshold (-0.28m)" ) );
 +
-+	// Controls registration
-+	AddItem( labelLocomotion );
-+	AddItem( smoothturn );
-+	AddItem( snapAngle );
-+	AddItem( walkdirection );
++	menuDistance.SetNameAndStatus( L( "Menu Quad Distance (m)" ), L( "Distance in meters of floating 2D menu quad (1.0 to 3.5m)" ) );
++	menuDistance.Setup( 1.0f, 3.5f, 0.1f );
 +
-+	AddItem( labelWeapons );
-+	AddItem( lasersight );
-+	AddItem( headtorch );
-+	AddItem( lefthanded );
-+	AddItem( haptics );
-+	AddItem( pointerHud );
++	menuScale.SetNameAndStatus( L( "Menu Quad Scale (m)" ), L( "Width in meters of floating 2D menu quad (1.0 to 3.0m)" ) );
++	menuScale.Setup( 1.0f, 3.0f, 0.1f );
 +
-+	AddItem( labelCalibration );
-+	AddItem( weaponPitch );
-+	AddItem( worldscale );
-+	AddItem( heightAdjust );
-+}
++	noteLocomotion.szName = L( "Snap turn angle applies only when smooth turning is OFF." );
++	noteLocomotion.iFlags = QMF_INACTIVE;
++	noteLocomotion.colorBase = PackRGBA( 160, 160, 160, 255 );
 +
-+/*
-+=================
-+CMenuVR::_VidInit
-+=================
-+*/
-+void CMenuVR::_VidInit( void )
-+{
-+	int lx = 330;
-+	int ly = 230;
++	tabLocomotion.AddItem( headerLocomotion );
++	tabLocomotion.AddItem( smoothturn );
++	tabLocomotion.AddItem( snapAngle );
++	tabLocomotion.AddItem( walkdirection );
++	tabLocomotion.AddItem( physicalCrouch );
++	tabLocomotion.AddItem( menuDistance );
++	tabLocomotion.AddItem( menuScale );
++	tabLocomotion.AddItem( noteLocomotion );
 +
-+	// Locomotion & Comfort column
-+	labelLocomotion.SetCoord( lx, ly );
-+	ly += 40;
++	// ==========================================
++	// Tab 2: Weapons & Combat
++	// ==========================================
++	headerWeapons.szName = L( "Weapons & Combat Ergonomics" );
++	headerWeapons.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	headerWeapons.colorBase = uiColorHelp;
+ 
+-	// Immersion & Weapon controls
+ 	lasersight.SetNameAndStatus( L( "3D Weapon Laser Sight" ), L( "Visible laser pointer projected from weapon barrel" ) );
+-	headtorch.SetNameAndStatus( L( "Head-Mounted Flashlight" ), L( "Flashlight attaches to head following gaze direction" ) );
+-	twohanded.SetNameAndStatus( L( "Two-Handed Stabilization" ), L( "Hold secondary hand grip near weapon to stabilize aim" ) );
++	headtorch.SetNameAndStatus( L( "Head-Mounted Flashlight" ), L( "Flashlight attaches to head following gaze direction (HL2:VR style)" ) );
++	twohanded.SetNameAndStatus( L( "Two-Handed Stabilization" ), L( "Hold secondary hand grip near weapon receiver to steady recoil" ) );
+ 	lefthanded.SetNameAndStatus( L( "Left-Handed Primary Weapon" ), L( "Hold primary weapon in left hand" ) );
+-	haptics.SetNameAndStatus( L( "Haptic Vibration Feedback" ), L( "Tactile recoil and environmental sensations in controllers" ) );
+-	pointerHud.SetNameAndStatus( L( "Menu Laser Pointer" ), L( "Interact with VR menus using laser pointer virtual cursor" ) );
+-	audioHrtf.SetNameAndStatus( L( "3D Binaural HRTF Audio" ), L( "Head-related spatial audio and rear pinna shadowing" ) );
++	proximityScope.SetNameAndStatus( L( "Proximity Optical Scope" ), L( "Auto-zoom Crossbow/357 Magnum when brought close to headset" ) );
++	meleeSwing.SetNameAndStatus( L( "Crowbar Physical Swing" ), L( "Physical swing motion triggers Crowbar melee attacks" ) );
+ 
+-	// Hands & Skeletal Presence
+-	labelHands.szName = L( "Hands & Presence" );
+-	labelHands.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
+-	labelHands.colorBase = uiColorHelp;
++	weaponPitch.SetNameAndStatus( L( "Weapon Barrel Pitch Offset" ), L( "Adjust weapon barrel angle in degrees (-30 to +30)" ) );
++	weaponPitch.Setup( -30.0f, 30.0f, 1.0f );
+ 
+-	fingerCurling.SetNameAndStatus( L( "Articulated Finger Curling" ), L( "Continuous finger flexing driven by trigger and grip analog axes" ) );
+-	offhandRender.SetNameAndStatus( L( "Off-Hand 6DoF Presence" ), L( "Render independent secondary hand tracked in 6DoF world space" ) );
++	calibrationStick.SetNameAndStatus( L( "Live Stick 6DoF Calibrator" ), L( "Calibrate weapon 6DoF offsets & angles live in-game with thumbstick" ) );
 +
-+	smoothturn.SetCoord( lx, ly );
-+	ly += 45;
++	btnDumpProfile.szName = L( "Dump Weapon Profile (JSON)" );
++	btnDumpProfile.onReleased = VoidCb( &CMenuVR::DumpProfileCb );
++	btnDumpProfile.colorBase = uiInputFgColor;
++	btnDumpProfile.colorFocus = uiPromptFocusColor;
 +
-+	snapAngle.SetRect( lx, ly + 15, 230, 30 );
-+	ly += 65;
++	noteWeapons.szName = L( "Live Calibrator: Check box, close menu, flick thumbstick L/R for axis, U/D for value." );
++	noteWeapons.iFlags = QMF_INACTIVE;
++	noteWeapons.colorBase = PackRGBA( 160, 160, 160, 255 );
 +
-+	walkdirection.SetCoord( lx, ly );
-+	ly += 55;
++	tabWeapons.AddItem( headerWeapons );
++	tabWeapons.AddItem( lasersight );
++	tabWeapons.AddItem( headtorch );
++	tabWeapons.AddItem( twohanded );
++	tabWeapons.AddItem( lefthanded );
++	tabWeapons.AddItem( proximityScope );
++	tabWeapons.AddItem( meleeSwing );
++	tabWeapons.AddItem( weaponPitch );
++	tabWeapons.AddItem( calibrationStick );
++	tabWeapons.AddItem( btnDumpProfile );
++	tabWeapons.AddItem( noteWeapons );
 +
-+	// Weapons & Flashlight
-+	labelWeapons.SetCoord( lx, ly );
-+	ly += 35;
++	// ==========================================
++	// Tab 3: Presence & Audio
++	// ==========================================
++	headerPresence.szName = L( "Immersion, Audio & Calibration" );
++	headerPresence.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	headerPresence.colorBase = uiColorHelp;
+ 
+-	// Calibration & World scale sliders
+-	weaponPitch.SetNameAndStatus( L( "Weapon Pitch Offset" ), L( "Adjust weapon barrel angle in degrees (-30 to +30)" ) );
+-	weaponPitch.Setup( -30.0f, 30.0f, 1.0f );
++	fingerCurling.SetNameAndStatus( L( "Articulated Finger Curling" ), L( "Continuous finger flexing driven by trigger and grip analog axes" ) );
++	offhandRender.SetNameAndStatus( L( "Off-Hand 6DoF Tracked Presence" ), L( "Render independent secondary hand tracked in 6DoF world space" ) );
++	gestureUse.SetNameAndStatus( L( "Touch-to-Use Hand Gesture" ), L( "Extend secondary hand near buttons and objects to interact" ) );
++	haptics.SetNameAndStatus( L( "Haptic Vibration Feedback" ), L( "Tactile recoil and environmental sensations in controllers" ) );
++	pointerHud.SetNameAndStatus( L( "Menu Laser Pointer" ), L( "Interact with VR menus using laser pointer virtual cursor" ) );
++	audioHrtf.SetNameAndStatus( L( "3D Binaural HRTF Spatial Audio" ), L( "Head-related spatial audio with rear pinna acoustic shadowing" ) );
+ 
+-	worldscale.SetNameAndStatus( L( "VR World Scale" ), L( "World scale units per meter (default: 40)" ) );
++	worldscale.SetNameAndStatus( L( "VR World Scale (units/m)" ), L( "World scale units per meter (OpenXR 6DoF standard: 40)" ) );
+ 	worldscale.Setup( 20.0f, 60.0f, 1.0f );
+ 
+-	heightAdjust.SetNameAndStatus( L( "Player Height Offset" ), L( "Vertical player height calibration (-20 to +20)" ) );
++	heightAdjust.SetNameAndStatus( L( "Player Height Calibration" ), L( "Vertical player height calibration (-20 to +20)" ) );
+ 	heightAdjust.Setup( -20.0f, 20.0f, 1.0f );
+ 
+-	menuDistance.SetNameAndStatus( L( "Menu Quad Distance" ), L( "Distance in meters of floating 2D menu quad (1.0 to 3.5m)" ) );
+-	menuDistance.Setup( 1.0f, 3.5f, 0.1f );
+-
+-	menuScale.SetNameAndStatus( L( "Menu Quad Scale" ), L( "Width in meters of floating 2D menu quad (1.0 to 3.0m)" ) );
+-	menuScale.Setup( 1.0f, 3.0f, 0.1f );
+-
+-	// Side buttons
+-	AddItem( banner );
+-	AddButton( L( "Done" ), nullptr, PC_DONE, VoidCb( &CMenuVR::SaveAndPopMenu ) );
+-	AddButton( L( "GameUI_Cancel" ), nullptr, PC_CANCEL, VoidCb( &CMenuFramework::Hide ) );
+-
+-	// Controls registration
+-	AddItem( labelLocomotion );
+-	AddItem( smoothturn );
+-	AddItem( snapAngle );
+-	AddItem( walkdirection );
+-
+-	AddItem( labelWeapons );
+-	AddItem( lasersight );
+-	AddItem( headtorch );
+-	AddItem( twohanded );
+-	AddItem( lefthanded );
+-	AddItem( haptics );
+-	AddItem( pointerHud );
+-	AddItem( audioHrtf );
+-
+-	AddItem( labelHands );
+-	AddItem( fingerCurling );
+-	AddItem( offhandRender );
+-
+-	AddItem( labelCalibration );
+-	AddItem( weaponPitch );
+-	AddItem( worldscale );
+-	AddItem( heightAdjust );
+-	AddItem( menuDistance );
+-	AddItem( menuScale );
++	notePresence.szName = L( "Note: 3D Binaural HRTF audio requires headphones for spatial acoustic shadowing." );
++	notePresence.iFlags = QMF_INACTIVE;
++	notePresence.colorBase = PackRGBA( 160, 160, 160, 255 );
 +
-+	lasersight.SetCoord( lx, ly );
-+	ly += 38;
++	tabPresence.AddItem( headerPresence );
++	tabPresence.AddItem( fingerCurling );
++	tabPresence.AddItem( offhandRender );
++	tabPresence.AddItem( gestureUse );
++	tabPresence.AddItem( haptics );
++	tabPresence.AddItem( pointerHud );
++	tabPresence.AddItem( audioHrtf );
++	tabPresence.AddItem( worldscale );
++	tabPresence.AddItem( heightAdjust );
++	tabPresence.AddItem( notePresence );
 +
-+	headtorch.SetCoord( lx, ly );
-+	ly += 38;
++	// ==========================================
++	// Tab 4: VR Debug (Dedicated Tab)
++	// ==========================================
++	headerDebug.szName = L( "VR Diagnostics, Alignment & Runtime Debug" );
++	headerDebug.iFlags = QMF_INACTIVE | QMF_DROPSHADOW;
++	headerDebug.colorBase = uiColorHelp;
 +
-+	lefthanded.SetCoord( lx, ly );
-+	ly += 38;
++	debugImpacts.SetNameAndStatus( L( "3D Bullet Impact Markers" ), L( "Draw 3D crosshairs and flight tracers at bullet impact points" ) );
++	testHands.SetNameAndStatus( L( "Simulate Hand Controllers" ), L( "Simulate controller pose when physical tracking unavailable" ) );
++	testHead.SetNameAndStatus( L( "Simulate Head Gaze (6DoF)" ), L( "Simulate HMD pitch/yaw/roll for headless CI testing" ) );
++	testFingerCurl.SetNameAndStatus( L( "Simulate Finger Curling" ), L( "Simulate analog touch curling for automated regression tests" ) );
 +
-+	haptics.SetCoord( lx, ly );
-+	ly += 38;
++	btnRecordImpact.szName = L( "Record Impact Sample" );
++	btnRecordImpact.onReleased = VoidCb( &CMenuVR::RecordImpactCb );
++	btnRecordImpact.colorBase = uiInputFgColor;
++	btnRecordImpact.colorFocus = uiPromptFocusColor;
 +
-+	pointerHud.SetCoord( lx, ly );
++	btnClearImpacts.szName = L( "Clear Impact Markers" );
++	btnClearImpacts.onReleased = VoidCb( &CMenuVR::ClearImpactsCb );
++	btnClearImpacts.colorBase = uiInputFgColor;
++	btnClearImpacts.colorFocus = uiPromptFocusColor;
 +
-+	// Right column: Calibration & World Scale
-+	int rx = 660;
-+	int ry = 230;
++	btnResetCalibration.szName = L( "Reset VR Calibration" );
++	btnResetCalibration.onReleased = VoidCb( &CMenuVR::ResetCalibrationCb );
++	btnResetCalibration.colorBase = uiInputFgColor;
++	btnResetCalibration.colorFocus = uiPromptFocusColor;
 +
-+	labelCalibration.SetCoord( rx, ry );
-+	ry += 60;
++	btnConsole.szName = L( "Open Developer Console" );
++	btnConsole.onReleased = VoidCb( &CMenuVR::OpenConsoleCb );
++	btnConsole.colorBase = uiInputFgColor;
++	btnConsole.colorFocus = uiPromptFocusColor;
 +
-+	weaponPitch.SetCoord( rx, ry );
-+	weaponPitch.size.w = 280;
-+	ry += 80;
++	lblDeviceProfile.szName = L( "Target: OpenXR 6DoF Headset" );
++	lblDeviceProfile.iFlags = QMF_INACTIVE;
++	lblDeviceProfile.colorBase = uiColorHelp;
 +
-+	worldscale.SetCoord( rx, ry );
-+	worldscale.size.w = 280;
-+	ry += 80;
++	lblTrackingInfo.szName = L( "Tracking: 6DoF HMD + Controllers" );
++	lblTrackingInfo.iFlags = QMF_INACTIVE;
++	lblTrackingInfo.colorBase = PackRGBA( 200, 200, 200, 255 );
 +
-+	heightAdjust.SetCoord( rx, ry );
-+	heightAdjust.size.w = 280;
++	lblRoomscaleInfo.szName = L( "Crouch: Squat <= -0.28m (-18u)" );
++	lblRoomscaleInfo.iFlags = QMF_INACTIVE;
++	lblRoomscaleInfo.colorBase = PackRGBA( 200, 200, 200, 255 );
 +
-+	GetConfig();
-+}
++	lblRendererInfo.szName = L( "Renderer: ref_gl_vr Stereo FBO" );
++	lblRendererInfo.iFlags = QMF_INACTIVE;
++	lblRendererInfo.colorBase = PackRGBA( 200, 200, 200, 255 );
 +
-+ADD_MENU( menu_vr, CMenuVR, UI_VR_Menu );
++	lblImpactsInfo.szName = L( "Tracers: Crosshair + Ballistics" );
++	lblImpactsInfo.iFlags = QMF_INACTIVE;
++	lblImpactsInfo.colorBase = PackRGBA( 200, 200, 200, 255 );
++
++	tabDebug.AddItem( headerDebug );
++	tabDebug.AddItem( debugImpacts );
++	tabDebug.AddItem( testHands );
++	tabDebug.AddItem( testHead );
++	tabDebug.AddItem( testFingerCurl );
++	tabDebug.AddItem( btnRecordImpact );
++	tabDebug.AddItem( btnClearImpacts );
++	tabDebug.AddItem( btnResetCalibration );
++	tabDebug.AddItem( btnConsole );
++	tabDebug.AddItem( lblDeviceProfile );
++	tabDebug.AddItem( lblTrackingInfo );
++	tabDebug.AddItem( lblRoomscaleInfo );
++	tabDebug.AddItem( lblRendererInfo );
++	tabDebug.AddItem( lblImpactsInfo );
+ }
+ 
+ /*
+@@ -245,80 +473,121 @@ CMenuVR::_VidInit
+ */
+ void CMenuVR::_VidInit( void )
+ {
+-	int lx = 330;
+-	int ly = 230;
++	// TabView placed in main canvas area (X=235 to 990, Y=210 to 715)
++	tabView.SetCoord( 235, 210 );
++	tabView.SetSize( 755, 505 );
++
++	// Content dimensions inside each tab
++	tabLocomotion.SetCoord( 0, 0 );
++	tabLocomotion.SetSize( 755, 460 );
++
++	tabWeapons.SetCoord( 0, 0 );
++	tabWeapons.SetSize( 755, 460 );
++
++	tabPresence.SetCoord( 0, 0 );
++	tabPresence.SetSize( 755, 460 );
++
++	tabDebug.SetCoord( 0, 0 );
++	tabDebug.SetSize( 755, 460 );
++
++	// ==========================================
++	// Tab 1: Locomotion & Comfort Layout
++	// ==========================================
++	headerLocomotion.SetCoord( 25, 20 );
++
++	// Left column (X = 25)
++	smoothturn.SetCoord( 25, 60 );
++	walkdirection.SetCoord( 25, 110 );
++	physicalCrouch.SetCoord( 25, 160 );
+ 
+-	// Locomotion & Comfort column
+-	labelLocomotion.SetCoord( lx, ly );
+-	ly += 40;
++	// CMenuSpinControl renders title ~24px above box; placing box at Y=235 puts title at Y=211
++	snapAngle.SetRect( 25, 235, 220, 26 );
+ 
+-	smoothturn.SetCoord( lx, ly );
+-	ly += 45;
++	// Right column (X = 390)
++	// CMenuSlider renders title ~24px above track; 70px vertical steps ensure clear spacing
++	menuDistance.SetCoord( 390, 85 );
++	menuDistance.size.w = 320;
+ 
+-	snapAngle.SetRect( lx, ly + 15, 230, 30 );
+-	ly += 65;
++	menuScale.SetCoord( 390, 165 );
++	menuScale.size.w = 320;
+ 
+-	walkdirection.SetCoord( lx, ly );
+-	ly += 55;
++	noteLocomotion.SetCoord( 25, 290 );
+ 
+-	// Weapons & Flashlight
+-	labelWeapons.SetCoord( lx, ly );
+-	ly += 35;
++	// ==========================================
++	// Tab 2: Weapons & Combat Layout
++	// ==========================================
++	headerWeapons.SetCoord( 25, 20 );
+ 
+-	lasersight.SetCoord( lx, ly );
+-	ly += 38;
++	// Left column (X = 25)
++	lasersight.SetCoord( 25, 60 );
++	headtorch.SetCoord( 25, 105 );
++	twohanded.SetCoord( 25, 150 );
++	lefthanded.SetCoord( 25, 195 );
++	proximityScope.SetCoord( 25, 240 );
++	meleeSwing.SetCoord( 25, 285 );
+ 
+-	headtorch.SetCoord( lx, ly );
+-	ly += 38;
++	// Right column (X = 390)
++	weaponPitch.SetCoord( 390, 85 );
++	weaponPitch.size.w = 320;
+ 
+-	twohanded.SetCoord( lx, ly );
+-	ly += 38;
++	calibrationStick.SetCoord( 390, 150 );
+ 
+-	lefthanded.SetCoord( lx, ly );
+-	ly += 38;
++	btnDumpProfile.SetCoord( 390, 205 );
++	btnDumpProfile.SetSize( 280, 24 );
+ 
+-	haptics.SetCoord( lx, ly );
+-	ly += 38;
++	noteWeapons.SetCoord( 25, 345 );
+ 
+-	pointerHud.SetCoord( lx, ly );
+-	ly += 38;
++	// ==========================================
++	// Tab 3: Presence & Audio Layout
++	// ==========================================
++	headerPresence.SetCoord( 25, 20 );
+ 
+-	audioHrtf.SetCoord( lx, ly );
++	// Left column (X = 25)
++	fingerCurling.SetCoord( 25, 60 );
++	offhandRender.SetCoord( 25, 105 );
++	gestureUse.SetCoord( 25, 150 );
++	haptics.SetCoord( 25, 195 );
++	pointerHud.SetCoord( 25, 240 );
++	audioHrtf.SetCoord( 25, 285 );
+ 
+-	// Right column: Hands & Presence followed by Calibration & World Scale
+-	int rx = 660;
+-	int ry = 230;
++	// Right column (X = 390)
++	worldscale.SetCoord( 390, 85 );
++	worldscale.size.w = 320;
+ 
+-	labelHands.SetCoord( rx, ry );
+-	ry += 40;
++	heightAdjust.SetCoord( 390, 165 );
++	heightAdjust.size.w = 320;
+ 
+-	fingerCurling.SetCoord( rx, ry );
+-	ry += 38;
++	notePresence.SetCoord( 25, 345 );
+ 
+-	offhandRender.SetCoord( rx, ry );
+-	ry += 45;
++	// ==========================================
++	// Tab 4: VR Debug Layout (Dedicated Tab)
++	// ==========================================
++	headerDebug.SetCoord( 25, 20 );
+ 
+-	labelCalibration.SetCoord( rx, ry );
+-	ry += 40;
++	// Left column (X = 25): Debug toggles & action buttons
++	debugImpacts.SetCoord( 25, 55 );
++	testHands.SetCoord( 25, 95 );
++	testHead.SetCoord( 25, 135 );
++	testFingerCurl.SetCoord( 25, 175 );
+ 
+-	weaponPitch.SetCoord( rx, ry );
+-	weaponPitch.size.w = 280;
+-	ry += 55;
++	btnRecordImpact.SetCoord( 25, 215 );
++	btnRecordImpact.SetSize( 280, 24 );
+ 
+-	worldscale.SetCoord( rx, ry );
+-	worldscale.size.w = 280;
+-	ry += 55;
++	btnClearImpacts.SetCoord( 25, 245 );
++	btnClearImpacts.SetSize( 280, 24 );
+ 
+-	heightAdjust.SetCoord( rx, ry );
+-	heightAdjust.size.w = 280;
+-	ry += 55;
++	btnResetCalibration.SetCoord( 25, 275 );
++	btnResetCalibration.SetSize( 280, 24 );
+ 
+-	menuDistance.SetCoord( rx, ry );
+-	menuDistance.size.w = 280;
+-	ry += 55;
++	btnConsole.SetCoord( 25, 305 );
++	btnConsole.SetSize( 280, 24 );
+ 
+-	menuScale.SetCoord( rx, ry );
+-	menuScale.size.w = 280;
++	// Right column (X = 380): Device & diagnostic telemetry
++	lblDeviceProfile.SetCoord( 380, 55 );
++	lblTrackingInfo.SetCoord( 380, 95 );
++	lblRoomscaleInfo.SetCoord( 380, 135 );
++	lblRendererInfo.SetCoord( 380, 175 );
++	lblImpactsInfo.SetCoord( 380, 215 );
+ 
+ 	GetConfig();
+ }
