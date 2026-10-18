@@ -17,6 +17,8 @@ GNU General Public License for more details.
 #include "xr_core.h"
 #include "xr_swapchain.h"
 #include "xr_input.h"
+#include "xr_profile.h"
+#include "pm_defs.h"
 
 int g_vr_eye = -1;
 static cvar_t *vr_fake_stereo = NULL;
@@ -1218,66 +1220,199 @@ static void R_DrawEntitiesOnList( void )
 				handBase[1] = RI.rvp.vieworigin[1] + world_dy;
 				handBase[2] = RI.rvp.vieworigin[2] + world_dz;
 
-				float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + 18.0f;
-				float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
-				float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f);
-
-				vec3_t fwd, rt, up;
-				AngleVectors( worldAngles, fwd, rt, up );
-
-				qboolean valid_start = false;
-				if( tr.viewent && !VectorIsNull( tr.viewent->attachment[0] ))
+				int w_att = 0;
+				vec3_t w_fallback = { 0.0f, 18.0f, 0.0f };
+				vec3_t w_grip = {0};
+				if( tr.viewent && tr.viewent->model && tr.viewent->model->name[0] )
 				{
-					VectorCopy( tr.viewent->attachment[0], start );
-
-					// If attachment[0] is too far from handBase (e.g. stale player simorg from events),
-					// or unprojected (identical to viewent->origin within 3 units), fallback to projected hand origin
-					float dist = VectorDistance( start, tr.viewent->origin );
-					float distHand = VectorDistance( start, handBase );
-					if( dist < 3.0f || distHand > 45.0f )
-					{
-						VectorMA( tr.viewent->origin, 18.0f, forward, start );
-						if( VectorDistance( start, handBase ) > 45.0f )
-						{
-							VectorMA( handBase, off_fwd, fwd, start );
-							VectorMA( start, off_rt, rt, start );
-							VectorMA( start, off_up, up, start );
-						}
-					}
-					valid_start = true;
+					XR_GetWeaponMuzzleParams( tr.viewent->model->name, &w_att, w_fallback );
+					XR_GetWeaponGripOffset( tr.viewent->model->name, w_grip );
 				}
-				else if( tr.viewent && !VectorIsNull( tr.viewent->origin ))
+
+				// Suppress laser sight on melee and throwable weapons without barrel (w_att == -1)
+				if( w_att != -1 )
 				{
-					if( VectorDistance( tr.viewent->origin, handBase ) <= 45.0f )
+					float barrel_len = (w_fallback[1] > 0.0f) ? w_fallback[1] : 18.0f;
+					float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0] + barrel_len;
+					float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + w_grip[1];
+					float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
+
+					vec3_t fwd, rt, up;
+					AngleVectors( worldAngles, fwd, rt, up );
+
+					qboolean valid_start = false;
+					if( w_att >= 0 && w_att < 4 && tr.viewent && !VectorIsNull( tr.viewent->attachment[w_att] ))
 					{
-						VectorMA( tr.viewent->origin, 18.0f, forward, start );
+						VectorCopy( tr.viewent->attachment[w_att], start );
+
+						// If attachment is too far from handBase (e.g. stale player simorg from events),
+						// or unprojected (identical to viewent->origin within 3 units), fallback to projected hand origin
+						float dist = VectorDistance( start, tr.viewent->origin );
+						float distHand = VectorDistance( start, handBase );
+						if( dist < 3.0f || distHand > 45.0f )
+						{
+							VectorMA( tr.viewent->origin, barrel_len, forward, start );
+							if( VectorDistance( start, handBase ) > 45.0f )
+							{
+								VectorMA( handBase, off_fwd, fwd, start );
+								VectorMA( start, off_rt, rt, start );
+								VectorMA( start, off_up, up, start );
+							}
+						}
 						valid_start = true;
 					}
+					else if( tr.viewent && !VectorIsNull( tr.viewent->origin ))
+					{
+						if( VectorDistance( tr.viewent->origin, handBase ) <= 45.0f )
+						{
+							VectorMA( tr.viewent->origin, 18.0f, forward, start );
+							valid_start = true;
+						}
+					}
+
+					if( !valid_start )
+					{
+						VectorMA( handBase, off_fwd, fwd, start );
+						VectorMA( start, off_rt, rt, start );
+						VectorMA( start, off_up, up, start );
+					}
+					vec3_t endTarget;
+					VectorMA( start, 4096.0f, forward, endTarget );
+
+					qboolean laserHit = false;
+					vec3_t laserHitNormal;
+					VectorSet( laserHitNormal, 0.0f, 0.0f, 1.0f );
+
+					if( gEngfuncs.CL_TraceLine )
+					{
+						pmtrace_t trLaser = gEngfuncs.CL_TraceLine( start, endTarget, PM_STUDIO_BOX );
+						if( trLaser.fraction < 1.0f )
+						{
+							VectorCopy( trLaser.endpos, end );
+							laserHit = true;
+							if( !VectorIsNull( trLaser.plane.normal ) )
+								VectorCopy( trLaser.plane.normal, laserHitNormal );
+							else
+								VectorNegate( forward, laserHitNormal );
+						}
+						else
+						{
+							VectorCopy( endTarget, end );
+						}
+					}
+					else
+					{
+						VectorCopy( endTarget, end );
+					}
+
+					pglDisable( GL_TEXTURE_2D );
+					pglEnable( GL_BLEND );
+					pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
+					pglLineWidth( 2.5f );
+					pglColor4f( 1.0f, 0.15f, 0.15f, 0.85f );
+
+					pglBegin( GL_LINES );
+					pglVertex3fv( start );
+					pglVertex3fv( end );
+					pglEnd();
+
+					// If laser hit surface, draw a glowing 3D red reticle dot on the impact surface
+					if( laserHit )
+					{
+						vec3_t lu, lv;
+						VectorVectors( laserHitNormal, lu, lv );
+						float rDot = 1.8f;
+
+						pglLineWidth( 2.5f );
+						pglColor4f( 1.0f, 0.2f, 0.2f, 0.95f );
+						pglBegin( GL_LINES );
+						pglVertex3f( end[0] - lu[0]*rDot, end[1] - lu[1]*rDot, end[2] - lu[2]*rDot );
+						pglVertex3f( end[0] + lu[0]*rDot, end[1] + lu[0]*rDot, end[2] + lu[2]*rDot );
+						pglVertex3f( end[0] - lv[0]*rDot, end[1] - lv[1]*rDot, end[2] - lv[2]*rDot );
+						pglVertex3f( end[0] + lv[0]*rDot, end[1] + lv[1]*rDot, end[2] + lv[2]*rDot );
+						pglEnd();
+					}
+
+					pglDisable( GL_BLEND );
+					pglEnable( GL_TEXTURE_2D );
+					pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 				}
+			}
+		}
 
-				if( !valid_start )
-				{
-					VectorMA( handBase, off_fwd, fwd, start );
-					VectorMA( start, off_rt, rt, start );
-					VectorMA( start, off_up, up, start );
-				}
-				VectorMA( start, 2048.0f, forward, end );
+		// 3D Visual Bullet Impact Markers for VR Sight Alignment & Ballistics Verification
+		if( XR_IsActive() && vr_debug_impacts && vr_debug_impacts->value > 0.0f && g_vrNumDebugImpacts > 0 )
+		{
+			double now = gp_host ? gp_host->realtime : 0.0;
+			pglDisable( GL_TEXTURE_2D );
+			pglEnable( GL_BLEND );
+			pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
 
-				pglDisable( GL_TEXTURE_2D );
-				pglEnable( GL_BLEND );
-				pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
-				pglLineWidth( 2.5f );
-				pglColor4f( 1.0f, 0.15f, 0.15f, 0.85f );
+			for( int i = 0; i < g_vrNumDebugImpacts; i++ )
+			{
+				vr_debug_impact_t *imp = &g_vrDebugImpacts[i];
+				if( imp->expire_time <= now )
+					continue;
 
+				float alpha = (float)((imp->expire_time - now) / 5.0);
+				if( alpha < 0.0f ) alpha = 0.0f;
+				if( alpha > 1.0f ) alpha = 1.0f;
+
+				vec3_t norm;
+				if( !VectorIsNull( imp->normal ) )
+					VectorCopy( imp->normal, norm );
+				else
+					VectorSet( norm, 0.0f, 0.0f, 1.0f );
+
+				vec3_t u, v;
+				VectorVectors( norm, u, v );
+
+				float crossR = 4.0f;
+				float diamondR = 2.0f;
+
+				// 1. Bold Lime-Green 3D Impact Crosshair on surface
+				pglLineWidth( 3.0f );
+				pglColor4f( 0.1f, 1.0f, 0.2f, alpha * 0.95f );
 				pglBegin( GL_LINES );
-				pglVertex3fv( start );
-				pglVertex3fv( end );
+				pglVertex3f( imp->end[0] - u[0]*crossR, imp->end[1] - u[1]*crossR, imp->end[2] - u[2]*crossR );
+				pglVertex3f( imp->end[0] + u[0]*crossR, imp->end[1] + u[1]*crossR, imp->end[2] + u[2]*crossR );
+				pglVertex3f( imp->end[0] - v[0]*crossR, imp->end[1] - v[1]*crossR, imp->end[2] - v[2]*crossR );
+				pglVertex3f( imp->end[0] + v[0]*crossR, imp->end[1] + v[1]*crossR, imp->end[2] + v[2]*crossR );
 				pglEnd();
 
-				pglDisable( GL_BLEND );
-				pglEnable( GL_TEXTURE_2D );
-				pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+				// 2. Cyan/Turquoise Diamond Reticle around impact point
+				pglLineWidth( 2.0f );
+				pglColor4f( 0.2f, 1.0f, 0.8f, alpha * 0.85f );
+				pglBegin( GL_LINE_LOOP );
+				pglVertex3f( imp->end[0] + u[0]*diamondR, imp->end[1] + u[1]*diamondR, imp->end[2] + u[2]*diamondR );
+				pglVertex3f( imp->end[0] + v[0]*diamondR, imp->end[1] + v[1]*diamondR, imp->end[2] + v[2]*diamondR );
+				pglVertex3f( imp->end[0] - u[0]*diamondR, imp->end[1] - u[1]*diamondR, imp->end[2] - u[2]*diamondR );
+				pglVertex3f( imp->end[0] - v[0]*diamondR, imp->end[1] - v[1]*diamondR, imp->end[2] - v[2]*diamondR );
+				pglEnd();
+
+				// 3. Orange Surface Normal Vector Spike
+				pglLineWidth( 2.0f );
+				pglColor4f( 1.0f, 0.7f, 0.1f, alpha * 0.80f );
+				pglBegin( GL_LINES );
+				pglVertex3fv( imp->end );
+				pglVertex3f( imp->end[0] + norm[0]*8.0f, imp->end[1] + norm[1]*8.0f, imp->end[2] + norm[2]*8.0f );
+				pglEnd();
+
+				// 4. Tracer Flight Line connecting Muzzle to Impact Point
+				if( !VectorIsNull( imp->start ) && VectorDistance( imp->start, imp->end ) > 10.0f )
+				{
+					pglLineWidth( 1.5f );
+					pglColor4f( 0.2f, 1.0f, 0.5f, alpha * 0.40f );
+					pglBegin( GL_LINES );
+					pglVertex3fv( imp->start );
+					pglVertex3fv( imp->end );
+					pglEnd();
+				}
 			}
+
+			pglDisable( GL_BLEND );
+			pglEnable( GL_TEXTURE_2D );
+			pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 		}
 
 		if( XR_IsActive() && XR_IsQuadHudActive() )

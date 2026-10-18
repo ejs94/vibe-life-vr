@@ -14,6 +14,7 @@ GNU General Public License for more details.
 */
 
 #include "gl_local.h"
+#include "xr_core.h"
 #include "pm_local.h"
 #include "sprite.h"
 #include "studio.h"
@@ -484,6 +485,18 @@ void R_DrawSpriteModel( cl_entity_t *e )
 		break;
 	case SPR_FWD_PARALLEL_UPRIGHT:
 	{
+#ifdef XASH_OPENXR
+		if( XR_IsActive() )
+		{
+			// In VR, head roll and pitch distort eye vforward, causing upright sprites (smoke, fire, explosions)
+			// to shear, spin, or prematurely vanish. Anchor billboarding to the player's horizontal view yaw.
+			float yaw_rad = DEG2RAD( RI.rvp.viewangles[YAW] );
+			VectorSet( v_up, 0.0f, 0.0f, 1.0f );
+			VectorSet( v_right, sinf( yaw_rad ), -cosf( yaw_rad ), 0.0f );
+			VectorNormalize( v_right );
+			break;
+		}
+#endif
 		float dot = RI.vforward[2];
 		if(( dot > 0.999848f ) || ( dot < -0.999848f ))	// cos(1 degree) = 0.999848
 			return; // invisible
