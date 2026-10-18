@@ -1564,18 +1564,6 @@ static void R_StudioCalcAttachments( void )
 		Matrix3x4_VectorTransform( g_studio.lighttransform[pAtt[i].bone], pAtt[i].org, RI.currententity->attachment[i] );
 	}
 
-#ifdef XASH_OPENXR
-	if( RI.currententity == tr.viewent && XR_IsActive() )
-	{
-		vec3_t muzzleOffset, aimAngles;
-		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
-		{
-			vec3_t canonicalMuzzle;
-			VectorAdd( RI.rvp.vieworigin, muzzleOffset, canonicalMuzzle );
-			VectorCopy( canonicalMuzzle, RI.currententity->attachment[0] );
-		}
-	}
-#endif
 }
 
 /*

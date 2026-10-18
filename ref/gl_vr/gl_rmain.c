@@ -1211,7 +1211,15 @@ static void R_DrawEntitiesOnList( void )
 					AngleVectors( aimAngles, forward, NULL, NULL );
 
 					// Start laser sight precisely at physical weapon muzzle tip
-					VectorAdd( RI.rvp.vieworigin, muzzleOffset, start );
+					if( w_att >= 0 && w_att < 4 && tr.viewent && !VectorIsNull( tr.viewent->attachment[w_att] ) &&
+					    VectorDistance( tr.viewent->attachment[w_att], RI.rvp.vieworigin ) < 80.0f )
+					{
+						VectorCopy( tr.viewent->attachment[w_att], start );
+					}
+					else
+					{
+						VectorAdd( RI.rvp.vieworigin, muzzleOffset, start );
+					}
 
 					vec3_t endTarget;
 					VectorMA( start, 4096.0f, forward, endTarget );

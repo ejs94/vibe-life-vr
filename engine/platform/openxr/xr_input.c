@@ -1285,19 +1285,28 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
 
     if( out_muzzle_offset )
     {
-        vec3_t forward, right, up;
-        AngleVectors( local_angles, forward, right, up );
+        // 1. If viewmodel already has attachment computed by studio bone transformation, use it directly
+        if( muzzle_att >= 0 && muzzle_att < 4 && clgame.viewent.model && !VectorIsNull( clgame.viewent.attachment[muzzle_att] ) &&
+            VectorDistance( clgame.viewent.attachment[muzzle_att], refState.vieworg ) < 80.0f )
+        {
+            VectorSubtract( clgame.viewent.attachment[muzzle_att], refState.vieworg, out_muzzle_offset );
+        }
+        else
+        {
+            vec3_t forward, right, up;
+            AngleVectors( local_angles, forward, right, up );
 
-        // Include weapon grip offsets and barrel extension so ballistics match viewmodel and laser sight
-        float barrel_len = (muzzle_fallback[1] > 0.0f) ? muzzle_fallback[1] : 18.0f;
-        float barrel_up  = muzzle_fallback[2];
-        float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + grip_offset[0] + barrel_len;
-        float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + grip_offset[1] + muzzle_fallback[0];
-        float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + grip_offset[2] + barrel_up;
+            // Include weapon grip offsets and barrel extension so ballistics match viewmodel and laser sight
+            float barrel_len = (muzzle_fallback[1] > 0.0f) ? muzzle_fallback[1] : 18.0f;
+            float barrel_up  = muzzle_fallback[2];
+            float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + grip_offset[0] + barrel_len;
+            float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + grip_offset[1] + muzzle_fallback[0];
+            float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + grip_offset[2] + barrel_up;
 
-        out_muzzle_offset[0] = world_dx + forward[0] * off_fwd + right[0] * off_rt + up[0] * off_up;
-        out_muzzle_offset[1] = world_dy + forward[1] * off_fwd + right[1] * off_rt + up[1] * off_up;
-        out_muzzle_offset[2] = world_dz + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
+            out_muzzle_offset[0] = world_dx + forward[0] * off_fwd + right[0] * off_rt + up[0] * off_up;
+            out_muzzle_offset[1] = world_dy + forward[1] * off_fwd + right[1] * off_rt + up[1] * off_up;
+            out_muzzle_offset[2] = world_dz + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
+        }
     }
 
     return true;
@@ -1307,7 +1316,24 @@ qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle )
 {
     if (!g_xrSessionRunning) return false;
 
-    // Direct canonical calculation from 6DoF hand pose and weapon muzzle calibration
+    int muzzle_att = 0;
+    vec3_t muzzle_fallback = { 0.0f, 18.0f, 0.0f };
+    if( clgame.viewent.model && clgame.viewent.model->name[0] )
+    {
+        XR_GetWeaponMuzzleParams( clgame.viewent.model->name, &muzzle_att, muzzle_fallback );
+    }
+
+    // 1. If viewmodel has a projected muzzle attachment point from studio bone transformation, prefer it
+    if( muzzle_att >= 0 && muzzle_att < 4 && clgame.viewent.model && !VectorIsNull( clgame.viewent.attachment[muzzle_att] ) )
+    {
+        if( VectorDistance( clgame.viewent.attachment[muzzle_att], refState.vieworg ) < 80.0f )
+        {
+            VectorCopy( clgame.viewent.attachment[muzzle_att], out_world_muzzle );
+            return true;
+        }
+    }
+
+    // 2. Direct canonical fallback calculation from 6DoF hand pose and weapon muzzle calibration
     vec3_t muzzleOffset, aimAngles;
     if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
     {

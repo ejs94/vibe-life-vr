@@ -105,7 +105,12 @@ static void V_SetupViewModel( void )
 	view->curstate.colormap = (info->topcolor & 0xFFFF)|((info->bottomcolor << 8) & 0xFFFF);
 	view->curstate.number = cl.playernum + 1;
 	view->index = cl.playernum + 1;
-	view->model = CL_ModelHandle( cl.local.viewmodel );
+	struct model_s *new_model = CL_ModelHandle( cl.local.viewmodel );
+	if( view->model != new_model )
+	{
+		memset( view->attachment, 0, sizeof( view->attachment ) );
+	}
+	view->model = new_model;
 	view->curstate.modelindex = cl.local.viewmodel;
 	view->curstate.sequence = cl.local.weaponsequence;
 	view->curstate.rendermode = kRenderNormal;
@@ -159,8 +164,11 @@ static void V_SetupViewModel( void )
 				VectorMA( view->origin, off_up,  up,  view->origin );
 			}
 
-			// Muzzle position directly at physical barrel tip
-			VectorAdd( refState.vieworg, muzzleOffset, view->attachment[0] );
+			// Fallback muzzle position only if not yet calculated by studio bone hierarchy
+			if( VectorIsNull( view->attachment[0] ) )
+			{
+				VectorAdd( refState.vieworg, muzzleOffset, view->attachment[0] );
+			}
 		}
 	}
 #endif

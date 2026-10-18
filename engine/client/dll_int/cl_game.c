@@ -2172,7 +2172,10 @@ static cl_entity_t *GAME_EXPORT CL_GetViewModel( void )
 		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
 		{
 			VectorCopy( aimAngles, clgame.viewent.angles );
-			VectorAdd( refState.vieworg, muzzleOffset, clgame.viewent.attachment[0] );
+			if( VectorIsNull( clgame.viewent.attachment[0] ) )
+			{
+				VectorAdd( refState.vieworg, muzzleOffset, clgame.viewent.attachment[0] );
+			}
 		}
 	}
 #endif
