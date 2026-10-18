@@ -1194,88 +1194,25 @@ static void R_DrawEntitiesOnList( void )
 #ifdef XASH_OPENXR
 		if( XR_IsActive() && (!vr_lasersight || vr_lasersight->value > 0.0f) )
 		{
-			vec3_t handOrigin, handAngles;
-			if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
+			vec3_t muzzleOffset, aimAngles;
+			if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ))
 			{
-				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
-				float turn_yaw = XR_GetPlayerTurnYaw();
-				float yaw_rad = DEG2RAD( turn_yaw );
-				float cy = cosf( yaw_rad );
-				float sy = sinf( yaw_rad );
-
-				float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
-				float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
-				float world_dz = handOrigin[2] * scale;
-
-				vec3_t worldAngles;
-				worldAngles[0] = handAngles[0];
-				worldAngles[1] = anglemod( handAngles[1] + turn_yaw );
-				worldAngles[2] = handAngles[2];
-
-				vec3_t forward, start, end;
-				AngleVectors( worldAngles, forward, NULL, NULL );
-
-				vec3_t handBase;
-				handBase[0] = RI.rvp.vieworigin[0] + world_dx;
-				handBase[1] = RI.rvp.vieworigin[1] + world_dy;
-				handBase[2] = RI.rvp.vieworigin[2] + world_dz;
-
 				int w_att = 0;
 				vec3_t w_fallback = { 0.0f, 18.0f, 0.0f };
-				vec3_t w_grip = {0};
 				if( tr.viewent && tr.viewent->model && tr.viewent->model->name[0] )
 				{
 					XR_GetWeaponMuzzleParams( tr.viewent->model->name, &w_att, w_fallback );
-					XR_GetWeaponGripOffset( tr.viewent->model->name, w_grip );
 				}
 
 				// Suppress laser sight on melee and throwable weapons without barrel (w_att == -1)
 				if( w_att != -1 )
 				{
-					float barrel_len = (w_fallback[1] > 0.0f) ? w_fallback[1] : 18.0f;
-					float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0] + barrel_len;
-					float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + w_grip[1];
-					float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
+					vec3_t forward, start, end;
+					AngleVectors( aimAngles, forward, NULL, NULL );
 
-					vec3_t fwd, rt, up;
-					AngleVectors( worldAngles, fwd, rt, up );
+					// Start laser sight precisely at physical weapon muzzle tip
+					VectorAdd( RI.rvp.vieworigin, muzzleOffset, start );
 
-					qboolean valid_start = false;
-					if( w_att >= 0 && w_att < 4 && tr.viewent && !VectorIsNull( tr.viewent->attachment[w_att] ))
-					{
-						VectorCopy( tr.viewent->attachment[w_att], start );
-
-						// If attachment is too far from handBase (e.g. stale player simorg from events),
-						// or unprojected (identical to viewent->origin within 3 units), fallback to projected hand origin
-						float dist = VectorDistance( start, tr.viewent->origin );
-						float distHand = VectorDistance( start, handBase );
-						if( dist < 3.0f || distHand > 45.0f )
-						{
-							VectorMA( tr.viewent->origin, barrel_len, forward, start );
-							if( VectorDistance( start, handBase ) > 45.0f )
-							{
-								VectorMA( handBase, off_fwd, fwd, start );
-								VectorMA( start, off_rt, rt, start );
-								VectorMA( start, off_up, up, start );
-							}
-						}
-						valid_start = true;
-					}
-					else if( tr.viewent && !VectorIsNull( tr.viewent->origin ))
-					{
-						if( VectorDistance( tr.viewent->origin, handBase ) <= 45.0f )
-						{
-							VectorMA( tr.viewent->origin, 18.0f, forward, start );
-							valid_start = true;
-						}
-					}
-
-					if( !valid_start )
-					{
-						VectorMA( handBase, off_fwd, fwd, start );
-						VectorMA( start, off_rt, rt, start );
-						VectorMA( start, off_up, up, start );
-					}
 					vec3_t endTarget;
 					VectorMA( start, 4096.0f, forward, endTarget );
 

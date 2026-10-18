@@ -1256,12 +1256,10 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
     float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
     float world_dz = handOrigin[2] * scale;
 
-    out_aim_angles[0] = handAngles[0];
-    out_aim_angles[1] = anglemod( handAngles[1] + turn_yaw );
-    out_aim_angles[2] = handAngles[2];
-
-    vec3_t forward, right, up;
-    AngleVectors( out_aim_angles, forward, right, up );
+    vec3_t local_angles;
+    local_angles[0] = handAngles[0];
+    local_angles[1] = anglemod( handAngles[1] + turn_yaw );
+    local_angles[2] = handAngles[2];
 
     // Query per-weapon calibration profile
     int muzzle_att = 0;
@@ -1276,19 +1274,31 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
         XR_GetWeaponPitchAdjust( clgame.viewent.model->name, &w_pitch, &w_yaw, &w_roll );
     }
 
-    out_aim_angles[0] += w_pitch;
-    out_aim_angles[1] = anglemod( out_aim_angles[1] + w_yaw );
-    out_aim_angles[2] += w_roll;
+    local_angles[0] += w_pitch;
+    local_angles[1] = anglemod( local_angles[1] + w_yaw );
+    local_angles[2] += w_roll;
 
-    // Include weapon grip offsets and barrel extension so ballistics match viewmodel and laser sight
-    float barrel_len = (muzzle_fallback[1] > 0.0f) ? muzzle_fallback[1] : 14.0f;
-    float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + grip_offset[0] + barrel_len;
-    float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + grip_offset[1];
-    float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + grip_offset[2];
+    if( out_aim_angles )
+    {
+        VectorCopy( local_angles, out_aim_angles );
+    }
 
-    out_muzzle_offset[0] = world_dx + forward[0] * off_fwd + right[0] * off_rt + up[0] * off_up;
-    out_muzzle_offset[1] = world_dy + forward[1] * off_fwd + right[1] * off_rt + up[1] * off_up;
-    out_muzzle_offset[2] = world_dz + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
+    if( out_muzzle_offset )
+    {
+        vec3_t forward, right, up;
+        AngleVectors( local_angles, forward, right, up );
+
+        // Include weapon grip offsets and barrel extension so ballistics match viewmodel and laser sight
+        float barrel_len = (muzzle_fallback[1] > 0.0f) ? muzzle_fallback[1] : 18.0f;
+        float barrel_up  = muzzle_fallback[2];
+        float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + grip_offset[0] + barrel_len;
+        float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + grip_offset[1] + muzzle_fallback[0];
+        float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + grip_offset[2] + barrel_up;
+
+        out_muzzle_offset[0] = world_dx + forward[0] * off_fwd + right[0] * off_rt + up[0] * off_up;
+        out_muzzle_offset[1] = world_dy + forward[1] * off_fwd + right[1] * off_rt + up[1] * off_up;
+        out_muzzle_offset[2] = world_dz + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
+    }
 
     return true;
 }
@@ -1297,25 +1307,7 @@ qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle )
 {
     if (!g_xrSessionRunning) return false;
 
-    int muzzle_att = 0;
-    vec3_t muzzle_fallback = { 0.0f, 18.0f, 0.0f };
-    if( clgame.viewent.model && clgame.viewent.model->name[0] )
-    {
-        XR_GetWeaponMuzzleParams( clgame.viewent.model->name, &muzzle_att, muzzle_fallback );
-    }
-
-    // 1. If viewmodel has a projected muzzle attachment point, prefer it
-    if( muzzle_att >= 0 && muzzle_att < 4 && clgame.viewent.model && !VectorIsNull( clgame.viewent.attachment[muzzle_att] ) )
-    {
-        // Sanity check: Ensure attachment is within reasonable proximity to player's eye origin
-        if( VectorDistance( clgame.viewent.attachment[muzzle_att], refState.vieworg ) < 60.0f )
-        {
-            VectorCopy( clgame.viewent.attachment[muzzle_att], out_world_muzzle );
-            return true;
-        }
-    }
-
-    // 2. Otherwise compute from 6DoF hand tracking and grip offsets relative to eye view origin
+    // Direct canonical calculation from 6DoF hand pose and weapon muzzle calibration
     vec3_t muzzleOffset, aimAngles;
     if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
     {

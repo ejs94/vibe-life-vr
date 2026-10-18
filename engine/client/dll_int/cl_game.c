@@ -37,6 +37,10 @@ GNU General Public License for more details.
 #include "vgui_draw.h"
 #include "sound.h"		// SND_STOP_LOOPING
 #include "platform/platform.h"
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
+#endif
 
 #define MAX_LINELENGTH	80
 #define TEXT_MSGNAME	"TextMessage"
@@ -2161,6 +2165,17 @@ pfnGetViewModel
 */
 static cl_entity_t *GAME_EXPORT CL_GetViewModel( void )
 {
+#ifdef XASH_OPENXR
+	if( XR_IsActive() )
+	{
+		vec3_t muzzleOffset, aimAngles;
+		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
+		{
+			VectorCopy( aimAngles, clgame.viewent.angles );
+			VectorAdd( refState.vieworg, muzzleOffset, clgame.viewent.attachment[0] );
+		}
+	}
+#endif
 	return &clgame.viewent;
 }
 

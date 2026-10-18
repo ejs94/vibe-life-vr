@@ -578,21 +578,23 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			origin[1] = RI.rvp.vieworigin[1] + world_dy;
 			origin[2] = RI.rvp.vieworigin[2] + world_dz;
 
-			angles[0] = handAngles[0];
-			angles[1] = anglemod( handAngles[1] + turn_yaw );
-			angles[2] = handAngles[2];
+			// Query per-weapon calibration profile
+			vec3_t w_grip = {0};
+			float w_pitch = 0.0f, w_yaw = 0.0f, w_roll = 0.0f;
+			if( e->model && e->model->name[0] )
+			{
+				XR_GetWeaponGripOffset( e->model->name, w_grip );
+				XR_GetWeaponPitchAdjust( e->model->name, &w_pitch, &w_yaw, &w_roll );
+			}
+
+			angles[0] = handAngles[0] + w_pitch;
+			angles[1] = anglemod( handAngles[1] + turn_yaw + w_yaw );
+			angles[2] = handAngles[2] + w_roll;
 
 			// Cache raw physical 6DoF hand pose for calibration debug visualizer
 			VectorCopy( origin, s_vrDebugRawHandOrigin );
 			VectorCopy( angles, s_vrDebugRawHandAngles );
 			s_vrDebugHandActive = true;
-
-			// Query per-weapon calibration profile
-			vec3_t w_grip = {0};
-			if( e->model && e->model->name[0] )
-			{
-				XR_GetWeaponGripOffset( e->model->name, w_grip );
-			}
 
 			// Apply Grip Offsets in hand local coordinate space
 			vec3_t fwd, rt, up;
@@ -1561,6 +1563,19 @@ static void R_StudioCalcAttachments( void )
 	{
 		Matrix3x4_VectorTransform( g_studio.lighttransform[pAtt[i].bone], pAtt[i].org, RI.currententity->attachment[i] );
 	}
+
+#ifdef XASH_OPENXR
+	if( RI.currententity == tr.viewent && XR_IsActive() )
+	{
+		vec3_t muzzleOffset, aimAngles;
+		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
+		{
+			vec3_t canonicalMuzzle;
+			VectorAdd( RI.rvp.vieworigin, muzzleOffset, canonicalMuzzle );
+			VectorCopy( canonicalMuzzle, RI.currententity->attachment[0] );
+		}
+	}
+#endif
 }
 
 /*

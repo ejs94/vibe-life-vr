@@ -23,6 +23,8 @@ GNU General Public License for more details.
 #include "platform/platform.h" // GL_UpdateSwapInterval
 #ifdef XASH_OPENXR
 #include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
+#include "../platform/openxr/xr_profile.h"
 #endif
 
 /*
@@ -114,6 +116,54 @@ static void V_SetupViewModel( void )
 		view->curstate.animtime = cl.local.weaponstarttime;
 		view->curstate.frame = 0.0f;
 	}
+
+#ifdef XASH_OPENXR
+	if( XR_IsActive() )
+	{
+		vec3_t muzzleOffset, aimAngles;
+		if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
+		{
+			VectorCopy( aimAngles, view->angles );
+
+			// Compute hand position with grip offset in world coordinates
+			vec3_t handOrigin, handAngles;
+			if( XR_GetPrimaryHandTransform( handOrigin, handAngles ) )
+			{
+				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+				float turn_yaw = XR_GetPlayerTurnYaw();
+				float yaw_rad = DEG2RAD( turn_yaw );
+				float cy = cosf( yaw_rad );
+				float sy = sinf( yaw_rad );
+
+				float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
+				float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
+				float world_dz = handOrigin[2] * scale;
+
+				view->origin[0] = refState.vieworg[0] + world_dx;
+				view->origin[1] = refState.vieworg[1] + world_dy;
+				view->origin[2] = refState.vieworg[2] + world_dz;
+
+				vec3_t w_grip = {0};
+				if( view->model && view->model->name[0] )
+					XR_GetWeaponGripOffset( view->model->name, w_grip );
+
+				vec3_t fwd, rt, up;
+				AngleVectors( view->angles, fwd, rt, up );
+
+				float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0];
+				float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + w_grip[1];
+				float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
+
+				VectorMA( view->origin, off_fwd, fwd, view->origin );
+				VectorMA( view->origin, off_rt,  rt,  view->origin );
+				VectorMA( view->origin, off_up,  up,  view->origin );
+			}
+
+			// Muzzle position directly at physical barrel tip
+			VectorAdd( refState.vieworg, muzzleOffset, view->attachment[0] );
+		}
+	}
+#endif
 }
 
 /*

@@ -1657,8 +1657,18 @@ R_ParticleLine
 */
 void GAME_EXPORT R_ParticleLine( const vec3_t start, const vec3_t end, byte r, byte g, byte b, float life )
 {
+	const float *use_start = start;
+#ifdef XASH_OPENXR
+	vec3_t true_muzzle;
+	if( XR_IsActive() && XR_GetPrimaryHandMuzzleWorldPosition( true_muzzle ) )
+	{
+		// Snap legacy flat-screen viewheight traces to physical 6DoF weapon muzzle
+		if( !start || VectorIsNull( start ) || VectorDistance( start, refState.vieworg ) < 80.0f )
+			use_start = true_muzzle;
+	}
+#endif
 	int pcolor = R_LookupColor( r, g, b );
-	PM_ParticleLine( start, end, pcolor, life, 0 );
+	PM_ParticleLine( use_start, end, pcolor, life, 0 );
 }
 
 /*
@@ -1861,18 +1871,28 @@ R_TracerEffect
 */
 void GAME_EXPORT R_TracerEffect( const vec3_t start, const vec3_t end )
 {
+	const float *use_start = start;
+#ifdef XASH_OPENXR
+	vec3_t true_muzzle;
+	if( XR_IsActive() && XR_GetPrimaryHandMuzzleWorldPosition( true_muzzle ) )
+	{
+		// Snap legacy flat-screen viewheight traces to physical 6DoF weapon muzzle
+		if( !start || VectorIsNull( start ) || VectorDistance( start, refState.vieworg ) < 80.0f )
+			use_start = true_muzzle;
+	}
+#endif
 	vec3_t	pos, vel, dir;
 
 	float speed = Q_max( tracerspeed.value, 3.0f );
 
-	VectorSubtract( end, start, dir );
+	VectorSubtract( end, use_start, dir );
 	float len = VectorLength( dir );
 	if( len == 0.0f ) return;
 
 	VectorScale( dir, 1.0f / len, dir ); // normalize
 	float offset = COM_RandomFloat( -10.0f, 9.0f ) + traceroffset.value;
 	VectorScale( dir, offset, vel );
-	VectorAdd( start, vel, pos );
+	VectorAdd( use_start, vel, pos );
 	VectorScale( dir, speed, vel );
 
 	R_AllocTracer( pos, vel, len / speed );
