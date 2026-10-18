@@ -24,6 +24,9 @@ GNU General Public License for more details.
 #include "vid_common.h"
 #include "pm_local.h"
 #include "multi_emulator.h"
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#endif
 
 #define CL_CONNECTION_TIMEOUT 15.0f
 #define CL_CONNECTION_RETRIES 5
@@ -4031,6 +4034,9 @@ void CL_Shutdown( void )
 		g_fsapi.Delete( "demoheader.tmp" ); // remove tmp file
 	SCR_FreeCinematic (); // release AVI's *after* client.dll because custom renderer may use them
 	S_Shutdown ();
+#ifdef XASH_OPENXR
+	XR_Shutdown();
+#endif
 	R_Shutdown ();
 
 	Con_Shutdown ();

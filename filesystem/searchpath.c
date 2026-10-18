@@ -412,6 +412,12 @@ void FS_AddGameHierarchy( const char *dir, uint flags )
 		Q_snprintf( buf, sizeof( buf ), "%s/" DEFAULT_CUSTOM_DIRECTORY, dir );
 		FS_AddGameDirectory( buf, flags );
 	}
+
+	if( FBitSet( mount_flags, FS_MOUNT_VR ))
+	{
+		Q_snprintf( buf, sizeof( buf ), "%s_vr/", dir );
+		FS_AddGameDirectory( buf, flags );
+	}
 }
 
 /*

@@ -52,8 +52,9 @@ enum
 	FS_MOUNT_LV    = BIT( 25 ), // mount low violence content folder
 	FS_MOUNT_ADDON = BIT( 26 ), // mount addon folder
 	FS_MOUNT_L10N  = BIT( 27 ), // mount localization folder
+	FS_MOUNT_VR    = BIT( 28 ), // mount virtual reality content folder (<gamedir>_vr)
 
-	FS_MOUNT_FLAGS = FS_MOUNT_HD | FS_MOUNT_LV | FS_MOUNT_ADDON | FS_MOUNT_L10N,
+	FS_MOUNT_FLAGS = FS_MOUNT_HD | FS_MOUNT_LV | FS_MOUNT_ADDON | FS_MOUNT_L10N | FS_MOUNT_VR,
 
 	FS_GAMEDIRONLY_SEARCH_FLAGS = FS_GAMEDIR_PATH | FS_CUSTOM_PATH | FS_GAMERODIR_PATH
 };

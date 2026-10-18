@@ -577,6 +577,9 @@ void V_PostRender( void )
 		Con_DrawDebug(); // must be last
 		Touch_Draw();
 		OSK_Draw();
+#ifdef XASH_OPENXR
+		UI_DrawVRPointerCursor();
+#endif
 
 		S_ExtraUpdate();
 	}

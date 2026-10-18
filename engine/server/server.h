@@ -680,6 +680,8 @@ qboolean SV_LoadGame( const char *pName );
 int SV_LoadGameState( char const *level );
 void SV_ChangeLevel( qboolean loadfromsavedgame, const char *mapname, const char *start, qboolean background );
 const char *SV_GetLatestSave( void );
+qboolean SV_GetSaveMapName( const char *savename, char *out_map, size_t maxlen );
+qboolean SV_SaveMatchesMap( const char *savename, const char *mapname );
 void SV_InitSaveRestore( void );
 void SV_ClearGameState( void );
 

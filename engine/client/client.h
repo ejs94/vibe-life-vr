@@ -1187,6 +1187,7 @@ void UI_AddServerToList( netadr_t adr, const char *info );
 void UI_GetCursorPos( int *pos_x, int *pos_y );
 void UI_SetCursorPos( int pos_x, int pos_y );
 void UI_ShowCursor( qboolean show );
+void UI_DrawVRPointerCursor( void );
 qboolean UI_CreditsActive( void );
 void UI_CharEvent( int key );
 qboolean UI_MouseInRect( void );

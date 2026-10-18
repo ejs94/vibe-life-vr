@@ -955,6 +955,16 @@ void SV_RunCmd( sv_client_t *cl, usercmd_t *ucmd, int random_seed )
 				VectorScale( handVel, scale, clent->v.vuser3 );
 			}
 		}
+		// vuser4[0]: Two-handed weapon stabilization active (1.0 = stabilized, 0.0 = one-handed)
+		// vuser4[1]: VR active indicator flag (1.0 = VR mode active)
+		// vuser4[2]: Reserved for future VR state
+		clent->v.vuser4[0] = XR_IsTwoHandStabilized() ? 1.0f : 0.0f;
+		clent->v.vuser4[1] = 1.0f;
+		clent->v.vuser4[2] = 0.0f;
+	}
+	else
+	{
+		VectorClear( clent->v.vuser4 );
 	}
 #endif
 

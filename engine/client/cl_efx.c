@@ -6,6 +6,8 @@
 #include "r_efx.h"
 #include "cl_tent.h"
 #include "pm_local.h"
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
 #define PART_SIZE	Q_max( 0.5f, cl_draw_particles.value )
 
 /*
@@ -1725,6 +1727,43 @@ void GAME_EXPORT R_BulletImpactParticles( const vec3_t pos )
 
 	int quantity = (1000.0f - dist) / 100.0f;
 	if( quantity == 0 ) quantity = 1;
+
+#ifdef XASH_OPENXR
+	if( XR_IsActive() && vr_debug_impacts && vr_debug_impacts->value > 0.0f )
+	{
+		vec3_t muzzle;
+		if( !XR_GetPrimaryHandMuzzleWorldPosition( muzzle ) )
+		{
+			vec3_t muzzleOffset, aimAngles;
+			if( XR_GetPrimaryHandMuzzleTransform( muzzleOffset, aimAngles ) )
+				VectorAdd( refState.vieworg, muzzleOffset, muzzle );
+			else
+				VectorCopy( refState.vieworg, muzzle );
+		}
+
+		// Calculate true surface normal at impact position via client-side ray trace
+		vec3_t normal;
+		pmtrace_t tr = CL_TraceLine( muzzle, (float *)pos, PM_STUDIO_IGNORE );
+		if( tr.fraction < 1.0f && !VectorIsNull( tr.plane.normal ) )
+		{
+			VectorCopy( tr.plane.normal, normal );
+		}
+		else
+		{
+			VectorSubtract( muzzle, pos, normal );
+			if( VectorNormalizeLength( normal ) < 0.01f )
+				VectorSet( normal, 0.0f, 0.0f, 1.0f );
+		}
+
+		XR_AddDebugBulletImpact( muzzle, pos, normal );
+
+		// Spawn persistent high-visibility 3D particle box around impact for visual confirmation
+		vec3_t bmin, bmax;
+		VectorSet( bmin, pos[0] - 2.0f, pos[1] - 2.0f, pos[2] - 2.0f );
+		VectorSet( bmax, pos[0] + 2.0f, pos[1] + 2.0f, pos[2] + 2.0f );
+		R_ParticleBox( bmin, bmax, 0, 255, 64, 4.0f );
+	}
+#endif
 
 	int color = 3 - ((30 * quantity) / 100 );
 	R_SparkStreaks( pos, 2, -200, 200 );

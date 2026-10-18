@@ -515,12 +515,26 @@ continue from latest savedgame
 */
 static void SV_Reload_f( void )
 {
+	const char *latest;
+
 	// because reload can be multiple issued
 	if( GameState->nextstate != STATE_RUNFRAME )
 		return;
 
-	if( !SV_LoadGame( SV_GetLatestSave( )))
-		COM_LoadLevel( sv_hostmap.string, false );
+	latest = SV_GetLatestSave();
+	// Only load the savegame if it belongs to the current map (prevents jumping to campaign saves when dying on deathmatch or skirmish maps)
+	if( latest && SV_SaveMatchesMap( latest, sv_hostmap.string ))
+	{
+		if( SV_LoadGame( latest ))
+			return;
+	}
+	else if( latest )
+	{
+		Con_Reportf( "SV_Reload: Latest save '%s' does not match current map '%s'. Restarting level.\n",
+			latest, sv_hostmap.string );
+	}
+
+	COM_LoadLevel( sv_hostmap.string, false );
 }
 
 /*

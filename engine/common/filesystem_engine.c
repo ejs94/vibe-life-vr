@@ -35,6 +35,7 @@ static CVAR_DEFINE_AUTO( fs_mount_hd, "0", FCVAR_PRIVILEGED, "mount high definit
 static CVAR_DEFINE_AUTO( fs_mount_lv, "0", FCVAR_PRIVILEGED, "mount low violence models content folder" );
 static CVAR_DEFINE_AUTO( fs_mount_addon, "0", FCVAR_PRIVILEGED, "mount addon content folder" );
 static CVAR_DEFINE_AUTO( fs_mount_l10n, "0", FCVAR_PRIVILEGED, "mount localization content folder" );
+static CVAR_DEFINE_AUTO( fs_mount_vr, "1", FCVAR_PRIVILEGED, "mount virtual reality content folder" );
 static CVAR_DEFINE_AUTO( ui_language, "english", FCVAR_PRIVILEGED, "selected game language" );
 
 fs_api_t g_fsapi;
@@ -92,6 +93,7 @@ static uint32_t FS_MountFlags( void )
 	if( fs_mount_hd.value ) SetBits( flags, FS_MOUNT_HD );
 	if( fs_mount_addon.value ) SetBits( flags, FS_MOUNT_ADDON );
 	if( fs_mount_l10n.value ) SetBits( flags, FS_MOUNT_L10N );
+	if( fs_mount_vr.value ) SetBits( flags, FS_MOUNT_VR );
 
 	return flags;
 }
@@ -121,6 +123,7 @@ static void FS_LoadVFSConfig( const char *gamedir )
 	ClearBits( fs_mount_lv.flags, FCVAR_CHANGED );
 	ClearBits( fs_mount_l10n.flags, FCVAR_CHANGED );
 	ClearBits( fs_mount_addon.flags, FCVAR_CHANGED );
+	ClearBits( fs_mount_vr.flags, FCVAR_CHANGED );
 	ClearBits( ui_language.flags, FCVAR_CHANGED );
 }
 
@@ -128,7 +131,7 @@ void FS_SaveVFSConfig( void )
 {
 	const qboolean force_save = !FS_FileExists( "vfs.cfg", true );
 
-	if( !force_save && !FBitSet( fs_mount_hd.flags|fs_mount_lv.flags|fs_mount_l10n.flags|fs_mount_addon.flags|ui_language.flags, FCVAR_CHANGED ))
+	if( !force_save && !FBitSet( fs_mount_hd.flags|fs_mount_lv.flags|fs_mount_l10n.flags|fs_mount_addon.flags|fs_mount_vr.flags|ui_language.flags, FCVAR_CHANGED ))
 	{
 		Con_Reportf( "%s: no need to save vfs.cfg\n", __func__ );
 		return;
@@ -147,6 +150,7 @@ void FS_SaveVFSConfig( void )
 	FS_Printf( f, "%s \"%d\"\n", fs_mount_lv.name, (int)fs_mount_lv.value );
 	FS_Printf( f, "%s \"%d\"\n", fs_mount_l10n.name, (int)fs_mount_l10n.value );
 	FS_Printf( f, "%s \"%d\"\n", fs_mount_addon.name, (int)fs_mount_addon.value );
+	FS_Printf( f, "%s \"%d\"\n", fs_mount_vr.name, (int)fs_mount_vr.value );
 	FS_Printf( f, "%s \"%s\"\n", ui_language.name, ui_language.string );
 
 	Host_FinalizeConfig( f, "vfs.cfg" );
@@ -155,6 +159,7 @@ void FS_SaveVFSConfig( void )
 	ClearBits( fs_mount_lv.flags, FCVAR_CHANGED );
 	ClearBits( fs_mount_l10n.flags, FCVAR_CHANGED );
 	ClearBits( fs_mount_addon.flags, FCVAR_CHANGED );
+	ClearBits( fs_mount_vr.flags, FCVAR_CHANGED );
 	ClearBits( ui_language.flags, FCVAR_CHANGED );
 }
 
@@ -401,6 +406,7 @@ void FS_Init( void )
 	Cvar_RegisterVariable( &fs_mount_lv );
 	Cvar_RegisterVariable( &fs_mount_addon );
 	Cvar_RegisterVariable( &fs_mount_l10n );
+	Cvar_RegisterVariable( &fs_mount_vr );
 	Cvar_RegisterVariable( &ui_language );
 
 	if( !Sys_GetParmFromCmdLine( "-dll", host.gamedll ))

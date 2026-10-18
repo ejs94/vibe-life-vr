@@ -2281,6 +2281,130 @@ const char *SV_GetLatestSave( void )
 
 /*
 ==================
+SV_GetSaveMapName
+
+Extract the mapName field from a savegame file without loading the entire state
+==================
+*/
+qboolean SV_GetSaveMapName( const char *savename, char *out_map, size_t maxlen )
+{
+	int	i, tag, size, nNumberOfFields, nFieldSize, tokenSize, tokenCount;
+	char	*pData, *pSaveData, *pFieldName, **pTokenList;
+	file_t	*f;
+
+	if( !savename || !out_map || maxlen == 0 )
+		return false;
+
+	out_map[0] = '\0';
+
+	if(( f = FS_Open( savename, "rb", true )) == NULL )
+		return false;
+
+	FS_Read( f, &tag, sizeof( int ));
+	if( tag != SAVEGAME_HEADER )
+	{
+		FS_Close( f );
+		return false;
+	}
+
+	FS_Read( f, &tag, sizeof( int ));
+	if( tag != SAVEGAME_VERSION && tag != 0x0065 )
+	{
+		FS_Close( f );
+		return false;
+	}
+
+	FS_Read( f, &size, sizeof( int ));
+	FS_Read( f, &tokenCount, sizeof( int ));
+	FS_Read( f, &tokenSize, sizeof( int ));
+	size += tokenSize;
+
+	if( tokenCount < 0 || tokenCount > SAVE_HASHSTRINGS || tokenSize < 0 || tokenSize > SAVE_HEAPSIZE )
+	{
+		FS_Close( f );
+		return false;
+	}
+
+	pSaveData = (char *)Mem_Malloc( host.mempool, size );
+	FS_Read( f, pSaveData, size );
+	pData = pSaveData;
+
+	if( tokenSize > 0 )
+	{
+		pTokenList = Mem_Calloc( host.mempool, tokenCount * sizeof( char* ));
+		for( i = 0; i < tokenCount; i++ )
+		{
+			pTokenList[i] = *pData ? pData : NULL;
+			while( *pData++ );
+		}
+	}
+	else pTokenList = NULL;
+
+	nFieldSize = *(short *)pData;
+	pData += sizeof( short );
+	pFieldName = pTokenList ? pTokenList[*(short *)pData] : NULL;
+
+	if( !pFieldName || Q_stricmp( pFieldName, "GameHeader" ))
+	{
+		if( pTokenList ) Mem_Free( pTokenList );
+		if( pSaveData ) Mem_Free( pSaveData );
+		FS_Close( f );
+		return false;
+	}
+
+	pData += sizeof( short );
+	nNumberOfFields = (int)*pData;
+	pData += nFieldSize;
+
+	for( i = 0; i < nNumberOfFields; i++ )
+	{
+		nFieldSize = *(short *)pData;
+		pData += sizeof( short );
+		pFieldName = pTokenList ? pTokenList[*(short *)pData] : NULL;
+		pData += sizeof( short );
+
+		if( pFieldName && !Q_stricmp( pFieldName, "mapName" ))
+		{
+			size_t sz = Q_min( (size_t)nFieldSize, maxlen - 1 );
+			Q_strncpy( out_map, pData, sz + 1 );
+			out_map[sz] = '\0';
+			break;
+		}
+		pData += nFieldSize;
+	}
+
+	if( pTokenList ) Mem_Free( pTokenList );
+	if( pSaveData ) Mem_Free( pSaveData );
+	FS_Close( f );
+
+	return !COM_StringEmpty( out_map );
+}
+
+/*
+==================
+SV_SaveMatchesMap
+
+Check if a savefile belongs to the specified map
+==================
+*/
+qboolean SV_SaveMatchesMap( const char *savename, const char *mapname )
+{
+	char saveMap[MAX_QPATH];
+
+	if( !savename || !mapname || !mapname[0] )
+		return false;
+
+	if( !SV_GetSaveMapName( savename, saveMap, sizeof( saveMap )))
+		return false;
+
+	if( !Q_stricmp( saveMap, mapname ))
+		return true;
+
+	return false;
+}
+
+/*
+==================
 SV_GetSaveComment
 
 check savegame for valid

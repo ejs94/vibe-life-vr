@@ -33,6 +33,43 @@ static void UI_ToggleAllowConsole_f( void )
 		gameui.globals->developer = true;
 }
 
+#ifdef XASH_OPENXR
+#include "../../platform/openxr/xr_input.h"
+#endif
+
+void UI_DrawVRPointerCursor( void )
+{
+#ifdef XASH_OPENXR
+	if( !ref.dllFuncs.FillRGBA ) return;
+
+	int cx = 0, cy = 0;
+	qboolean hit = false;
+	if( XR_GetPointerCursorPos( &cx, &cy, &hit ) && hit )
+	{
+		if( cx < 0 || cy < 0 || (refState.width > 0 && cx >= refState.width) || (refState.height > 0 && cy >= refState.height) )
+			return;
+
+		// High-contrast VR reticle cursor with dark outline
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 14, cy - 2, 28, 4, 0, 0, 0, 180 );
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 2, cy - 14, 4, 28, 0, 0, 0, 180 );
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 6, cy - 6, 12, 12, 0, 0, 0, 200 );
+
+		int activeHand = XR_GetActivePointerHand();
+		byte r = (activeHand == 0) ? 255 : 0;
+		byte g = (activeHand == 0) ? 170 : 225;
+		byte b = (activeHand == 0) ? 40  : 255;
+
+		// Reticle crosshair arms
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 12, cy - 1, 24, 2, r, g, b, 240 );
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 1, cy - 12, 2, 24, r, g, b, 240 );
+
+		// Bright center dot
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 4, cy - 4, 8, 8, r, g, b, 255 );
+		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 2, cy - 2, 4, 4, 255, 255, 255, 255 );
+	}
+#endif
+}
+
 void UI_UpdateMenu( float realtime )
 {
 	if( !gameui.hInstance ) return;
@@ -61,6 +98,7 @@ void UI_UpdateMenu( float realtime )
 	gameui.globals->developer = host.allow_console;
 
 	gameui.dllFuncs.pfnRedraw( realtime );
+	UI_DrawVRPointerCursor();
 	UI_UpdateUserinfo();
 }
 
