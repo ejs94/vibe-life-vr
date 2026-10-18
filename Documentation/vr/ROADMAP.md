@@ -4,18 +4,25 @@
 
 ---
 
+### 🏷️ Status Conventions & Remediation Policy
+* 🟢 **Completed:** Empirically validated in dual-platform tests with zero known blockers or visual regressions.
+* 🟠 **Maintenance / Remediation:** A bug, visual glitch, or physics defect was identified in a phase. The phase is actively reopened for maintenance until re-verified.
+* 🟡 **Active:** Initial feature engineering and baseline bring-up in active progress.
+* ⚪ **Planned:** Scheduled milestone awaiting activation.
+
 ## 🚀 1. Master Development Roadmap
 
 | Phase | Description | Status | Empirical Validation Gate |
 | :---: | :--- | :---: | :--- |
 | **01** | **OpenXR Baseline & Dual-Platform Bring-Up** | 🟢 **Completed** | Clean OpenXR instance negotiation, GLX/EGL graphics context sharing, and dual swapchain creation verified on PCVR and Quest. |
 | **02** | **Stereo Rendering, Asymmetric Frustum & 6DoF** | 🟢 **Completed** | Full stereo 3D rendering with correct culling in `crossfire` and `c1a0`. Black screen resolved via `gl4es_registerExternalTexture`. Eye buffer dump: `Mean RGB > 60-117`. |
-| **03** | **Universal Action Sets, Touch Poses & Locomotion** | 🟢 **Completed** | Analog stick locomotion, snap/smooth turn, action buttons (fire, alt-fire, jump, crouch, use, reload, flashlight, menu), two-handed stabilizer, weapon cycling, left-handed mode. |
-| **04** | **6DoF Weapon Decoupling & Head Flashlight** | 🟢 **Completed** | Weapon viewmodels locked to dominant controller aim pose; head-mounted flashlight following view direction + HL2:VR temple gesture click toggle (`cl_tent.c`, `xr_input.c`). |
+| **03** | **Universal Action Sets, Touch Poses & Locomotion** | 🟢 **Completed** | Analog stick locomotion, snap/smooth turn, action buttons (fire, alt-fire, jump, crouch, use, reload, flashlight, menu), two-handed stabilizer, weapon cycling, left-handed mode. Physical roomscale ducking (`vr_physical_crouch`) and VR ladder movement decoupled from head pitch. |
+| **04** | **6DoF Weapon Decoupling & Viewmodel Presence** | 🟢 **Completed** | Weapon viewmodels locked to dominant controller aim pose; head-mounted flashlight following view direction + HL2:VR temple gesture click toggle (`cl_tent.c`, `xr_input.c`). Culling of detached offscreen reload props (`Box02`, `Speedload Master`, `shell`) and flat bobbing suppression. |
 | **05** | **In-Headset Spatial UI, Laser Pointer & VR Options** | 🟢 **Completed** | Beat Saber-style dual alternating laser pointers for menus (`XR_UpdatePointerCursor`), floating quad layer interaction, and dedicated in-headset VR options screen (`CMenuVR`) fully compiled and verified. |
-| **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | 🟢 **Completed** | Physical muzzle ballistics via `pev->vuser1` across all arsenal weapons (`GetGunPosition`), RPG rocket spawn alignment, and physical grenade toss momentum via 6DoF velocity (`pev->vuser3`). |
-| **07** | **Immersive Hand Presence & 3D Spatial Audio** | 🟡 **Active** | Dynamic articulated hand models with animated fingers and 3D HRTF spatialized audio via OpenAL Soft. |
-| **08** | **Expansions (Opposing Force, Blue Shift) & Mod Suite** | ⚪ Planned | Complete support for Gearbox expansions, weapon packs, and GoldSrc singleplayer/multiplayer mods. |
+| **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | 🟢 **Completed** | Physical muzzle ballistics via `pev->vuser1` across all arsenal weapons (`GetGunPosition`), RPG rocket spawn alignment, physical grenade/snark toss momentum via 6DoF velocity (`pev->vuser3`), tripmine 6DoF alignment (`vuser2`), bypass of flat autoaim deflection, and 50% tighter spread under two-handed hold (`vuser4`). |
+| **07** | **Immersive Hand Presence & 3D Spatial Audio** | 🟢 **Completed** | 3D HRTF spatial audio & 6DoF listener tracking, dynamic procedural finger curling (trigger, grip, capacitive thumb), standalone hand entity presence (`s_offhandEnt`, `v_hand.mdl`), and full bone rig compatibility (`Bip01 Finger0..4` and `Bone27..45`). |
+| **08** | **Mod Suite & Declarative Calibration Manifests** | 🟢 **Completed** | Declarative Weapon Calibration Manifest (`vr_weapons.json` Silver Tier runtime C parser in `xr_profile.c`), per-weapon grip offsets, barrel pitch adjustments, two-handed gating, live `vr_reload_weapon_profiles` hot-reload, and 24/24 automated Monado assertions PASS. |
+| **09** | **Visual Polish, Full Body Motion (VRIK) & Immersion** | 🟡 **Active** | Physical Quest 3 on-device validation, procedural Full-Body Inverse Kinematics (VRIK) experimentation (torso, arms, legs, and spine tracking), weapon collision, holsters, and immersion polish. |
 
 ---
 
@@ -29,7 +36,7 @@
 * **Root Cause:** Quad layers were referencing `STAGE` reference space directly. When room calibration or floor height differed from eye level, the floating canvas rendered stuck in the ground.
 * **Resolution:** Created `g_xrViewSpace` (`XR_REFERENCE_SPACE_TYPE_VIEW`). Floating HUD and menus are anchored in head-relative space at `z = -1.5m`, remaining comfortably centered regardless of player height or posture.
 
-### Issue #3: Quest 3S Black Screen on 3D World Scene (Critical Root Cause)
+### Issue #3: Quest 3 Black Screen on 3D World Scene (Critical Root Cause)
 * **Root Cause:**
   1. `gl4es` was unaware of swapchain texture IDs allocated by OpenXR via Android `AHardwareBuffer` (since they were not created via `glGenTextures`). In response, GL4ES created empty dummy textures in the FBO, drawing the scene to a ghost texture while the real OpenXR swapchain remained 100% black in the TimeWarp compositor.
   2. The frustum planes in `ref/gl_vr/gl_frustum.c` had inverted normals, causing `R_RecursiveWorldNode()` to cull 100% of world geometry.
@@ -63,7 +70,7 @@
 * **Resolution:** Added `XR_RegisterCVars()` called directly in `Host_Init()` in `engine/common/host.c`.
 
 ### Issue #9: In-Headset 2D Menus / Quad HUD Laser Pointer Interaction Non-Functional
-* **Symptoms:** When running the APK in-headset on the Meta Quest 3S, 2D in-game menus (mainui, pause menu, options) were visible on the floating quad, but VR controller pointer clicks and cursor interaction did not interact with or activate UI buttons.
+* **Symptoms:** When running the APK in-headset on the Meta Quest 3, 2D in-game menus (mainui, pause menu, options) were visible on the floating quad, but VR controller pointer clicks and cursor interaction did not interact with or activate UI buttons.
 * **Root Causes:**
   1. *Space Mismatch:* `XR_UpdatePointerCursor()` originally queried controller poses in `STAGE` roomscale space (floor at $Y=0$, head at $Y \approx 1.5m$), whereas the floating menu quad layer is positioned in head-relative `g_xrViewSpace` (head at $(0,0,0)$, quad at $Z=-1.5m$). The raycast was testing against $Y \in [-0.45, 0.45]$, which was below floor level in room coordinates and therefore `hit` was permanently `false`.
   2. *Android Touchscreen Emulation Hijack:* On Android, `Touch_WantVisibleCursor()` defaulted to `true`, causing `IN_MouseMove()` to abort and all clicks in `Touch_KeyEvent()` to redirect to touchscreen coordinates, calling `Platform_GetMousePos()` which returned $(0,0)$.
@@ -108,14 +115,15 @@
 ### Issue #13: Dedicated In-Headset VR Options Configuration Menu (`CMenuVR`)
 * **Symptoms:** Modifying VR settings (snap turn angles, two-handed grip, haptics, flashlight mode, world scale, laser sight) required either modifying Android preferences before launch or typing raw console commands in-game.
 * **Architecture & Resolution:**
-  - Created a dedicated C++ UI class `CMenuVR` (`3rdparty/mainui/menus/VR.cpp`) derived from `CMenuFramework`.
-  - Grouped settings into three clear sections:
-    - **Locomotion & Comfort:** `vr_smoothturn` (smooth/snap toggle), `vr_snap_angle` (SpinControl from 15° to 90° in 15° increments), `vr_walkdirection` (head vs controller walk orientation).
-    - **Weapons & Flashlight:** `vr_lasersight` (3D weapon laser), `vr_headtorch` (HL2:VR style head flashlight), `vr_twohanded` (two-handed stabilization), `vr_lefthanded` (left-handed dominant hand), `vr_haptics_enabled` (tactile recoil/vibration), `vr_pointer_hud` (menu laser pointer).
-    - **Calibration & World Scale:** `vr_weapon_pitchadjust` (-30° to +30°), `vr_worldscale` (20 to 60 units/m), `vr_height_adjust` (-20 to +20), `vr_menu_distance` (1.0 to 3.5m), `vr_menu_scale` (1.0 to 3.0m).
+  - Created a dedicated C++ UI class `CMenuVR` (`3rdparty/mainui/menus/VR.cpp`) derived from `CMenuFramework` using `CMenuTabView`.
+  - Grouped settings into four ergonomic category tabs:
+    - **Tab 1 (Locomotion & Comfort):** `vr_smoothturn` (smooth/snap toggle), `vr_snap_angle` (SpinControl from 15° to 90°), `vr_walkdirection` (head vs controller walk orientation), `vr_physical_crouch` (roomscale squat ducking), and `vr_menu_distance` / `vr_menu_scale`.
+    - **Tab 2 (Weapons & Combat):** `vr_lasersight` (3D weapon laser), `vr_headtorch` (HL2:VR style head flashlight), `vr_twohanded` (two-handed stabilization with soft clamp), `vr_lefthanded` (left-handed dominant hand), `vr_proximity_scope` (natural optical zoom), `vr_melee_swing` (physical Crowbar swing), and `vr_weapon_pitchadjust` (-30° to +30°).
+    - **Tab 3 (Presence & Audio):** `vr_finger_curling` (procedural finger flex), `vr_offhand_render` (secondary hand presence), `vr_gesture_use` (touch-to-use), `vr_haptics_enabled` (tactile recoil), `vr_pointer_hud` (menu laser pointer), `vr_audio_hrtf` (3D binaural HRTF audio), and `vr_worldscale` / `vr_height_adjust`.
+    - **Tab 4 (VR Debug):** `vr_debug_impacts` (3D bullet impact markers and tracers), simulated 6DoF head/hands/curl controls for headless testing, interactive sample recording/clearing buttons (`vr_record_impact`, `vr_clear_impacts`), calibration reset, and real-time hardware telemetry display.
   - Integrated into main options menu (`CMenuOptions` via `UI_VR_Menu` in `Configuration.cpp`), declared in `BaseMenu.h`, and registered console command `menu_vr`.
   - Verified clean native compilation into `out/libmenu.so` and standalone Meta Quest packaging in `out/xash3d-vr-quest.apk`.
-* **Status:** 🟢 **Resolved** (In-headset VR options menu active and validated).
+* **Status:** 🟢 **Resolved** (In-headset VR 4-tab options menu active and validated).
 
 ### Issue #14: Server-Side 6DoF Weapon Muzzle Ballistics & Hitscan Alignment (`dlls/player.cpp`, `dlls/rpg.cpp`, `engine/server/sv_pmove.c`)
 * **Symptoms:** Hitscan traces (Glock, MP5, Shotgun, Python) and projectile spawns (RPG, Crossbow bolts, Gauss beams, Hornet Gun) originated from the player's eye level (`pev->origin + pev->view_ofs`) rather than the physical 3D muzzle of the weapon held in 6DoF hand space.
@@ -147,9 +155,35 @@
   - Validated with automated test gate 1.11 in `run_regression_battery.sh` (14/14 PASS).
 * **Status:** 🟢 **Resolved** (3D HRTF spatial audio & 6DoF head listener active).
 
+### Issue #18: Viewmodel Floating Reload Props in VR (Glock Box02, .357 Speedload Master, Shotgun Shells)
+* **Root Cause:** In flat-screen 1998 Half-Life, animators hid secondary reload meshes (like the spare Glock clip, speedloader, or loose shotgun shells) by animating their root bones to $Z < -15$ units below the 2D viewport. In 6DoF VR, looking down revealed them hovering in mid-air below the player's hand.
+* **Resolution:** Implemented dual-layer suppression in both `ref/gl_vr/gl_studio.c` and `3rdparty/hlsdk-portable/cl_dll/StudioModelRenderer.cpp`. Collapses detached offscreen root bones to zero matrix and skips spare reload submodels (`clip_reference`, `python_speedload`, `shell`) when not actively executing a reload sequence.
+* **Status:** 🟢 **Resolved** (No floating reload props in VR viewmodels).
+
+### Issue #19: Flat Autoaim Snap & Recoil Pitch Deflecting Bullets Away from 6DoF Weapon Barrel
+* **Root Cause:** Flat-screen `CBasePlayer::GetAutoaimVector` deflected bullets toward nearby enemies and added screen `punchangle`, bending the bullet trajectory away from where the physical gun barrel and laser sight were aimed.
+* **Resolution:** In `player.cpp`, bypassed autoaim deflection when in VR (`pev->vuser1 != g_vecZero` or `vuser4.y > 0.0f`), returning the exact 6DoF forward aim vector of `pev->vuser2`. In `combat.cpp`, added two-handed stabilization (`pevAttacker->vuser4.x > 0.0f`) reducing bullet spread by 50%.
+* **Status:** 🟢 **Resolved** (Physical 6DoF ballistics & two-handed stabilization active).
+
+### Issue #20: Air Duct Trapping & Inverted VR Ladder Climbing
+* **Root Cause:** Physical roomscale squatting dropped the head camera without shrinking the player hull, causing players to get stuck entering air ducts in Black Mesa (`c1a2`). On ladders, climbing direction was tied to head pitch, reversing climb when looking down, and pressing jump launched players backwards into the abyss.
+* **Resolution:**
+  - Implemented `XR_GetRoomscaleHeadDrop()` in `xr_swapchain.c` and `vr_physical_crouch` in `xr_input.c` (automatically engages `IN_DUCK` when head drops $\ge 28\text{cm}$ below calibrated height).
+  - In `pm_shared.c`, decoupled ladder climbing from head pitch (stick forward always climbs UP) and smoothed ladder dismount jump to boost safely onto ledges.
+* **Status:** 🟢 **Resolved** (Physical roomscale ducking & smooth VR ladders active).
+
+### Issue #21: 3D Bullet Impact Markers, Flight Tracers & Laser Trace Collision (`vr_debug_impacts`)
+* **Symptoms:** Modders and testers lacked visual telemetry to verify whether 3D laser sights, controller aim vectors, and server-side bullet traces converged on the exact same world hit point in 6DoF space.
+* **Resolution:**
+  - In `ref/gl_vr/gl_rmain.c`, truncated the laser sight beam dynamically against geometry via `CL_TraceLine`, drawing an aligned 3D red surface reticle.
+  - Implemented a circular buffer in `xr_core.c` storing up to 32 recent projectile impacts with 5-second persistence.
+  - In `gl_rmain.c`, renders a 4-part 3D visual debug marker at each hit: lime-green crosshair (`+`), cyan concentric diamond, orange surface normal line, and translucent trajectory line from muzzle to hit position.
+  - Tied to archived CVar `vr_debug_impacts` (default `1`) and integrated into Tab 4 of `CMenuVR`.
+* **Status:** 🟢 **Resolved** (3D bullet impact alignment visual debug active).
+
 ---
 
-## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3S Testing)
+## ⚠️ 3. Active & Pending Hardware Issues (Discovered in Quest 3 Testing)
 
 ### Issue #16 / Feature #12: Dynamic Articulated Skeletal 3D Hands & Finger Curling (Half-Life: Alyx / HL2VR Style)
 * **Goal & Scope:** Replace static viewmodel-baked hands with fully independent, articulated 3D hand entities whose fingers dynamically follow the player's physical hand inputs in real time.

@@ -87,38 +87,75 @@ flowchart TD
 
 ### 3.3 Universal Input & Controller Mechanics (`xr_input.c`)
 - **Profiles:** Canonical bindings for Meta Quest Touch (Quest 1/2/Pro/3/3S) and Valve Index Knuckles.
-- **Locomotion:**
-  - Analog stick deadzone (`0.15`).
-  - Snap Turn (`vr_smoothturn 0`, step `vr_snap_angle 45°`) with haptic click; Smooth Turn (`vr_smoothturn 1`, `150°/s`).
-  - Movement direction decoupling (`vr_walkdirection`): `0` = HMD gaze direction (default), `1` = Controller direction.
-- **Weapon Mechanics & Decoupling:**
+- **Unified Half-Life 2: VR Mod Controller Layout:**
+  - **Right Controller:**
+    - Button A: Reload (`+reload`).
+    - Button B: Secondary Fire (`+attack2`, MP5 grenade launcher, Shotgun double blast) or Flashlight (configurable via `vr_button_b_action`).
+    - Analog Stick: Smooth turn (`vr_smoothturn 1`) or Snap turn (`vr_smoothturn 0`, step `vr_snap_angle 45°`). Click = Sprint (`+speed`).
+    - Trigger: Primary Fire (`+attack`) / Menu pointer click (`K_MOUSE1`).
+    - Grip: Weapon hold / Two-handed stabilizer when secondary.
+  - **Left Controller:**
+    - Button X: Jump (`+jump`).
+    - Button Y: Use / Interact (`+use`).
+    - Analog Stick: 2D Locomotion (walk/strafe). Direction decoupled via `vr_walkdirection` (`0` = HMD gaze, `1` = controller aim). Click = Crouch (`+duck`).
+    - Trigger: Sprint / Alt-fire when stabilized / Menu pointer click.
+    - Grip: Off-hand stabilizer grip (`grip > 0.55`).
+  - **Universal Menu Button:** Toggles in-game menu / floating Quad UI (`K_ESCAPE`).
+- **Weapon Mechanics, Ballistics & Decoupling:**
   - Weapon viewmodel locked to dominant controller aim pose (`XR_GetPrimaryHandTransform`).
-  - Bullet traces and rockets originate along weapon barrel direction in server commands (`cmd->viewangles`).
-  - Two-Handed Weapon Stabilizer: Holding offhand grip (`grip > 0.4`) within 12cm–55cm aligns aim along the inter-hand vector.
+  - Server-side bullet traces and rockets emerge from physical 3D muzzle (`pev->vuser1`).
+  - Two-Handed Weapon Stabilizer (`vr_twohanded`): Holding offhand grip (`grip > 0.55`, release `< 0.35`) with forward gating (5cm to 60cm), separation (12cm to 65cm), and soft asymptotic clamp (`softDev`) provides 50% tighter bullet spread (`pev->vuser4.x`).
+  - Physical Grenade & Snark Momentum: Throw velocity inherits 6DoF hand swing momentum (`pev->vuser3 * 1.25f`).
+  - 6DoF Tripmines: Wall/floor mounting trace follows controller orientation (`pev->vuser2`).
   - Quick Weapon Switch: Flicking turn stick Up = `invprev`, Down = `invnext` (with debounce and haptic tick).
-  - Gestures: Over-the-shoulder crowbar draw (`slot1`), forward reach to interact (`+use`).
+  - Physical Gestures:
+    - Head-mounted flashlight toggle via temple touch gesture (`vr_headtorch 1`).
+    - Over-the-shoulder crowbar draw (`slot1`).
+    - Proximity optical scope (`vr_proximity_scope 1`): Zoom (`+alt1`) engages automatically within 15cm of eye.
+    - Touch-to-use (`vr_gesture_use 1`): Physical forward reach triggers `+use`.
+    - Physical melee swing (`vr_melee_swing 1`): Rapid crowbar swing attacks enemies.
 - **Left-Handed Mode (`vr_lefthanded 1`):** Swaps weapon hand, laser sight, triggers, and locomotion/turn sticks dynamically.
 
 ---
 
 ## 4. Console Variables (CVars)
 
-All VR CVars are archived (`FCVAR_ARCHIVE`) and registered early in `Host_Init()`:
+All VR CVars are archived (`FCVAR_ARCHIVE`) and registered early in `Host_Init()` via `XR_RegisterCVars()`:
 
 | CVar | Default | Values | Description |
 | :--- | :---: | :---: | :--- |
-| `vr_smoothturn` | `1` | `0`, `1` | `0` = discrete snap turning, `1` = smooth turning |
+| **Locomotion & Comfort** | | | |
+| `vr_smoothturn` | `1`* | `0`, `1` | `0` = discrete snap turning, `1` = smooth turning (*Launcher defaults to `0` for comfort) |
 | `vr_snap_angle` | `45` | `15`–`90` | Angle step in degrees for snap turn mode |
 | `vr_walkdirection` | `0` | `0`, `1` | `0` = movement oriented by HMD gaze, `1` = oriented by controller |
-| `vr_lasersight` | `1` | `0`, `1` | Real-time 3D red laser beam projected from weapon barrel |
-| `vr_headtorch` | `0` | `0`, `1` | `0` = physical off-hand flashlight, `1` = head-mounted flashlight |
-| `vr_lefthanded` | `0` | `0`, `1` | `1` = primary weapon held in left hand, sticks/triggers inverted |
-| `vr_weapon_pitchadjust` | `0` | `-30`–`+30` | Fine pitch adjustment angle for physical weapon stock alignment |
+| `vr_physical_crouch` | `1` | `0`, `1` | Physical roomscale crouching (triggers `IN_DUCK` when squatting $\ge 28\text{cm}$) |
 | `vr_height_adjust` | `0` | `-20`–`+20` | Standing height offset calibration in GoldSrc units |
 | `vr_worldscale` | `40.0` | `20.0`–`60.0` | Engine units per real-world meter (default: 40.0) |
-| `vr_haptics_enabled` | `1` | `0`, `1` | Haptic vibration feedback on weapon fire, damage, and UI |
+| **Weapons & Combat** | | | |
+| `vr_lasersight` | `1` | `0`, `1` | Real-time 3D red laser beam projected from weapon barrel with impact marker |
+| `vr_headtorch` | `1` | `0`, `1` | `1` = head-mounted flashlight with temple gesture (HL2:VR), `0` = off-hand flashlight |
+| `vr_twohanded` | `0` | `0`, `1` | Enable two-handed weapon grip stabilization with soft clamp |
+| `vr_lefthanded` | `0` | `0`, `1` | `1` = primary weapon held in left hand, sticks/triggers inverted |
+| `vr_weapon_pitchadjust` | `0`* | `-30`–`+30` | Fine pitch adjustment angle for physical weapon alignment (*Launcher defaults to `10`) |
+| `vr_proximity_scope` | `1` | `0`, `1` | Natural optical zoom on Crossbow/Magnum when weapon is brought within 15cm of eye |
+| `vr_melee_swing` | `1` | `0`, `1` | Physical arm swing motion to trigger Crowbar melee attacks |
+| `vr_button_b_action` | `0` | `0`, `1` | Right B button action: `0` = Alt-Fire (`+attack2`, HL2:VR default), `1` = Flashlight |
+| `vr_weapon_offset_forward`| `-10.0` | float | Weapon grip forward offset in GoldSrc units |
+| `vr_calibration_stick` | `0` | `0`, `1` | Real-time 6DoF weapon offset & angle calibration via thumbstick (Team Beef: L/R=axis, U/D=adjust) |
+| **Immersion, Audio & Presence** | | | |
+| `vr_hide_arms` | `1` | `0`, `1`, `2` | `1` = 3D hands only (culls rigid 1998 flat arms), `2` = floating weapons, `0` = original mesh |
+| `vr_audio_hrtf` | `1` | `0`, `1` | 3D binaural HRTF spatial audio with pinna shadowing and 6DoF listener tracking |
+| `vr_haptics_enabled` | `1` | `0`, `1` | OpenXR haptic vibration feedback on weapon fire, damage, and UI |
 | `vr_haptics_intensity` | `1.0` | `0.0`–`2.0` | Global haptic vibration amplitude multiplier |
-| `vr_pointer_hud` | `1` | `0`, `1` | 3D in-headset laser pointer for menu and HUD interaction |
+| `vr_finger_curling` | `1` | `0`, `1` | Procedural finger curling driven by controller analog trigger/grip axes |
+| `vr_finger_curl_scale` | `1.0` | `0.1`–`2.0` | Multiplier for procedural finger curling angle |
+| `vr_gesture_use` | `1` | `0`, `1` | Touch-to-use gesture when extending free hand towards buttons and interactive objects |
+| `vr_offhand_render` | `0` | `0`, `1` | Render secondary 6DoF off-hand presence when not holding weapon |
+| **Spatial UI & Debug** | | | |
+| `vr_pointer_hud` | `1` | `0`, `1` | Beat Saber-style 3D dual alternating laser pointers for menus and UI |
+| `vr_menu_distance` | `1.5` | `1.0`–`3.5` | Distance in meters of floating 2D menu quad canvas in head space |
+| `vr_menu_scale` | `1.4` | `1.0`–`3.0` | Width in meters of floating 2D menu quad canvas |
+| `vr_debug_impacts` | `1` | `0`, `1` | 3D visual markers (crosshairs, tracers, normals) at bullet impact points |
 
 ---
 
@@ -131,7 +168,10 @@ All VR CVars are archived (`FCVAR_ARCHIVE`) and registered early in `Host_Init()
 ./waf build
 ./waf install --destdir=./out
 
-# Run automated Monado headless simulation (bounded 15s test)
+# Run automated Monado comprehensive unit test suite (23 assertion gates, 40s)
+./scripts/test_simulated_monado.sh
+
+# Or run custom map simulation in Monado
 ./scripts/test_simulated_monado.sh crossfire
 
 # Run directly on PCVR headset
@@ -153,10 +193,35 @@ adb install -r out/xash3d-vr-quest.apk
 ./scripts/test_quest_auto.sh 25 crossfire
 ```
 
+### 5.3 Ferramentas MCP & Inteligência de Código (`mcp-tools`)
+
+O fluxo de engenharia do port VR integra ferramentas do Model Context Protocol (MCP) localizadas em `../mcp-tools` para governança, auditoria de código e análise de impacto prévia a refatorações:
+
+- **Repowise:** Análise de call graph, blast radius e rastreamento de símbolos C/C++ sem requisições LLM. Usado para prever quebras ao modificar estruturas de movimentação (`sv_pmove.c`), renderizador (`gl_rmain.c`) ou platform layers (`xr_swapchain.c`).
+- **Graphify:** Mapeamento em grafo de conhecimento (AST + semântico), agrupamento em comunidades e visualização interativa do ecossistema engine/OpenXR (`graphify-out/graph.html`).
+- **Desloppify:** Scanner rigoroso de código morto, acoplamento e dívida técnica C/C++ vinculado a `build/compile_commands.json`.
+
+```bash
+# Verificar status das ferramentas MCP e artefatos de grafo
+./scripts/mcp_tools.sh status
+
+# Gerar/atualizar grafo de conhecimento AST do repositório
+./scripts/mcp_tools.sh graph
+
+# Analisar código morto e símbolos inacessíveis (Repowise)
+./scripts/mcp_tools.sh dead-code
+
+# Executar scanner de higiene e dívida técnica C/C++ (Desloppify)
+./scripts/mcp_tools.sh health
+```
+
 ---
 
 ## 6. Documentação Relacionada
 
-- [Caderno de Engenharia & Anotações de Soluções](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md) — Soluções próprias vs adaptadas, decisões arquiteturais, telemetria headless e integração com Khronos OpenXR-CTS.
-- [Roadmap & Análise de Problemas](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ROADMAP.md) — Fases 01 a 08 e histórico de depuração.
+- [Caderno de Engenharia & Anotações de Soluções](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md) — Soluções próprias vs adaptadas, decisões arquiteturais, telemetria headless, integração OpenXR-CTS e governança MCP.
+- [Roadmap & Análise de Problemas](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ROADMAP.md) — Fases 01 a 08, port tracker e histórico de depuração.
+- [Arquitetura de Compatibilidade de Mods & Mod Manager](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/MOD_COMPATIBILITY_ARCHITECTURE.md) — Sistema de 3 Tiers (Gold, Silver, Bronze), especificações de manifest (`vr_mods.json`), Mod Manager para Quest/PCVR, e protocolos de limpeza de armazenamento.
+- [Estratégia de Sincronização Upstream](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/UPSTREAM_SYNC_STRATEGY.md) — Política de Selective Cherry-Pick com Janela de Maturação (60-90 dias) e testes em sandbox Monado VR.
+
 

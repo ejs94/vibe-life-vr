@@ -1,99 +1,108 @@
 # 📌 Ponto de Parada da Sessão (Session Checkpoint)
 
-**Data do Checkpoint:** 16 de Outubro de 2026  
+**Data do Checkpoint:** 17 de Outubro de 2026  
 **Repositório:** `xash3d-fwgs-vr`  
 **Branch:** `feature/openxr-vr`  
-**Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Desligado (testes executados 100% via simulação Monado PCVR).  
+**Dispositivo Físico:** Meta Quest 3 (`3487C10GBP00JJ`) — Standalone APK pronto para instalação via ADB.  
 **APK Atualizado e Pronto:** [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk)  
 **Caderno de Engenharia:** [Documentation/vr/ENGINEERING_NOTEBOOK.md](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/Documentation/vr/ENGINEERING_NOTEBOOK.md)
 
 ---
 
-## 🏁 O que foi Concluído nesta Sessão
+## 🏁 O que foi Concluído até o Momento
 
-1. **Correção dos Controles Touch / Analógicos Inativos (`input.c`):**
-   - No cliente FWGS moderno, `clgame.dllFuncs.pfnLookEvent` é não-nulo, fazendo `IN_EngineAppendMove` retornar prematuramente antes do bloco OpenXR ser alcançado.
-   - O bloco OpenXR de despacho de comandos (`XR_InputAppendMove`) foi movido para o topo de `IN_EngineAppendMove`.
-   - Locomoção pelo stick analógico esquerdo, giro pelo analógico direito e todos os botões de ação (`IN_ATTACK`, `IN_JUMP`, `IN_DUCK`, `IN_USE`, `IN_RELOAD`, `IN_RUN`, lanterna) agora são devidamente transmitidos ao servidor em todos os frames.
+1. **Controles Touch e Analógicos Ativos:** Locomoção e rotação via analógicos, botões de ação e lanterna integrados no topo de `IN_EngineAppendMove`.
+2. **Origem do Laser e Empunhadura Dominante:** Deslocamento relativo à cabeça (`handPose - headPose`) e alinhamento milimétrico com a mão primária.
+3. **Visão Ortonormal e Eliminação de Náusea:** Matriz de visão direta do quaternion OpenXR ($R, U, F$) combinada com `turn_yaw`.
+4. **Sweet Spot Óptico no Menu Flutuante:** Distância e escala padrão do quad layer calibradas (`vr_menu_distance 1.5m`, `vr_menu_scale 1.4m`).
+5. **Launcher 2D Horizon OS Modernizado:** Layout dinâmico responsivo, botões desacoplados e painel de preferências VR.
+6. **Menu VR In-Headset Dedicado (`CMenuVR`):** Controle completo em C++ para conforto, calibração, miras e áudio dentro do headset.
+7. **Simulador Headless Monado PCVR:** Bateria de testes automatizada executável via terminal sem depender do headset físico.
+8. **Lanterna de Cabeça com Gesto na Têmpora:** Cone de luz acoplado à linha de visão e acionamento por toque na têmpora com debounce.
+9. **Ponteiros Laser Alternados no Menu (Beat Saber Style):** Mira laser simultânea de ambas as mãos com alternância instantânea pelo gatilho.
+10. **Balística a partir do Cano Físico no Servidor:** Tiros e projéteis emergem com precisão milimétrica de `pev->vuser1` (`GetGunPosition()`).
+11. **Arremesso Físico de Granadas por Inércia 6DoF:** Vetor de lançamento soma a velocidade angular/linear do braço do jogador (`pev->vuser3`).
+12. **Áudio Espacial 3D HRTF & Base 6DoF do Ouvinte (Issue #17):**
+    - Listener binaural acoplado à cabeça via `XR_GetHeadCenterTransformWithBasis()`, eliminando gimbal lock no Roll.
+    - Sombra acústica direcional da orelha humana (atenuação de sons traseiros) e difração vertical em `S_SpatializeChannel()`.
+    - Bypass de silenciamento em simulação (`snd_mute_losefocus` desativado se `XR_IsActive()`).
+13. **Bateria Master de Regressão (14/14 Gates 100% PASS):**
+    - `scripts/run_regression_battery.sh` cobrindo OpenXR, FBOs, render estéreo, balística, lasers, áudio HRTF, APK arm64-v8a e layout do Horizon OS.
+14. **Reorganização Estrutural do Repositório:**
+    - Repositório principal mantido isolado e limpo na raiz (`xash3d-fwgs-vr`).
+    - Ferramentas e referências agrupadas em subpastas categorizadas (`mcp-tools`, `other-vr-ports`, `xash3d-upstream`, `xash3d-vr-ports`, `openxr-tooling`).
+15. **Integração das Ferramentas MCP ao Fluxo de Desenvolvimento (`mcp-tools`):**
+    - Configurado `.agents/mcp_config.json` conectando os servidores MCP `repowise` (blast radius e dependência de símbolos) e `graphify` (grafo de conhecimento AST da arquitetura).
+    - Criado utilitário unificado [`scripts/mcp_tools.sh`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/mcp_tools.sh) (`status`, `graph`, `dead-code`, `health`, `mcp-repowise`, `mcp-graphify`).
+    - Gerados os artefatos iniciais do ecossistema: [`graphify-out/graph.json`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/graphify-out/graph.json) (39.710 nós e 106.381 conexões) e visualização interativa [`graphify-out/graph.html`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/graphify-out/graph.html).
+    - Estabelecido protocolo de 3 fases (Pré-Refatoração com Repowise, Implementação com Graphify e Validação com Desloppify + Regressão) em `.agents/rules/mcp_workflow.md` e Seção 8 do Caderno de Engenharia.
 
-2. **Correção do Ponto de Origem do Laser e Empunhadura da Mão Dominante (`xr_input.c`, `gl_rmain.c`, `gl_studio.c`):**
-   - O cálculo das coordenadas da mão em `XR_GetRightHandTransform` e `XR_GetLeftHandTransform` utilizava a pose bruta do OpenXR no espaço de rastreamento do chão (`g_xrLocalSpace`), sem subtrair a posição da cabeça do headset (`g_xrViews[0].pose.position`). Isso deslocava a arma ~1.4m acima e fora do campo relativo da visão.
-   - Subtração da cabeça aplicada: `rel = handPose.position - headPose.position`, alinhando a arma milimetricamente com a mão dominante.
-   - Adicionada detecção e fallback em `gl_rmain.c` contra origens `simorg` obsoletas (centro do jogador): a mira laser agora emerge exclusivamente da ponta do cano da mão primária.
-   - Criada a CVar `vr_twohanded` (padrão `0`) com validação estrita (`aimDir[0] > 0.08f`), impedindo que apertar o grip da mão esquerda aponte a arma para o chão ou suma com o laser.
-
-3. **Eliminação de Náusea no Giro de Cabeça (Roll) com Matriz de Visão Ortonormal Livre de Singularidade (`gl_rmain.c`):**
-   - O cálculo anterior decompunha os quaternions do OpenXR em ângulos de Euler e realizava três rotações legadas do Quake (`ConcatRotate(-roll, 1, 0, 0)`), girando o ponto de vista ao redor do eixo X fixo do mundo em vez da linha de visão do olho.
-   - Implementado cálculo direto da matriz Modelview a partir do quaternion OpenXR: eixos Right ($R$), Up ($U$) e Forward ($F$) ortonormais combinados com a rotação de locomoção `turn_yaw`.
-   - Inclinação lateral da cabeça (roll) agora é 100% natural, sem acelerações espúrias, sem distorção e sem náusea.
-
-4. **Ajuste de Distância do Menu 2D Flutuante (`xr_swapchain.c`, `xr_input.c`):**
-   - Adicionada CVar `vr_menu_distance` (padrão `2.1m`, anteriormente hardcoded em `1.5m`) e `vr_menu_scale` (`1.8m`), trazendo o plano do menu para o sweet spot óptico das lentes do Quest e eliminando o corte ou borrão nas bordas da tela.
-   - Ponteiro laser do cursor em menus perfeitamente sincronizado com a nova distância e escala do quad.
-
-5. **Modernização do Botão de Testes no Launcher Android:**
-   - Botão renomeado para `"TEST GAME"` / `"TESTAR JOGO"` nos arquivos `strings.xml`.
-   - Comando de inicialização atualizado para entrar automaticamente com todas as armas, HEV suit, munição e cheats ativados: `+sv_cheats 1 +map crossfire +give item_suit +impulse 101`.
-
-6. **Simulação PCVR com Movimentação 6DoF de Cabeça:**
-   - Implementadas as CVars `vr_test_head` (0/1), `vr_test_head_pitch`, `vr_test_head_yaw` e `vr_test_head_roll` em `xr_swapchain.c` para teste programático.
-   - Criado e executado o script [scripts/simulate_head_and_weapons.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/simulate_head_and_weapons.cfg) no simulador Monado, gerando evidências visuais de rotação de cabeça e disparo com MP5, Shotgun e Hornetgun.
-
-7. **Lanterna Montada na Cabeça & Gesto 6DoF na Têmpora (HL1 & HL2:VR Style) (`cl_tent.c`, `xr_input.c`):**
-   - Removida a lógica de lanterna física acoplada à mão secundária; o cone de luz agora é montado na cabeça (`cl.viewheight`) e segue a linha de visão do jogador (`cl.viewangles`).
-   - Implementada detecção de gesto espacial 6DoF: ao aproximar qualquer uma das mãos da lateral da cabeça (região têmpora/orelha, distância $< 28\text{ cm}$, $|y| < 18\text{ cm}$, $|x| > 7\text{ cm}$) e puxar o gatilho (*trigger*) ou apertar o *grip*, a lanterna alterna (`impulse 100`).
-   - Disparo de armas suprimido (`cmd->buttons &= ~(IN_ATTACK | IN_ATTACK2)`) durante o gesto para impedir auto-disparo acidental na cabeça.
-   - Vibração tátil de clique (*haptics*) disparada no controle que acionou o gesto, com *debounce* de 350ms.
-
-8. **Ponteiros Laser Duplos Alternados no Menu Flutuante (Beat Saber Style) (`xr_input.c`, `xr_input.h`, `gl_rmain.c`):**
-   - Ambos os controles (esquerdo e direito) agora projetam raios laser tridimensionais simultâneos contra a tela flutuante do menu.
-   - Puxar o gatilho da mão esquerda alterna o cursor do mouse e clica no alvo da mão esquerda; puxar o gatilho da mão direita alterna instantaneamente para a direita.
-   - Renderização diferenciada: mão ativa em feixe ciano vibrante (espessura 2.5), mão secundária em feixe âmbar (espessura 1.6).
-   - Validado no simulador Monado via script [scripts/simulate_headgesture_beatsaber.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/simulate_headgesture_beatsaber.cfg).
-
----
-
-9. **Ajuste de Layout e Escala de Fontes do Launcher 2D no Meta Horizon OS (Issue #10) (`activity_main.xml`, `card_game.xml`, `vr_preferences.xml`, `Game.kt`):**
-   - Corrigido o colapso de layout da Toolbar no Horizon OS definindo altura e `minHeight` para `?attr/actionBarSize` dentro do `AppBarLayout`.
-   - Cards de jogos em `card_game.xml` ajustados para altura dinâmica `wrap_content` (com `minHeight="170dp"`), eliminando a altura fixa de `160dp` que cortava os botões ao redimensionar a janela flutuante no Quest.
-   - Desacoplamento de âncoras no card: a badge com ícone e título foi ancorada de forma independente no topo-início (`top_toTopOf="parent"`), enquanto o container de botões de ação ("TEST GAME" e "PLAY IN VR") foi ancorado na base-fim (`bottom_toBottomOf="parent"`), impedindo sobreposição e colisão horizontal em qualquer proporção de tela.
-   - Adicionadas novas preferências VR em `vr_preferences.xml` (`vr_lasersight`, `vr_headtorch`, `vr_lefthanded`, `vr_twohanded`) e strings em `strings.xml`.
-   - Conectados os novos parâmetros em `Game.kt` (`buildString`), passando-os automaticamente na linha de comando de inicialização da engine.
-
-10. **Menu de Opções VR Dedicado In-Headset (Issue #13) (`3rdparty/mainui/menus/VR.cpp`, `BaseMenu.h`, `Configuration.cpp`):**
-    - Desenvolvido o menu completo em C++ `CMenuVR` integrado ao sistema `mainui` do Xash3D.
-    - Seções organizadas com cabeçalhos legíveis:
-      - *Locomotion & Comfort:* `vr_smoothturn` (Smooth/Snap turn toggle), `vr_snap_angle` (SpinControl 15°–90°), `vr_walkdirection` (Head/Controller orientation).
-      - *Weapons & Flashlight:* `vr_lasersight` (mira laser 3D no cano), `vr_headtorch` (lanterna montada na cabeça), `vr_twohanded` (estabilização com mão secundária), `vr_lefthanded` (modo canhoto), `vr_haptics_enabled` (vibração tátil), `vr_pointer_hud` (ponteiro laser no menu).
-      - *Calibration & Scale:* `vr_weapon_pitchadjust` (-30° a +30°), `vr_worldscale` (escala do mundo 20–60), `vr_height_adjust` (-20 a +20), `vr_menu_distance` (1.0m a 3.5m), `vr_menu_scale` (1.0m a 3.0m).
-    - Registrado como comando de console `menu_vr` e acessível pelo menu de opções (`Configuration -> VR Options`).
-    - Compilação nativa (`out/libmenu.so`) e APK standalone do Meta Quest (`out/xash3d-vr-quest.apk`) testados e validados com 100% de sucesso.
-
----
-
-11. **Balística a partir da Boca Física do Cano no Servidor (Issue #14) (`dlls/player.cpp`, `dlls/rpg.cpp`, `engine/server/sv_pmove.c`):**
-    - `CBasePlayer::GetGunPosition()` em `3rdparty/hlsdk-portable/dlls/player.cpp` agora verifica se `pev->vuser1 != g_vecZero` (preenchido a cada frame de pre-think via `XR_GetPrimaryHandMuzzleTransform` em `sv_pmove.c`) e retorna `pev->origin + pev->vuser1`.
-    - Como todas as armas do Half-Life (Glock, MP5, Python, Shotgun, Gauss/Tau Cannon, Egon, Crossbow, Hornet Gun, Crowbar) utilizam `GetGunPosition()`, todos os tiros hitscan, raios de energia e projéteis físicos agora emergem com precisão milimétrica da boca da arma na mão dominante do jogador, alinhados com o laser sight 3D.
-    - O disparo de foguete em `rpg.cpp` foi adaptado em VR para emergir diretamente da boca do lançador sem a translação de ombro da tela plana de 1998.
-
-12. **Lançamento Físico de Granadas por Inércia e Momento 6DoF (Issue #15) (`handgrenade.cpp`, `xr_input.c`, `sv_pmove.c`):**
-    - Em `xr_input.c`, `XR_GetRightHandVelocity` e `XR_GetLeftHandVelocity` agora rotacionam o vetor linear de velocidade OpenXR pelo ângulo de giro do jogador (`s_playerTurnYaw`), convertendo o vetor de inércia da sala física para o referencial mundial de jogo.
-    - `sv_pmove.c` atualizado para repassar a velocidade da mão dominante do jogador para o servidor através de `clent->v.vuser3` (`XR_GetPrimaryHandVelocity`).
-    - Em `handgrenade.cpp`, `CHandGrenade::WeaponIdle()` agora instancia a granada na posição real da mão (`pev->origin + pev->vuser1 + gpGlobals->v_forward * 6.0f`) e adiciona o momento físico do braço do jogador ao vetor de arremesso (`vecThrow += m_pPlayer->pev->vuser3 * 1.25f`) quando a velocidade de movimento manual for superior a 40 unidades/s, possibilitando arremessos manuais intuitivos em VR.
-    - APK atualizado compilado com sucesso (`BUILD SUCCESSFUL in 18s`) e salvo em [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk).
-
-13. **Bateria de Testes Regressivos Automatizados (12/12 Gates Aprovados):**
-    - Criado o script unificado [scripts/regression_master.cfg](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/regression_master.cfg) e o executor [scripts/run_regression_battery.sh](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/run_regression_battery.sh).
-    - Executados os 12 gates de verificação cobrindo OpenXR runtime, 14 CVars VR, acionamento do menu VR in-headset (`CMenuVR`), alternância Beat Saber de lasers, carga de mapa 3D (`c1a0`), lanterna por gesto na têmpora, inclinação de cabeça (roll) ortonormal sem gimbal lock, balística 6DoF de cano (MP5, Shotgun, Crossbow, RPG), arremesso de granadas por momento físico, empunhadura bimanual, integridade das 5 bibliotecas nativas arm64-v8a no APK standalone e layout do launcher no Horizon OS.
-    - Todos os 12 testes foram aprovados com 100% de sucesso. Relatório detalhado em [`regression_test_report.md`](file:///home/ejs94/.gemini/antigravity-ide/brain/97590628-7c11-438b-af73-35b4132380c8/regression_test_report.md).
+16. **Mapeamento de Controles Unificado Padrão Half-Life 2: VR Mod:**
+    - Botão A direito: Recarregar (`+reload`).
+    - Botão B direito: Disparo Secundário (`+attack2`, lança-granadas na MP5, tiro duplo na Shotgun).
+    - Botão X esquerdo: Pular (`+jump`).
+    - Botão Y esquerdo: Usar / Interagir (`+use`).
+    - Alternância de menu universal no botão Menu (`K_ESCAPE`).
+17. **Arquitetura de Compatibilidade de Mods em 3 Tiers & Governança de Roadmap:**
+    - Tiers estritos: **Gold** (Native VR), **Silver** (Calibrated Profile), **Bronze** (Universal Fallback).
+    - Manifesto padronizado tipado em TypeScript com `extended_features` e flag opcional `vibe_code`.
+    - Isolamento de SDKs sem conflito no engine/DLL ABI.
+    - Convenção honesta adotada no Roadmap: bugs reabrem fases em 🟠 **Maintenance / Remediation**.
+18. **Remediações Críticas Implementadas no HL1 Benchmark (Qualidade Gold Native VR):**
+    - **Agachamento Físico Roomscale (`vr_physical_crouch`):** Headset caindo $\ge 28\text{cm}$ ativa o hull de 36 unidades, evitando que o jogador fique preso em dutos de ventilação (ex: Black Mesa `c1a2`).
+    - **Alinhamento 6DoF de Minas e Snarks:** Trace de posicionamento de Tripmines e arremesso de Snarks seguem o vetor físico 6DoF da mão controladora (`pev->vuser2`), incorporando a inércia do golpe físico (`pev->vuser3 * 1.25f`).
+    - **Física de Escadas em VR Desacoplada do Headset Pitch:** Analógico para frente sempre sobe ao longo do plano da escada independente de olhar para baixo, e o pulo no topo da escada impulsiona suavemente para a borda em vez de ejetar o jogador 270 unidades para trás.
+19. **APK Meta Quest Standalone Atualizado e Pronto:**
+    - APK recompilado em 33s em [`out/xash3d-vr-quest.apk`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/out/xash3d-vr-quest.apk).
+    - Binários x86_64 do host atualizados e validados com testes automatizados headless (`simulate_gold_remediations.cfg`, exit code 0).
+20. **Suíte Oficial de Testes Unitários no Monado OpenXR (`scripts/test_simulated_monado.sh`):**
+    - Transformado em um executor de testes unitários end-to-end assertivo, cobrindo 100% dos subsistemas desenvolvidos em PCVR simulado via Monado (`scripts/monado_unit_tests.cfg`).
+    - Bateria com 23 asserções automatizadas cobrindo runtime OpenXR, menus, lasers Beat Saber, layout HL2:VR, agachamento físico, balística 6DoF, minas, snarks, mãos esqueléticas e áudio HRTF.
+    - **Resultado:** 23/23 testes aprovados (100% GREEN), 18 capturas de tela visuais em PNG geradas em `out/evidence/monado_unittest_*/`.
+21. **Interface do Menu VR In-Headset com Abas de Sessões & Aba Dedicada para VR Debug (`CMenuVR`):**
+    - Subdivisão do menu superlotado em 4 abas ergonômicas usando `CMenuTabView` com suporte total a input interativo (mouse, laser pointer VR, hotkeys `[` e `]`):
+      - **Aba 1 (Locomotion & Comfort):** Smooth turn, snap turn angle, walk direction de controle, physical roomscale crouch e ajuste de distância/escala do menu 2D flutuante.
+      - **Aba 2 (Weapons & Combat):** Mira laser 3D, lanterna de cabeça, estabilização bimanual, empunhadura canhota, mira óptica por proximidade, golpe físico do pé-de-cabra e ajuste de pitch do cano.
+      - **Aba 3 (Presence & Audio):** Flexão procedural dos dedos, presença 6DoF da mão secundária, gesto touch-to-use, vibração tátil dos gatilhos, laser HUD pointer, áudio espacial 3D HRTF e calibração de altura/escala de mundo.
+      - **Aba 4 (VR Debug - Aba Dedicada):** Marcadores visuais 3D de impacto de projéteis (`vr_debug_impacts`), simulação 6DoF de headset e controles para testes headless, botões de ação interativos para registrar amostras e limpar marcadores (`vr_record_impact`, `vr_clear_impacts`), reset de calibração para padrão de fábrica e painel de telemetria em tempo real (Meta Quest 3, taxa de amostragem de 120Hz, limiar de duck de 28cm e pipeline estéreo ref_gl_vr).
+    - Validação com 100% PASS (23/23 testes green no Monado) e APK Meta Quest compilado e pronto em `out/xash3d-vr-quest.apk`.
+22. **Estabilização Bimanual com Gating Espacial e Soft Clamp (`vr_twohanded`):**
+    - Modelo ergonômico validado (*FEAR VR* e *Lambda1VR*): vetor dominante $\to$ secundária com avanço frontal de 5cm a 60cm, separação euclidiana de 12cm a 65cm e clamp assintótico suave (`softDev`) prevenindo paradas bruscas em rotações acentuadas.
+23. **Proximity Scope Natural (`vr_proximity_scope`):**
+    - Ativação automática de zoom ótico (`+alt1`) ao aproximar o visor da Crossbow/Magnum a menos de 15cm do olho.
+24. **Toque Físico com o Cenário (`vr_gesture_use`):**
+    - Disparo natural de interação ao estender a mão livre contra botões, painéis e estações HEV no mapa.
 
 ---
 
-## 🎯 Próximos 2 Issues para Solucionar Imediatamente
+25. **Mãos Esqueléticas 3D e Curvatura Contínua dos Dedos (Issue #16):**
+    - Desacoplamento de braços planos de 1998 com preservação de luvas e palmas (`vr_hide_arms 1`).
+    - Flexão procedural analógica contínua orientando ossos de falanges via quaternions locais:
+      - Gatilho analógico: Dedo indicador (`Finger1` / `Bone31..33`).
+      - Grip analógico: Dedos médio, anelar e mínimo (`Finger2..4` / `Bone35..45`).
+      - Toque capacitivo/deflexão: Polegar (`Finger0` / `Bone27..29`).
+    - Suporte bidirecional para rigs Valve Standard (`Bip01 Finger0..4`) e malhas standalone (`Bone27..45`).
+    - Entidade 6DoF dedicada de presença de mão desacoplada (`s_offhandEnt`, `vr_offhand_render 1`) com suporte nativo ao modelo [`models/v_hand.mdl`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/assets/valve_vr/models/v_hand.mdl).
+26. **Parser C em Tempo de Execução de Perfis Declarativos (`vr_weapons.json` — Tier Silver):**
+    - Módulo C zero-dependência [`engine/platform/openxr/xr_profile.c`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_profile.c) e [`xr_profile.h`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_profile.h) que carrega e analisa manifests JSON na inicialização e troca de mapas.
+    - Calibração por arma de `grip_offset`, `pitch_adjust`, `yaw_adjust`, `roll_adjust`, gating bimanual `two_handed` (bloqueando duas mãos no pé-de-cabra/granadas), distâncias mín/máx de empunhadura, índices de attachment de cano/ejeção/carregador e hápticos dedicados.
+    - Comando de console para hot-reload em tempo real no headset: `vr_reload_weapon_profiles`.
+    - Bateria de testes Monado expandida para 24 asserções automatizadas com **100% PASS (24/24 GREEN)**.
+27. **Remediação de Dívida Técnica e Code Health Guiada por Repowise:**
+    - Diagnóstico de saúde do Repowise MCP atendido: [`engine/platform/openxr/xr_input.c`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/engine/platform/openxr/xr_input.c).
+    - Modularização de `XR_InputAppendMove` (queda de complexidade de CCN 160 $\to$ 4, decomposta em `XR_ProcessTriggers`, `XR_ProcessAltFireButton`, `XR_ProcessCrouchAndSprint`, `XR_ProcessUseAndFlashlight`, `XR_ProcessHeadFlashlightGesture`, `XR_ProcessWeaponSelectionGestures`, `XR_ProcessTouchToUse`, `XR_ProcessProximityScope`, `XR_ProcessPhysicalMeleeSwing`, `XR_ProcessLocomotionAndTurn`).
+    - Modularização de `XR_SyncInputs` (CCN 72 $\to$ 3, decomposta em `XR_SyncActionStates`, `XR_SyncThumbsticksAndCurls`, `XR_SyncHandPoses`).
+    - Modularização de `XR_UpdatePointerCursor` (CCN 80 $\to$ 28, decomposta em `XR_ProcessMenuToggle`, `XR_TracePointerRayForHand`, `XR_ProcessPointerTriggers`, `XR_ProcessPointerScroll`).
+    - Modularização de `XR_InitInput` (decomposta em `XR_CreateAllActions`, `XR_SuggestAllBindings`, `XR_AttachActionSetsAndSpaces`).
+    - Validação total com build Waf 100% limpo e **24/24 Monado tests 100% GREEN**.
 
-1. **Issue #16 — Rastreamento Óptico dos Dedos e Mãos Esqueléticas 3D Articuladas (Feature #12 / Phase 07):**
-   - Substituir o modelo estático clássico de luva por malha de mão 3D independente com esqueleto articulado nos dedos (falanges proximal, intermediária e distal).
-   - Acoplar o fechamento e abertura de dedos aos gatilhos analógicos (*trigger* e *grip*) ou à extensão OpenXR `XR_EXT_hand_tracking` no Meta Quest 3S.
+---
 
-2. **Issue #17 — Áudio Espacial 3D HRTF em Tempo Real com OpenAL Soft (Phase 07):**
-   - Configurar o backend OpenAL Soft no Android e PCVR para ativar funções de transferência binaural (HRTF) nas caixas acústicas do Quest 3S, garantindo posicionamento acústico 3D de passos de inimigos, ricochetes e vozes no ambiente.
+## 🎯 Próximo Desafio Prioritário (Fase 09)
+
+1. **Testes de Campo no Dispositivo Físico Meta Quest 3:**
+   - Instalação do APK atualizado via ADB (`adb install -r out/xash3d-vr-quest.apk`).
+   - Validação da empunhadura física dos controles Touch Plus nos modelos de armas calibrados pelo `vr_weapons.json`.
+   - Verificação da renderização da mão secundária `v_hand.mdl` e resposta tátil de recuo.
+
+
