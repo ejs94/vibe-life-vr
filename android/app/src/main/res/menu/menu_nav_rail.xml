@@ -3,7 +3,7 @@
 	<item
 		android:id="@+id/libraryFragment"
 		android:icon="@drawable/ic_games_24"
-		android:title="@string/nav_games" />
+		android:title="@string/nav_library" />
 	<item
 		android:id="@+id/vrSettingsFragment"
 		android:icon="@drawable/ic_vr_headset_24"

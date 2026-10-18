@@ -18,7 +18,7 @@
 	<string-array name="vr_weapon_pitch_entries">
 		<item>-10°</item>
 		<item>0° (Flat)</item>
-		<item>+10° (Quest Touch Plus)</item>
+		<item>+10° (Standard 6DoF)</item>
 		<item>+15°</item>
 		<item>+20°</item>
 	</string-array>
@@ -56,5 +56,15 @@
 		<item>1.0</item>
 		<item>1.25</item>
 		<item>1.4</item>
+	</string-array>
+
+	<!-- Upper Face Button Action -->
+	<string-array name="vr_button_b_entries">
+		<item>Secondary Fire (+attack2, HL2:VR)</item>
+		<item>Flashlight (impulse 100)</item>
+	</string-array>
+	<string-array name="vr_button_b_values">
+		<item>0</item>
+		<item>1</item>
 	</string-array>
 </resources>

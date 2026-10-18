@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="library">Biblioteca</string>
+	<string name="nav_library">Biblioteca</string>
+	<string name="nav_games">Biblioteca</string>
+	<string name="nav_vr_settings">Configurações VR</string>
+	<string name="nav_settings">Configurações do Motor</string>
+	<string name="nav_diagnostics">Diagnósticos VR</string>
 	<string name="dedicated_server">Dedicado</string>
 	<string name="app_settings">Configurações</string>
 	<string name="game_settings">Configurações do jogo</string>
@@ -23,3 +28,4 @@
 	<string name="test_map_crossfire">Crossfire (Todas as armas no chão)</string>
 	<string name="test_map_hazard">Hazard Course (Campo de treinamento)</string>
 </resources>
+

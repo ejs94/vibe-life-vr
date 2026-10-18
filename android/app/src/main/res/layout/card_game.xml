@@ -42,7 +42,8 @@
 		<com.google.android.material.card.MaterialCardView
 			style="@style/Widget.Material3.CardView.Filled"
 			android:layout_width="wrap_content"
-			android:layout_height="52dp"
+			android:layout_height="wrap_content"
+			android:minHeight="52dp"
 			android:layout_marginStart="16dp"
 			android:layout_marginTop="16dp"
 			app:cardBackgroundColor="#CC22262C"
@@ -56,7 +57,8 @@
 
 			<androidx.constraintlayout.widget.ConstraintLayout
 				android:layout_width="wrap_content"
-				android:layout_height="match_parent">
+				android:layout_height="wrap_content"
+				android:minHeight="36dp">
 
 				<ImageView
 					android:id="@+id/gameIcon"
@@ -74,9 +76,10 @@
 					android:id="@+id/gameTitle"
 					style="@style/TextAppearance.Material3.TitleMedium"
 					android:layout_width="wrap_content"
-					android:layout_height="match_parent"
+					android:layout_height="wrap_content"
 					android:gravity="center_vertical"
-					android:singleLine="true"
+					android:maxLines="1"
+					android:ellipsize="end"
 					android:textSize="18sp"
 					android:textStyle="bold"
 					android:textColor="@color/horizon_text_primary"
@@ -110,7 +113,7 @@
 				android:id="@+id/btnTestMap"
 				style="@style/Widget.Material3.Button.TonalButton"
 				android:layout_width="wrap_content"
-				android:layout_height="48dp"
+				android:layout_height="wrap_content"
 				android:minHeight="48dp"
 				android:layout_marginEnd="10dp"
 				android:text="@string/launch_test_map"
@@ -129,7 +132,7 @@
 				android:id="@+id/launchButton"
 				style="@style/Widget.Material3.Button"
 				android:layout_width="wrap_content"
-				android:layout_height="48dp"
+				android:layout_height="wrap_content"
 				android:minHeight="48dp"
 				android:text="@string/play_in_vr"
 				android:textColor="@color/horizon_bg"

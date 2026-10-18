@@ -77,7 +77,32 @@
 			app:layout="@layout/switch_preference"
 			app:summary="@string/vr_twohanded_summary"
 			app:title="@string/vr_twohanded_title" />
+
+		<ListPreference
+			app:defaultValue="0"
+			app:entries="@array/vr_button_b_entries"
+			app:entryValues="@array/vr_button_b_values"
+			app:key="vr_button_b_action"
+			app:layout="@layout/list_preference"
+			app:summary="@string/vr_button_b_summary"
+			app:title="@string/vr_button_b_title"
+			app:useSimpleSummaryProvider="true" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="true"
+			app:key="vr_debug_impacts"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_debug_impacts_summary"
+			app:title="@string/vr_debug_impacts_title" />
+
+		<SwitchPreferenceCompat
+			app:defaultValue="false"
+			app:key="vr_calibration_stick"
+			app:layout="@layout/switch_preference"
+			app:summary="@string/vr_calibration_stick_summary"
+			app:title="@string/vr_calibration_stick_title" />
 	</PreferenceCategory>
+
 
 	<PreferenceCategory
 		app:title="@string/vr_performance_category">
