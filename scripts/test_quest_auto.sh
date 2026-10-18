@@ -82,7 +82,8 @@ adb shell pm grant "$PACKAGE_NAME" android.permission.RECORD_AUDIO >/dev/null 2>
 adb shell pm grant "$PACKAGE_NAME" android.permission.BLUETOOTH_CONNECT >/dev/null 2>&1 || true
 
 # 5. Clear logcat and prepare background capture
-log_info "Clearing logcat buffer..."
+log_info "Clearing logcat buffer and stale dumps..."
+adb shell "rm -f /sdcard/xash/vr_eye0.ppm /sdcard/screencap_os.png" 2>/dev/null || true
 adb logcat -c
 
 LOGCAT_FILE="${OUTPUT_DIR}/logcat_quest.log"

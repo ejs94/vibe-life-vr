@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# Xash3D VR - Build Script for Meta Quest Standalone (Quest 1, 2, Pro, 3, 3S)
+# Xash3D VR - Build Script for Meta Quest Standalone (Quest 1, 2, Pro, 3)
 # ==============================================================================
 
 set -e

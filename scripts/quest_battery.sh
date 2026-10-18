@@ -103,6 +103,7 @@ show_status() {
 
     local model
     model=$($ADB_CMD shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+    model=$(echo "$model" | sed -e 's/Quest_3S/Quest 3/g' -e 's/Quest 3S/Quest 3/g')
 
     echo "=========================================================="
     echo "  🥽 Meta Quest Battery & Thermal Health Monitor          "
