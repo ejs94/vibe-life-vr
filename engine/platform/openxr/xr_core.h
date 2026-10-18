@@ -14,6 +14,7 @@ extern XrSystemId g_xrSystemId;
 extern XrSession g_xrSession;
 extern XrSpace g_xrLocalSpace;
 extern XrSpace g_xrViewSpace;
+extern XrSpace g_xrMenuQuadSpace;
 extern XrSessionState g_xrSessionState;
 extern qboolean g_xrSessionRunning;
 
@@ -48,12 +49,47 @@ extern EXPORT convar_t *vr_test_head;
 extern EXPORT convar_t *vr_test_head_pitch;
 extern EXPORT convar_t *vr_test_head_yaw;
 extern EXPORT convar_t *vr_test_head_roll;
+extern EXPORT convar_t *vr_test_head_drop;
 extern EXPORT convar_t *vr_test_headgesture;
 extern EXPORT convar_t *vr_audio_hrtf;
 extern EXPORT convar_t *vr_finger_curling;
 extern EXPORT convar_t *vr_finger_curl_scale;
 extern EXPORT convar_t *vr_offhand_render;
 extern EXPORT convar_t *vr_test_finger_curl;
+extern EXPORT convar_t *vr_proximity_scope;
+extern EXPORT convar_t *vr_gesture_use;
+extern EXPORT convar_t *vr_melee_swing;
+extern EXPORT convar_t *vr_debug_impacts;
+extern EXPORT convar_t *vr_debug_hand;
+extern EXPORT convar_t *vr_calibration_stick;
+extern EXPORT convar_t *vr_weapon_idle_mode;
+extern EXPORT convar_t *vr_weapon_anchor_root;
+extern EXPORT convar_t *vr_weapon_skip_draw;
+extern EXPORT convar_t *vr_button_b_action;
+extern EXPORT convar_t *vr_test_btn_reload;
+extern EXPORT convar_t *vr_test_btn_altfire;
+extern EXPORT convar_t *vr_test_btn_jump;
+extern EXPORT convar_t *vr_test_btn_use;
+extern EXPORT convar_t *vr_physical_crouch;
+extern EXPORT convar_t *vr_menu_tab;
+
+// 3D visual bullet impact debug marker tracking structure
+typedef struct vr_debug_impact_s
+{
+    vec3_t start;       // Weapon muzzle position
+    vec3_t end;         // Exact surface impact position
+    vec3_t normal;      // Impact surface normal
+    double expire_time; // Absolute expiration timestamp in host.realtime
+    int shot_id;        // Monotonically increasing shot identifier
+} vr_debug_impact_t;
+
+#define MAX_VR_DEBUG_IMPACTS 32
+extern EXPORT vr_debug_impact_t g_vrDebugImpacts[MAX_VR_DEBUG_IMPACTS];
+extern EXPORT int g_vrNumDebugImpacts;
+extern EXPORT int g_vrTotalShotsFired;
+
+EXPORT void XR_AddDebugBulletImpact( const float *start, const float *end, const float *normal );
+EXPORT void XR_ClearDebugBulletImpacts( void );
 
 EXPORT void XR_RegisterCVars( void );
 EXPORT qboolean XR_Init( void );

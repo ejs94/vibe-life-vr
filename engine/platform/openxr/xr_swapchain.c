@@ -245,11 +245,12 @@ qboolean XR_WaitFrame( XrFrameState *outFrameState )
             q.y = sy * cp * cr - cy * sp * sr;
             q.z = cy * cp * sr + sy * sp * cr;
 
+            float head_y_drop = (vr_test_head_drop ? vr_test_head_drop->value : 0.0f);
             for (int eye = 0; eye < 2; eye++)
             {
                 g_xrViews[eye].pose.orientation = q;
                 g_xrViews[eye].pose.position.x = (eye == 0) ? -0.032f : 0.032f;
-                g_xrViews[eye].pose.position.y = 1.65f;
+                g_xrViews[eye].pose.position.y = 1.65f + head_y_drop;
                 g_xrViews[eye].pose.position.z = 0.0f;
             }
         }
@@ -379,21 +380,38 @@ void XR_EndFrame( void )
     projLayer.viewCount = 2;
     projLayer.views = projViews;
 
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
+    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.4f;
+    float quadHeight = menuScale * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
+
     XrCompositionLayerQuad quadLayer = {0};
     quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     quadLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
+    quadLayer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
     quadLayer.subImage.swapchain = g_xrEyeSwapchains[0].swapchain;
     quadLayer.subImage.imageRect.offset.x = 0;
     quadLayer.subImage.imageRect.offset.y = 0;
     quadLayer.subImage.imageRect.extent.width = g_xrEyeSwapchains[0].width;
     quadLayer.subImage.imageRect.extent.height = g_xrEyeSwapchains[0].height;
-    quadLayer.pose.position.x = 0.0f;
-    quadLayer.pose.position.y = 0.0f;
-    quadLayer.pose.position.z = -1.5f; // Floating 1.5m ahead
-    quadLayer.pose.orientation.w = 1.0f;
-    quadLayer.size.width = 1.6f;
-    quadLayer.size.height = 0.9f;
+    quadLayer.size.width = menuScale;
+    quadLayer.size.height = quadHeight;
+
+    if (g_xrMenuQuadSpace != XR_NULL_HANDLE)
+    {
+        quadLayer.space = g_xrMenuQuadSpace;
+        quadLayer.pose.position.x = 0.0f;
+        quadLayer.pose.position.y = 0.0f;
+        quadLayer.pose.position.z = 0.0f;
+        quadLayer.pose.orientation.w = 1.0f;
+    }
+    else
+    {
+        quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
+        quadLayer.pose.position.x = 0.0f;
+        quadLayer.pose.position.y = 0.0f;
+        quadLayer.pose.position.z = -menuDist;
+        quadLayer.pose.orientation.w = 1.0f;
+    }
 
     const XrCompositionLayerBaseHeader *layers[2];
     uint32_t activeLayers = 0;
@@ -416,6 +434,110 @@ void XR_EndFrame( void )
     xrEndFrame(g_xrSession, &endInfo);
 }
 
+static qboolean s_menuQuadAnchored = false;
+static float s_menuAnchorHeadPos[3] = {0.0f, 0.0f, 0.0f};
+
+void XR_ResetMenuAnchor( void )
+{
+    s_menuQuadAnchored = false;
+}
+
+qboolean XR_IsMenuQuadAnchored( void )
+{
+    return s_menuQuadAnchored && (g_xrMenuQuadSpace != XR_NULL_HANDLE);
+}
+
+XrSpace XR_GetMenuQuadSpace( void )
+{
+    return g_xrMenuQuadSpace;
+}
+
+void XR_AnchorMenuQuad( void )
+{
+    if (!g_xrSessionRunning || g_xrSession == XR_NULL_HANDLE || g_xrLocalSpace == XR_NULL_HANDLE || g_xrViewSpace == XR_NULL_HANDLE)
+        return;
+
+    XrTime syncTime = g_currentFrameState.predictedDisplayTime;
+    if (syncTime <= 0)
+        return;
+
+    // Query head pose in room/local reference space
+    XrSpaceLocation headLoc = {0};
+    headLoc.type = XR_TYPE_SPACE_LOCATION;
+    if (XR_FAILED(xrLocateSpace(g_xrViewSpace, g_xrLocalSpace, syncTime, &headLoc)))
+        return;
+
+    if (!(headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) ||
+        !(headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+        return;
+
+    float hx = headLoc.pose.position.x;
+    float hy = headLoc.pose.position.y;
+    float hz = headLoc.pose.position.z;
+
+    s_menuAnchorHeadPos[0] = hx;
+    s_menuAnchorHeadPos[1] = hy;
+    s_menuAnchorHeadPos[2] = hz;
+
+    // Extract horizontal forward vector from head orientation quaternion
+    float qx = headLoc.pose.orientation.x;
+    float qy = headLoc.pose.orientation.y;
+    float qz = headLoc.pose.orientation.z;
+    float qw = headLoc.pose.orientation.w;
+
+    // In OpenXR view space, -Z is forward
+    float fx = -2.0f * (qx * qz + qw * qy);
+    float fz = -1.0f + 2.0f * (qx * qx + qy * qy);
+
+    float fwdLen = sqrtf(fx * fx + fz * fz);
+    if (fwdLen > 0.001f)
+    {
+        fx /= fwdLen;
+        fz /= fwdLen;
+    }
+    else
+    {
+        fx = 0.0f;
+        fz = -1.0f;
+    }
+
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
+
+    // Anchor quad floating in room space in front of player, slightly lowered for ergonomic gaze
+    float anchorX = hx + fx * menuDist;
+    float anchorY = hy - 0.05f;
+    float anchorZ = hz + fz * menuDist;
+
+    // Quad faces back towards player (-fx, -fz)
+    float theta = atan2f(fx, -fz);
+    float halfTheta = theta * 0.5f;
+    float quadQy = sinf(halfTheta);
+    float quadQw = cosf(halfTheta);
+
+    if (g_xrMenuQuadSpace != XR_NULL_HANDLE)
+    {
+        xrDestroySpace(g_xrMenuQuadSpace);
+        g_xrMenuQuadSpace = XR_NULL_HANDLE;
+    }
+
+    XrReferenceSpaceCreateInfo spaceInfo = {0};
+    spaceInfo.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
+    spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    spaceInfo.poseInReferenceSpace.position.x = anchorX;
+    spaceInfo.poseInReferenceSpace.position.y = anchorY;
+    spaceInfo.poseInReferenceSpace.position.z = anchorZ;
+    spaceInfo.poseInReferenceSpace.orientation.x = 0.0f;
+    spaceInfo.poseInReferenceSpace.orientation.y = quadQy;
+    spaceInfo.poseInReferenceSpace.orientation.z = 0.0f;
+    spaceInfo.poseInReferenceSpace.orientation.w = quadQw;
+
+    XrResult res = xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrMenuQuadSpace);
+    if (XR_SUCCEEDED(res))
+    {
+        s_menuQuadAnchored = true;
+    }
+}
+
 EXPORT void XR_EndMenuFrame( void )
 {
     if (!g_xrSessionRunning || !g_xrSwapchainsReady) return;
@@ -434,13 +556,39 @@ EXPORT void XR_EndMenuFrame( void )
         return;
     }
 
-    // Build quad layer displaying Eye 0 swapchain to both eyes in VR space.
-    // Floating comfortably 1.5m in front of the headset origin in VIEW space (Issue #2).
-    // Pattern inspired by Team Beef (Lambda1VR TBXR_submitFrame quad layer).
+    // Ensure menu quad is anchored in fixed local/room coordinates
+    if (!s_menuQuadAnchored || g_xrMenuQuadSpace == XR_NULL_HANDLE)
+    {
+        XR_AnchorMenuQuad();
+    }
+    else
+    {
+        // Re-anchor if user has walked more than 2.0 meters away from anchor origin in roomscale
+        XrTime syncTime = g_currentFrameState.predictedDisplayTime;
+        if (syncTime > 0 && g_xrLocalSpace != XR_NULL_HANDLE && g_xrViewSpace != XR_NULL_HANDLE)
+        {
+            XrSpaceLocation headLoc = {0};
+            headLoc.type = XR_TYPE_SPACE_LOCATION;
+            if (XR_SUCCEEDED(xrLocateSpace(g_xrViewSpace, g_xrLocalSpace, syncTime, &headLoc)) &&
+                (headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+            {
+                float dx = headLoc.pose.position.x - s_menuAnchorHeadPos[0];
+                float dy = headLoc.pose.position.y - s_menuAnchorHeadPos[1];
+                float dz = headLoc.pose.position.z - s_menuAnchorHeadPos[2];
+                if ((dx * dx + dy * dy + dz * dz) > 4.0f) // > 2.0 meters
+                {
+                    XR_AnchorMenuQuad();
+                }
+            }
+        }
+    }
+
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
+    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.4f;
+
     XrCompositionLayerQuad quadLayer = {0};
     quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
     quadLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
     quadLayer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
     quadLayer.subImage.swapchain = g_xrEyeSwapchains[0].swapchain;
     quadLayer.subImage.imageRect.offset.x = 0;
@@ -448,15 +596,25 @@ EXPORT void XR_EndMenuFrame( void )
     quadLayer.subImage.imageRect.extent.width = g_xrEyeSwapchains[0].width;
     quadLayer.subImage.imageRect.extent.height = g_xrEyeSwapchains[0].height;
     quadLayer.subImage.imageArrayIndex = 0;
-    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 2.1f;
-    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.8f;
-
-    quadLayer.pose.position.x = 0.0f;
-    quadLayer.pose.position.y = 0.0f;
-    quadLayer.pose.position.z = -menuDist;
-    quadLayer.pose.orientation.w = 1.0f;
     quadLayer.size.width = menuScale;
     quadLayer.size.height = menuScale * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
+
+    if (g_xrMenuQuadSpace != XR_NULL_HANDLE)
+    {
+        quadLayer.space = g_xrMenuQuadSpace;
+        quadLayer.pose.position.x = 0.0f;
+        quadLayer.pose.position.y = 0.0f;
+        quadLayer.pose.position.z = 0.0f;
+        quadLayer.pose.orientation.w = 1.0f;
+    }
+    else
+    {
+        quadLayer.space = (g_xrViewSpace != XR_NULL_HANDLE) ? g_xrViewSpace : g_xrLocalSpace;
+        quadLayer.pose.position.x = 0.0f;
+        quadLayer.pose.position.y = 0.0f;
+        quadLayer.pose.position.z = -menuDist;
+        quadLayer.pose.orientation.w = 1.0f;
+    }
 
     const XrCompositionLayerBaseHeader *layers[1];
     layers[0] = (const XrCompositionLayerBaseHeader*)&quadLayer;
@@ -742,6 +900,26 @@ qboolean XR_GetHeadCenterTransformWithBasis( vec3_t out_origin_offset, vec3_t ou
     }
 
     return true;
+}
+
+/*
+=================
+XR_GetRoomscaleHeadDrop
+
+Returns vertical displacement in meters relative to calibrated standing height.
+Negative when ducking / squatting in physical roomscale.
+=================
+*/
+float XR_GetRoomscaleHeadDrop( void )
+{
+    if (vr_test_head && vr_test_head->value > 0.0f && vr_test_head_drop)
+        return vr_test_head_drop->value;
+
+    if (!g_xrSessionRunning || !g_xrSwapchainsReady || !s_vrHeadOriginCalibrated)
+        return 0.0f;
+
+    float head_y = (g_xrViews[0].pose.position.y + g_xrViews[1].pose.position.y) * 0.5f;
+    return head_y - s_vrHeadBaseOrigin[1];
 }
 
 #endif // XASH_OPENXR

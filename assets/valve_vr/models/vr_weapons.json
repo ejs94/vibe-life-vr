@@ -1,0 +1,187 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xash3d-fwgs-vr/schemas/main/vr_weapons.schema.json",
+  "version": 1,
+  "description": "Xash3D VR Declarative Weapon Calibration Manifest for Half-Life and GoldSrc Mods",
+  "weapons": {
+    "v_crowbar.mdl": {
+      "name": "Crowbar",
+      "type": "melee",
+      "muzzle_attachment": -1,
+      "grip_offset": [0.0, 3.0, -1.0],
+      "pitch_adjust": -12.0,
+      "two_handed": false,
+      "haptics": {
+        "impact_amplitude": 1.0,
+        "impact_duration_ms": 120
+      }
+    },
+    "v_9mmhandgun.mdl": {
+      "name": "Glock 17 (9mm Handgun)",
+      "type": "hitscan",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 11.5, 2.2],
+      "ejection_attachment": 2,
+      "magwell_attachment": 3,
+      "pitch_adjust": -5.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.12,
+      "two_hand_max_dist": 0.45,
+      "recoil_pitch": 2.0,
+      "haptics": {
+        "fire_amplitude": 0.85,
+        "fire_duration_ms": 65
+      }
+    },
+    "v_357.mdl": {
+      "name": "Colt Python .357 Magnum",
+      "type": "hitscan",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 13.0, 2.8],
+      "cylinder_attachment": 3,
+      "pitch_adjust": -5.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.12,
+      "two_hand_max_dist": 0.45,
+      "recoil_pitch": 5.0,
+      "haptics": {
+        "fire_amplitude": 1.0,
+        "fire_duration_ms": 100
+      }
+    },
+    "v_9mmar.mdl": {
+      "name": "MP5 / 9mm Assault Rifle",
+      "type": "hitscan",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 18.0, 1.8],
+      "grip_attachment": 1,
+      "ejection_attachment": 2,
+      "magwell_attachment": 3,
+      "pitch_adjust": -4.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.18,
+      "two_hand_max_dist": 0.55,
+      "spread_reduction_two_handed": 0.50,
+      "haptics": {
+        "fire_amplitude": 0.70,
+        "fire_duration_ms": 45
+      }
+    },
+    "v_shotgun.mdl": {
+      "name": "SPAS-12 Combat Shotgun",
+      "type": "hitscan",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 21.0, 2.0],
+      "pump_attachment": 1,
+      "pitch_adjust": -4.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.22,
+      "two_hand_max_dist": 0.60,
+      "spread_reduction_two_handed": 0.50,
+      "haptics": {
+        "fire_amplitude": 1.0,
+        "fire_duration_ms": 110,
+        "pump_amplitude": 0.5,
+        "pump_duration_ms": 40
+      }
+    },
+    "v_crossbow.mdl": {
+      "name": "Crossbow",
+      "type": "projectile",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 22.0, 1.5],
+      "grip_attachment": 1,
+      "pitch_adjust": -3.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.20,
+      "two_hand_max_dist": 0.55,
+      "proximity_scope": true,
+      "scope_eye_dist": 0.14
+    },
+    "v_rpg.mdl": {
+      "name": "RPG Launcher",
+      "type": "projectile",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 26.0, 3.0],
+      "grip_attachment": 1,
+      "pitch_adjust": 0.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.25,
+      "two_hand_max_dist": 0.65
+    },
+    "v_gauss.mdl": {
+      "name": "Tau Cannon / Gauss Gun",
+      "type": "beam",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 20.0, 1.0],
+      "grip_attachment": 1,
+      "pitch_adjust": -2.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.20,
+      "two_hand_max_dist": 0.55
+    },
+    "v_egon.mdl": {
+      "name": "Gluon Gun / Egon",
+      "type": "beam",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 22.0, 2.0],
+      "grip_attachment": 1,
+      "pitch_adjust": -2.0,
+      "two_handed": true,
+      "two_hand_min_dist": 0.22,
+      "two_hand_max_dist": 0.55
+    },
+    "v_hgun.mdl": {
+      "name": "Hornet Gun / Hivehand",
+      "type": "projectile",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 15.0, 0.5],
+      "pitch_adjust": -6.0,
+      "two_handed": false
+    },
+    "v_grenade.mdl": {
+      "name": "Hand Grenade",
+      "type": "toss",
+      "muzzle_attachment": -1,
+      "throw_min_speed": 40.0,
+      "throw_speed_multiplier": 1.25,
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    },
+    "v_tripmine.mdl": {
+      "name": "Laser Tripmine",
+      "type": "placeable",
+      "muzzle_attachment": 0,
+      "muzzle_offset_fallback": [0.0, 8.0, 1.0],
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    },
+    "v_satchel.mdl": {
+      "name": "Satchel Charge",
+      "type": "toss",
+      "muzzle_attachment": -1,
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    },
+    "v_satchel_radio.mdl": {
+      "name": "Satchel Detonator",
+      "type": "tool",
+      "muzzle_attachment": -1,
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    },
+    "v_squeak.mdl": {
+      "name": "Snark",
+      "type": "toss",
+      "muzzle_attachment": -1,
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    },
+    "v_hand.mdl": {
+      "name": "VR Hand Presence",
+      "type": "hand",
+      "muzzle_attachment": -1,
+      "pitch_adjust": 0.0,
+      "two_handed": false
+    }
+  }
+}

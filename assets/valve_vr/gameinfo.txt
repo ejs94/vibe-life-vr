@@ -1,0 +1,7 @@
+// Gameinfo for Half-Life VR Content Overlay
+game "Half-Life 1 VR"
+gamedir "valve_vr"
+fallback_dir "valve"
+type "singleplayer_only"
+version "1.0"
+vr_support "1"

@@ -38,6 +38,7 @@ typedef enum {
 typedef struct {
     qboolean attack;
     qboolean attack2;
+    qboolean altfire;
     qboolean jump;
     qboolean duck;
     qboolean use;
@@ -74,12 +75,14 @@ EXPORT float XR_GetPlayerTurnYaw( void );
 EXPORT qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles );
+EXPORT qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle );
 EXPORT qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetRightHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetLeftHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetRightHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles );
 EXPORT qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles );
+EXPORT qboolean XR_IsTwoHandStabilized( void );
 EXPORT void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float *out_thumb );
 
 EXPORT void XR_ApplyHapticFeedback( int hand, float duration_seconds, float frequency_hz, float amplitude );
@@ -103,9 +106,11 @@ static inline float XR_GetPlayerTurnYaw( void ) { return 0.0f; }
 static inline qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity ) { return false; }
 static inline qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles ) { return false; }
+static inline qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle ) { return false; }
 static inline qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
+static inline qboolean XR_IsTwoHandStabilized( void ) { return false; }
 static inline void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float *out_thumb ) {
     if (out_trigger) *out_trigger = 0.0f;
     if (out_grip) *out_grip = 0.0f;
