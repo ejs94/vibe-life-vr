@@ -59,8 +59,8 @@ class GameAdapter(private val libraryViewModel: LibraryViewModel) :
 					libraryViewModel.startEngine(it.context, game)
 				}
 				btnTestMap.setOnClickListener {
-					// Launch test map with cheats enabled, deathmatch mode, suit equipped, and all weapons (impulse 101)
-					libraryViewModel.startEngine(it.context, game, "+sv_cheats 1 +deathmatch 1 +map crossfire +give item_suit +impulse 101")
+					// Launch test map with cheats enabled, deathmatch mode, suit equipped, and all weapons spawned
+					libraryViewModel.startEngine(it.context, game, "+sv_cheats 1 +deathmatch 1 +vr_test_weapons 1 +map crossfire")
 				}
 				btnTestMap.setOnLongClickListener { v ->
 					val options = arrayOf(
@@ -68,8 +68,8 @@ class GameAdapter(private val libraryViewModel: LibraryViewModel) :
 						v.context.getString(R.string.test_map_hazard)
 					)
 					val cmds = arrayOf(
-						"+sv_cheats 1 +deathmatch 1 +map crossfire +give item_suit +impulse 101",
-						"+sv_cheats 1 +map t0a0 +give item_suit +impulse 101"
+						"+sv_cheats 1 +deathmatch 1 +vr_test_weapons 1 +map crossfire",
+						"+sv_cheats 1 +vr_test_weapons 1 +map t0a0"
 					)
 					com.google.android.material.dialog.MaterialAlertDialogBuilder(v.context)
 						.setTitle(R.string.test_map_title)
