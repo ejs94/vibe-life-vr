@@ -68,7 +68,8 @@ require_device() {
         die 'no Quest attached. Checklist:
   1. Developer Mode on (a free developers.meta.com org + the toggle in the Meta Horizon phone app)
   2. a data-capable USB-C cable (not charge-only)
-  3. headset worn once to accept the USB-debugging prompt'
+  3. headset worn once to accept the USB-debugging prompt
+  4. if the headset is asleep, press the power button to wake it; ADB wake is best-effort'
     fi
     quests=$(quest_serials $attached)
     if [ -z "$quests" ]; then
@@ -107,7 +108,7 @@ ensure_awake() {
             *) return 0 ;;
         esac
     done
-    die 'headset would not wake (KEYCODE_POWER sent, still asleep after 4s)'
+    die 'headset did not wake over ADB (KEYCODE_POWER sent, still asleep after 4s). Press the power button; deep standby can ignore injected keys.'
 }
 
 # ---------------------------------------------------------------- setup verbs

@@ -108,6 +108,10 @@ Wrong guesses: there is no `quest record` (use `quest-vr-record`);
   not toggle the headset back. `sleep` uses `KEYCODE_SLEEP` and works on the
   profile lock screen; `wake` uses `KEYCODE_POWER` and usually lands on that
   lock screen.
+- `quest wake` needs a live ADB connection. After a long sleep the USB
+  transport may drop; in that case press the power button. `quest wake`
+  reports "no Quest attached" or "did not wake over ADB" instead of toggling
+  blindly.
 - `quest mount off` restores normal proximity and autosleep behavior. Use
   `quest mount on` only for off-head HIL work; it keeps the headset awake and
   drains the battery.
@@ -122,6 +126,9 @@ Wrong guesses: there is no `quest record` (use `quest-vr-record`);
 - `quest sleep` sends `KEYCODE_SLEEP`, which works even while the profile lock
   screen is up. `quest wake` sends `KEYCODE_POWER`; `KEYCODE_WAKEUP` is a no-op
   on Horizon OS. Waking usually lands on the profile lock screen.
+- ADB wake is best-effort. After a long sleep the headset can stop enumerating
+  USB, so `quest wake` cannot send the key. Press the power button; that is the
+  reliable wake path.
 - Captures and downloads land in the wearer's Android user (often 10), which
   the adb shell cannot read; `quest screenshot` goes through MediaStore with
   `--user` for that reason.
