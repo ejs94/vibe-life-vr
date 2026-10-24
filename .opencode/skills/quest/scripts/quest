@@ -1,0 +1,697 @@
+#!/usr/bin/env bash
+# quest - see and drive a Meta Quest headset over adb.
+#
+# Structured verbs print JSON; logs/crashes/foreground/sh print raw text.
+# Requires adb, bash, and python3 (only for the uiautomator XML tree).
+# Video recording lives in the sibling quest-vr-record script (scrcpy).
+#
+# Docs: ../SKILL.md
+# Why plain `screencap` and `input tap` fail in VR: ../resources/eyes-and-hands.md
+set -euo pipefail
+
+ADB_BIN="${QUEST_ADB:-adb}"
+SERIAL="${QUEST_SERIAL:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TMP_Q="$(mktemp -d)"
+trap 'rm -rf "$TMP_Q"' EXIT
+
+die() { printf 'quest: %s\n' "$*" >&2; exit 1; }
+
+json_str() {
+    local s="${1-}"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    s=${s//$'\n'/\\n}
+    s=${s//$'\r'/\\r}
+    s=${s//$'\t'/\\t}
+    printf '"%s"' "$s"
+}
+
+adb_cmd() {
+    if [ -n "$SERIAL" ]; then "$ADB_BIN" -s "$SERIAL" "$@"; else "$ADB_BIN" "$@"; fi
+}
+
+adb_sh() { adb_cmd shell "$1"; }
+
+is_wireless() { case "$1" in *:*) return 0 ;; *) return 1 ;; esac; }
+
+current_user() {
+    local u
+    u=$(adb_sh 'am get-current-user' 2>/dev/null | tr -d '\r' || true)
+    case "$u" in
+        ''|*[!0-9]*) printf '0' ;;
+        *) printf '%s' "$u" ;;
+    esac
+}
+
+quest_serials() {
+    local s m
+    for s in "$@"; do
+        [ -n "$s" ] || continue
+        m=$("$ADB_BIN" -s "$s" shell getprop ro.product.manufacturer 2>/dev/null | tr -d '\r' || true)
+        case "$m" in
+            *[Oo]culus*|*[Mm]eta*) printf '%s\n' "$s" ;;
+        esac
+    done
+}
+
+require_device() {
+    [ -n "$SERIAL" ] && return 0
+    local lines attached unauth quests wired s
+    lines=$("$ADB_BIN" devices 2>/dev/null | sed '1d' | tr -d '\r' || true)
+    attached=$(printf '%s\n' "$lines" | awk '$2=="device"{print $1}')
+    unauth=$(printf '%s\n' "$lines" | awk '$2=="unauthorized"{print $1}')
+    if [ -z "$attached" ]; then
+        if [ -n "$unauth" ]; then
+            die 'the headset is UNAUTHORIZED. Put it on and accept "Allow USB debugging"; the prompt only shows inside the headset.'
+        fi
+        die 'no Quest attached. Checklist:
+  1. Developer Mode on (a free developers.meta.com org + the toggle in the Meta Horizon phone app)
+  2. a data-capable USB-C cable (not charge-only)
+  3. headset worn once to accept the USB-debugging prompt'
+    fi
+    quests=$(quest_serials $attached)
+    if [ -z "$quests" ]; then
+        die "no Quest among the attached devices ($(printf '%s' "$attached" | tr '\n' ' ')). A phone on the same adb server is ignored."
+    fi
+    wired=""
+    for s in $quests; do
+        if ! is_wireless "$s"; then wired="$s"; break; fi
+    done
+    if [ -n "$wired" ]; then
+        SERIAL="$wired"
+    else
+        SERIAL=$(printf '%s\n' "$quests" | head -1)
+    fi
+}
+
+wakefulness_line() {
+    adb_sh 'dumpsys power | grep -m1 mWakefulness=' 2>/dev/null | tr -d '\r' || true
+}
+
+ensure_awake() {
+    local w
+    w=$(wakefulness_line)
+    case "$w" in
+        *Asleep*|*Dozing*) ;;
+        *) return 1 ;;
+    esac
+    # KEYCODE_POWER toggles; KEYCODE_WAKEUP is a no-op on Horizon OS.
+    adb_sh 'input keyevent KEYCODE_POWER' >/dev/null 2>&1 || true
+    local i
+    for i in $(seq 1 10); do
+        sleep 0.4
+        w=$(wakefulness_line)
+        case "$w" in
+            *Asleep*|*Dozing*) ;;
+            *) return 0 ;;
+        esac
+    done
+    die 'headset would not wake (KEYCODE_POWER sent, still asleep after 4s)'
+}
+
+# ---------------------------------------------------------------- setup verbs
+
+cmd_doctor() {
+    local ver devices_out arr first line serial state t quests q next model user scrcpy_ok
+    ver=$("$ADB_BIN" version 2>/dev/null | head -1 || true)
+    devices_out=$("$ADB_BIN" devices -l 2>/dev/null | sed '1d' | tr -d '\r' || true)
+    arr=""
+    first=1
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        serial=$(printf '%s' "$line" | awk '{print $1}')
+        state=$(printf '%s' "$line" | awk '{print $2}')
+        t=usb
+        if is_wireless "$serial"; then t=wifi; fi
+        if [ "$first" -eq 1 ]; then first=0; else arr+=","; fi
+        arr+="{\"serial\":$(json_str "$serial"),\"state\":$(json_str "$state"),\"transport\":\"$t\"}"
+    done <<< "$devices_out"
+
+    quests=$(printf '%s\n' "$devices_out" | awk '$2=="device"{print $1}' | while IFS= read -r s; do
+        quest_serials "$s"
+    done)
+
+    next='ready'
+    if printf '%s\n' "$devices_out" | awk '$2=="unauthorized"{found=1} END{exit !found}'; then
+        next='put the headset on and accept "Allow USB debugging"'
+    elif [ -z "$quests" ]; then
+        next='no Quest attached: enable Developer Mode, use a data cable, wake the headset'
+    fi
+
+    if [ -n "$quests" ]; then
+        local wired="" quests_j
+        for q in $quests; do
+            if ! is_wireless "$q"; then wired="$q"; break; fi
+        done
+        selected="${wired:-$(printf '%s\n' "$quests" | head -1)}"
+        SERIAL="$selected"
+        model=$(adb_sh 'getprop ro.product.model' 2>/dev/null | tr -d '\r' || true)
+        user=$(current_user)
+        if command -v scrcpy >/dev/null 2>&1; then scrcpy_ok=true; fi
+        quests_j=$(printf '%s\n' "$quests" | awk 'NF{printf "%s\"%s\"", sep, $0; sep=","}')
+        printf '{\n  "ok": true,\n  "adb": %s,\n  "devices": [%s],\n  "quests": [%s],\n  "selected": %s,\n  "model": %s,\n  "wearerUser": %s,\n  "scrcpy": %s,\n  "next": %s\n}\n' \
+            "$(json_str "$ver")" "$arr" "$quests_j" \
+            "$(json_str "$selected")" "$(json_str "$model")" "$user" "$scrcpy_ok" "$(json_str "$next")"
+        return 0
+    fi
+
+    printf '{\n  "ok": false,\n  "adb": %s,\n  "devices": [%s],\n  "quests": [],\n  "next": %s\n}\n' \
+        "$(json_str "$ver")" "$arr" "$(json_str "$next")"
+}
+
+cmd_users() {
+    require_device
+    local raw cur arr first id name running
+    raw=$(adb_sh 'pm list users' 2>/dev/null | tr -d '\r' || true)
+    cur=$(current_user)
+    arr=""
+    first=1
+    while IFS=$'\t' read -r id name; do
+        [ -n "$id" ] || continue
+        running=false
+        if printf '%s\n' "$raw" | grep -q "UserInfo{$id:.*running"; then running=true; fi
+        if [ "$first" -eq 1 ]; then first=0; else arr+=","; fi
+        arr+="{\"id\":$id,\"name\":$(json_str "$name"),\"running\":$running,\"current\":$([ "$id" = "$cur" ] && printf true || printf false)}"
+    done < <(printf '%s\n' "$raw" | sed -n 's/.*UserInfo{\([0-9]*\):\([^:]*\):.*/\1\t\2/p')
+    printf '{\n  "currentUser": %s,\n  "users": [%s]\n}\n' "$cur" "$arr"
+}
+
+cmd_wireless() {
+    require_device
+    local ip r
+    ip=$(adb_sh "ip -4 addr show wlan0 | grep -o 'inet [0-9.]*'" 2>/dev/null | awk '{print $2}' | head -1 || true)
+    case "$ip" in
+        *.*.*.*) ;;
+        *) die "could not read the headset's Wi-Fi address (got \"$ip\")" ;;
+    esac
+    "$ADB_BIN" tcpip 5555 >&2
+    sleep 4
+    r=$("$ADB_BIN" connect "$ip:5555" 2>&1 || true)
+    case "$r" in
+        *connected*) ;;
+        *) die "tcpip succeeded but connect failed: $r" ;;
+    esac
+    printf '{"ok":true,"address":%s,"note":"The cable can come out. This resets when the headset reboots."}\n' "$(json_str "$ip:5555")"
+}
+
+# ---------------------------------------------------------------- eyes verbs
+
+list_shots() {
+    local u
+    u=$(current_user)
+    adb_sh "content query --user $u --uri content://media/external/images/media --projection _id:_display_name" 2>/dev/null |
+        tr -d '\r' |
+        sed -n 's/.*_id=\([0-9][0-9]*\), *_display_name=\(.*\)$/\1\t\2/p'
+}
+
+cmd_screenshot() {
+    require_device
+    local out="" width="" height=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --width) width="${2:-}"; shift 2 ;;
+            --height) height="${2:-}"; shift 2 ;;
+            -*) die "unknown flag $1" ;;
+            *) out="$1"; shift ;;
+        esac
+    done
+    [ -n "$out" ] || die 'usage: quest screenshot <out.jpg> [--width W] [--height H]'
+
+    ensure_awake || true
+    local user before after cmd deadline newid="" name=""
+    user=$(current_user)
+    before=$(list_shots | cut -f1 || true)
+    cmd='am startservice -n com.oculus.metacam/.capture.CaptureService -a TAKE_SCREENSHOT'
+    if [ -n "$width" ]; then cmd+=" --ei screenshot_width $width"; fi
+    if [ -n "$height" ]; then cmd+=" --ei screenshot_height $height"; fi
+    adb_sh "$cmd" >/dev/null 2>&1 || die 'the Meta capture service did not start'
+
+    deadline=$(( $(date +%s) + 15 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        after=$(list_shots || true)
+        while IFS=$'\t' read -r cid cname; do
+            [ -n "$cid" ] || continue
+            if ! printf '%s\n' "$before" | grep -qx "$cid"; then
+                newid="$cid"; name="$cname"; break
+            fi
+        done <<< "$after"
+        if [ -n "$newid" ]; then break; fi
+        sleep 0.4
+    done
+
+    if [ -z "$newid" ]; then
+        local asleep
+        asleep=$(wakefulness_line)
+        case "$asleep" in
+            *Asleep*|*Dozing*) die 'the capture service wrote no file within 15s. The headset is asleep: run `quest mount on` so it stays awake off-head.' ;;
+            *) die 'the capture service wrote no file within 15s. Check `quest state` for a lock screen, and `quest logs ScreenCapture`.' ;;
+        esac
+    fi
+
+    mkdir -p "$(dirname "$out")"
+    adb_cmd exec-out "content read --user $user --uri content://media/external/images/media/$newid" > "$out" ||
+        die "MediaStore row $newid read back failed"
+    local bytes
+    bytes=$(wc -c < "$out" | tr -d ' ')
+    [ "$bytes" -gt 0 ] || die "MediaStore row $newid read back empty"
+    printf '{\n  "ok": true,\n  "local": %s,\n  "bytes": %s,\n  "device": %s\n}\n' \
+        "$(json_str "$out")" "$bytes" "$(json_str "$name")"
+}
+
+cmd_foreground() {
+    require_device
+    local txt
+    txt=$(adb_sh "dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity' | head -3" 2>/dev/null || true)
+    printf '%s\n' "${txt:-(none reported)}"
+}
+
+cmd_state() {
+    require_device
+    local pw wake resumed lock asleep don autosleep state prox note="" resumed_j="" first
+    pw=$(adb_sh 'dumpsys vrpowermanager' 2>/dev/null | tr -d '\r' || true)
+    wake=$(wakefulness_line | sed 's/.*mWakefulness=//')
+    state=$(printf '%s\n' "$pw" | sed -n 's/^ *State: //p' | head -1)
+    prox=$(printf '%s\n' "$pw" | sed -n 's/^ *Virtual proximity state: //p' | head -1)
+    autosleep=$(printf '%s\n' "$pw" | sed -n 's/^ *isAutosleepDisabled: //p' | head -1)
+    don=$(printf '%s\n' "$pw" | grep 'onMountSensorChanged: don:' | head -1 | sed -n 's/.*don: \([a-z]*\).*/\1/p')
+
+    resumed=$(adb_sh "dumpsys activity activities | grep topResumedActivity | head -3" 2>/dev/null |
+        grep -oE 'u[0-9]+ [A-Za-z0-9._]+/' | sed 's/^u[0-9]* //; s:/$::' | awk '!seen[$0]++' || true)
+    first=1
+    while IFS= read -r r; do
+        [ -n "$r" ] || continue
+        if [ "$first" -eq 1 ]; then first=0; else resumed_j+=","; fi
+        resumed_j+="$(json_str "$r")"
+    done <<< "$resumed"
+
+    adb_sh 'uiautomator dump --windows /sdcard/quest_state.xml >/dev/null 2>&1 || uiautomator dump /sdcard/quest_state.xml >/dev/null 2>&1' >/dev/null 2>&1 || true
+    lock=false
+    if adb_sh 'grep -q vrlockscreen /sdcard/quest_state.xml' >/dev/null 2>&1; then lock=true; fi
+    adb_sh 'rm -f /sdcard/quest_state.xml' >/dev/null 2>&1 || true
+
+    local worn=null
+    case "$don" in
+        true) worn=true ;;
+        false) worn=false ;;
+    esac
+    local auto=null
+    case "$autosleep" in
+        true) auto=true ;;
+        false) auto=false ;;
+    esac
+    local wake_j; wake_j=$(json_str "${wake:-unknown}")
+    local state_j; state_j=$(json_str "${state:-unknown}")
+    local prox_j=null; [ -n "$prox" ] && prox_j=$(json_str "$prox")
+    if [ "$lock" = true ]; then
+        note='Profile-select lock screen is up: `quest elements`, then tap your profile tile.'
+    fi
+    printf '{\n  "state": %s,\n  "virtualProximity": %s,\n  "physicalSensorWorn": %s,\n  "wakefulness": %s,\n  "autosleepDisabled": %s,\n  "lockScreen": %s,\n  "resumed": [%s],\n  "note": %s\n}\n' \
+        "$state_j" "$prox_j" "$worn" "$wake_j" "$auto" "$lock" "$resumed_j" "$(json_str "$note")"
+}
+
+dump_nodes() {
+    local remote=/sdcard/quest_window_dump.xml
+    if ! adb_sh "uiautomator dump --windows $remote" >/dev/null 2>&1; then
+        adb_sh "uiautomator dump $remote" >/dev/null 2>&1 || die 'uiautomator dump failed'
+    fi
+    adb_cmd pull "$remote" "$TMP_Q/dump.xml" >/dev/null 2>&1 ||
+        die 'uiautomator produced no dump: the foreground is a native VR app with no Android view tree.'
+    adb_sh "rm -f $remote" >/dev/null 2>&1 || true
+    printf '%s' "$TMP_Q/dump.xml"
+}
+
+cmd_elements() {
+    require_device
+    local pkg="" all=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --pkg) pkg="${2:-}"; shift 2 ;;
+            --all) all=1; shift ;;
+            *) die "unknown flag $1" ;;
+        esac
+    done
+    local xml; xml=$(dump_nodes)
+    local args=(elements "$xml")
+    if [ -n "$pkg" ]; then args+=(--pkg "$pkg"); fi
+    if [ -n "$all" ]; then args+=(--all); fi
+    python3 "$SCRIPT_DIR/quest_ui.py" "${args[@]}"
+}
+
+find_json() {
+    local xml; xml=$(dump_nodes)
+    local out rc
+    if out=$(python3 "$SCRIPT_DIR/quest_ui.py" find "$xml" "$@" 2>"$TMP_Q/find.err"); then
+        rc=0
+    else
+        rc=$?
+    fi
+    cat "$TMP_Q/find.err" >&2 || true
+    printf '%s' "$out"
+    return "$rc"
+}
+
+cmd_swipe() {
+    require_device
+    local x1="${1:-}" y1="${2:-}" x2="${3:-}" y2="${4:-}" ms="${5:-300}"
+    case "$x1$y1$x2$y2$ms" in ''|*[!0-9]*) die 'usage: quest swipe <x1> <y1> <x2> <y2> [ms]' ;; esac
+    adb_sh "input swipe $x1 $y1 $x2 $y2 $ms" >/dev/null
+    printf '{"ok":true}\n'
+}
+
+cmd_type() {
+    require_device
+    local text="$*"
+    [ -n "$text" ] || die 'usage: quest type <text...>'
+    text=$(printf '%s' "$text" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' -e 's/ /%s/g')
+    adb_sh "input text \"$text\"" >/dev/null
+    printf '{"ok":true}\n'
+}
+
+cmd_tap() {
+    require_device
+    [ $# -gt 0 ] || die 'usage: quest tap <x> <y> | quest tap --text <t> [--pkg p] [--exact]'
+    if [ "${1#--}" != "$1" ]; then
+        local json rc
+        if json=$(find_json "$@"); then rc=0; else rc=$?; fi
+        [ "$rc" -eq 0 ] || exit "$rc"
+        local xy label
+        xy=$(printf '%s' "$json" | python3 -c 'import json,sys; n=json.load(sys.stdin)["node"]; print(n["center"][0], n["center"][1])')
+        label=$(printf '%s' "$json" | python3 -c 'import json,sys; n=json.load(sys.stdin)["node"]; print(n["label"] or n["resource-id"])')
+        adb_sh "input tap $xy" >/dev/null
+        printf '{\n  "ok": true,\n  "tapped": %s,\n  "center": [%s]\n}\n' "$(json_str "$label")" "${xy// /, }"
+        return
+    fi
+    local x="${1:-}" y="${2:-}"
+    case "$x$y" in *[!0-9-]*) die 'coordinates must be integers' ;; esac
+    adb_sh "input tap $x $y" >/dev/null
+    printf '{"ok":true,"tapped":[%s,%s]}\n' "$x" "$y"
+}
+
+cmd_exists() {
+    require_device
+    local xml json rc
+    xml=$(dump_nodes)
+    if json=$(python3 "$SCRIPT_DIR/quest_ui.py" exists "$xml" "$@" 2>"$TMP_Q/exists.err"); then
+        rc=0
+    else
+        rc=$?
+    fi
+    cat "$TMP_Q/exists.err" >&2 || true
+    printf '%s\n' "$json"
+    exit "$rc"
+}
+
+cmd_wait_for() {
+    require_device
+    local timeout=20 gone=0 find_args=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --timeout) timeout="${2:-20}"; shift 2 ;;
+            --gone) gone=1; shift ;;
+            *) find_args+=("$1"); shift ;;
+        esac
+    done
+    local deadline present xml
+    deadline=$(( $(date +%s) + timeout ))
+    while :; do
+        xml=$(dump_nodes)
+        if python3 "$SCRIPT_DIR/quest_ui.py" exists "$xml" "${find_args[@]}" >/dev/null 2>&1; then
+            present=1
+        else
+            present=0
+        fi
+        if [ "$gone" -eq 1 ]; then
+            [ "$present" -eq 0 ] && { printf '{"ok":true,"state":"gone"}\n'; return; }
+        else
+            [ "$present" -eq 1 ] && { printf '{"ok":true,"state":"present"}\n'; return; }
+        fi
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+            printf '{"ok":false,"timeout":true}\n'
+            exit 1
+        fi
+        sleep 1
+    done
+}
+
+cmd_logs() {
+    require_device
+    local tag="" grep_pat="" lines=500 level=V
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --grep) grep_pat="${2:-}"; shift 2 ;;
+            --lines) lines="${2:-500}"; shift 2 ;;
+            --level) level="${2:-V}"; shift 2 ;;
+            -*) die "unknown flag $1" ;;
+            *) tag="$1"; shift ;;
+        esac
+    done
+    level=${level^^}
+    local args=(-d -t "$lines")
+    if [ -n "$tag" ]; then args+=("$tag:$level" '*:S'); else args+=("*:$level"); fi
+    local txt
+    txt=$(adb_cmd logcat "${args[@]}" 2>/dev/null || true)
+    if [ -n "$grep_pat" ]; then
+        txt=$(printf '%s\n' "$txt" | grep -iE "$grep_pat" || true)
+    fi
+    printf '%s\n' "$txt"
+}
+
+cmd_crashes() {
+    require_device
+    local pkg="${1:-}" crash
+    crash=$(adb_cmd logcat -d -b crash 2>/dev/null || true)
+    if [ -n "$pkg" ]; then
+        printf '%s\n' "$crash" | awk -v p="$pkg" 'BEGIN{RS="--------- beginning of"} index($0,p){printf "--------- beginning of%s\n", $0}'
+    else
+        printf '%s\n' "$crash"
+    fi
+}
+
+cmd_press() {
+    require_device
+    local source="" long=0 key=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --source) source="${2:-}"; shift 2 ;;
+            --long) long=1; shift ;;
+            -*) die "unknown flag $1" ;;
+            *) key="$1"; shift ;;
+        esac
+    done
+    [ -n "$key" ] || die 'usage: quest press <key> [--source gamepad] [--long]'
+    case "$source" in
+        ""|gamepad|keyboard|dpad|joystick) ;;
+        *) die '--source must be one of gamepad|keyboard|dpad|joystick' ;;
+    esac
+    local k="$key"
+    case "$key" in
+        back) k=KEYCODE_BACK ;;
+        home) k=KEYCODE_HOME ;;
+        enter) k=KEYCODE_ENTER ;;
+        menu) k=KEYCODE_MENU ;;
+        volup) k=KEYCODE_VOLUME_UP ;;
+        voldown) k=KEYCODE_VOLUME_DOWN ;;
+        delete) k=KEYCODE_DEL ;;
+        tab) k=KEYCODE_TAB ;;
+    esac
+    local lp=""
+    if [ "$long" -eq 1 ]; then lp="--longpress "; fi
+    adb_sh "input ${source:+$source }keyevent ${lp}${k}" >/dev/null
+    local src_j; src_j=$(json_str "${source:-default}")
+    local long_j=false
+    if [ "$long" -eq 1 ]; then long_j=true; fi
+    printf '{"ok":true,"key":%s,"source":%s,"long":%s}\n' "$(json_str "$k")" "$src_j" "$long_j"
+}
+
+cmd_wake() {
+    require_device
+    local woke=false
+    if ensure_awake; then woke=true; fi
+    printf '{"ok":true,"woke":%s}\n' "$woke"
+}
+
+# ------------------------------------------------------------ off-head verbs
+
+cmd_mount() {
+    require_device
+    local mode="${1:-}"
+    case "$mode" in
+        status)
+            local mqst power
+            mqst=$(adb_sh 'content call --uri content://com.oculus.rc --method GET_PROPERTY' 2>/dev/null || true)
+            power=$(adb_sh "dumpsys vrpowermanager | grep -E 'proximity|Autosleep|AutoSleepTime|^ *State'" 2>/dev/null || true)
+            printf '{\n  "mqst": %s,\n  "power": %s\n}\n' "$(json_str "$mqst")" "$(json_str "$power")"
+            ;;
+        on|off)
+            shift || true
+            local pin=""
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --pin) pin="${2:-}"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            [ -n "$pin" ] || pin="${QUEST_MQST_PIN:-}"
+            [ -n "$pin" ] || die 'need a PIN: --pin NNNN or QUEST_MQST_PIN (store PIN of the account on Android user 0)'
+            local v=true mounted=true
+            if [ "$mode" = off ]; then v=false; mounted=false; fi
+            local r
+            r=$(adb_sh "content call --uri content://com.oculus.rc --method SET_PROPERTY --extra set_proximity_close:b:$v --extra disable_autosleep:b:$v --extra disable_dialogs:b:$v --extra disable_guardian:b:$v --extra PIN:s:$pin" 2>&1 || true)
+            case "$r" in
+                *Success=false*) die "MQST refused: $r" ;;
+            esac
+            local state
+            state=$(adb_sh "dumpsys vrpowermanager | grep -E '^ *State:'" 2>/dev/null | head -1 | sed 's/^ *//' || true)
+            printf '{"ok":true,"mounted":%s,"vrpowermanager":%s}\n' "$mounted" "$(json_str "$state")"
+            ;;
+        *)
+            die 'usage: quest mount on|off|status [--pin NNNN]'
+            ;;
+    esac
+}
+
+# -------------------------------------------------------------- app verbs
+
+cmd_install() {
+    require_device
+    local apk="${1:-}"
+    [ -n "$apk" ] && [ -f "$apk" ] || die 'usage: quest install <file.apk>'
+    adb_cmd install -r -g "$apk" >&2
+    printf '{"ok":true,"apk":%s,"note":"-g grants runtime permissions but not all files access; see quest storage-grant."}\n' "$(json_str "$apk")"
+}
+
+cmd_apps() {
+    require_device
+    local flag=-3
+    if [ "${1:-}" = "--system" ]; then flag=""; fi
+    local raw
+    raw=$(adb_sh "pm list packages $flag" 2>/dev/null || true)
+    printf '%s\n' "$raw" | sed 's/^package://' | sed '/^$/d' | sort
+}
+
+cmd_vr_launch() {
+    require_device
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die 'usage: quest vr-launch <package>'
+    local dump comp
+    dump=$(adb_sh "dumpsys package $pkg | grep -B6 'com.oculus.intent.category.VR'" 2>/dev/null || true)
+    comp=$(printf '%s\n' "$dump" | grep -oE "$pkg/[A-Za-z0-9_.$]+" | head -1 || true)
+    [ -n "$comp" ] || die "$pkg declares no VR activity. Use 'quest launch' for a 2D app, or am start with its activity."
+    ensure_awake || true
+    adb_sh "am start -a android.intent.action.VIEW -c com.oculus.intent.category.VR -n $comp" >/dev/null
+    printf '{"ok":true,"component":%s,"note":"Off-head, run quest mount on first or the shell will not place the window."}\n' "$(json_str "$comp")"
+}
+
+cmd_launch() {
+    require_device
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die 'usage: quest launch <package>'
+    adb_sh "monkey -p $pkg -c android.intent.category.LAUNCHER 1" >/dev/null
+    printf '{"ok":true,"launched":%s}\n' "$(json_str "$pkg")"
+}
+
+cmd_stop() {
+    require_device
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die 'usage: quest stop <package>'
+    adb_sh "am force-stop $pkg" >/dev/null
+    printf '{"ok":true,"stopped":%s}\n' "$(json_str "$pkg")"
+}
+
+cmd_storage_grant() {
+    require_device
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die 'usage: quest storage-grant <package>'
+    local u; u=$(current_user)
+    adb_sh "appops set --user $u $pkg MANAGE_EXTERNAL_STORAGE allow" >/dev/null 2>&1 || true
+    adb_sh "am force-stop $pkg" >/dev/null 2>&1 || true
+    local after ok=false
+    after=$(adb_sh "appops get --user $u $pkg MANAGE_EXTERNAL_STORAGE" 2>/dev/null || true)
+    case "$after" in *allow*) ok=true ;; esac
+    printf '{"ok":%s,"package":%s,"user":%s,"after":%s}\n' "$ok" "$(json_str "$pkg")" "$u" "$(json_str "$after")"
+}
+
+cmd_push() {
+    require_device
+    local src="${1:-}" dest="${2:-/sdcard/Download/}"
+    [ -n "$src" ] && [ -f "$src" ] || die 'usage: quest push <local-path> [remote-path]'
+    adb_cmd push "$src" "$dest" >&2
+    printf '{"ok":true,"local":%s,"remote":%s}\n' "$(json_str "$src")" "$(json_str "$dest")"
+}
+
+cmd_pull() {
+    require_device
+    local remote="${1:-}" local_dest="${2:-.}"
+    [ -n "$remote" ] || die 'usage: quest pull <remote-path> [local-path]'
+    adb_cmd pull "$remote" "$local_dest" >&2
+    printf '{"ok":true,"remote":%s,"local":%s}\n' "$(json_str "$remote")" "$(json_str "$local_dest")"
+}
+
+cmd_sh() {
+    require_device
+    adb_sh "$*" || true
+}
+
+# -------------------------------------------------------------------- main
+
+usage() {
+    cat <<'EOF'
+quest - see and drive a Meta Quest over adb (JSON for structured verbs)
+
+  quest [-s serial] <verb> ...
+
+setup     doctor | users | wireless
+eyes      screenshot <out.jpg> [--width W] [--height H] | elements [--pkg p] [--all]
+          foreground | state | logs [tag] [--grep re] [--lines N] [--level V|D|I|W|E]
+          crashes [pkg]
+hands     tap <x> <y> | tap --text <t> [--id i] [--desc d] [--pkg p] [--exact] [--index N]
+          swipe x1 y1 x2 y2 [ms] | type <text> | press <key> [--source gamepad] [--long]
+          exists --text <t> | wait-for --text <t> [--gone] [--timeout S] | wake
+off-head  mount on|off|status [--pin NNNN]     (env QUEST_MQST_PIN)
+apps      install <apk> | apps [--system] | vr-launch <pkg> | launch <pkg> | stop <pkg>
+          storage-grant <pkg> | push <src> [dst] | pull <src> [dst] | sh <cmd>
+
+Record video with the sibling script: scripts/quest-vr-record.
+EOF
+}
+
+if [ "${1:-}" = "-s" ]; then
+    SERIAL="${2:-}"
+    [ -n "$SERIAL" ] || die '-s needs a serial'
+    shift 2
+fi
+
+cmd="${1:-}"
+if [ $# -gt 0 ]; then shift; fi
+
+case "$cmd" in
+    doctor) cmd_doctor ;;
+    users) cmd_users ;;
+    wireless) cmd_wireless ;;
+    screenshot) cmd_screenshot "$@" ;;
+    elements) cmd_elements "$@" ;;
+    foreground) cmd_foreground ;;
+    state) cmd_state ;;
+    logs) cmd_logs "$@" ;;
+    crashes) cmd_crashes "$@" ;;
+    tap) cmd_tap "$@" ;;
+    swipe) cmd_swipe "$@" ;;
+    type) cmd_type "$@" ;;
+    press) cmd_press "$@" ;;
+    exists) cmd_exists "$@" ;;
+    wait-for) cmd_wait_for "$@" ;;
+    wake) cmd_wake ;;
+    mount) cmd_mount "$@" ;;
+    install) cmd_install "$@" ;;
+    apps) cmd_apps "$@" ;;
+    vr-launch) cmd_vr_launch "$@" ;;
+    launch) cmd_launch "$@" ;;
+    stop) cmd_stop "$@" ;;
+    storage-grant) cmd_storage_grant "$@" ;;
+    push) cmd_push "$@" ;;
+    pull) cmd_pull "$@" ;;
+    sh) cmd_sh "$@" ;;
+    ""|--help|-h|help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac

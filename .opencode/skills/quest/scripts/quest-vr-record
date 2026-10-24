@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# quest-vr-record - record what the headset shows (VR apps included) to an .mkv.
+#
+#   quest-vr-record start <out.mkv> [left|right|both] [--raw] [--angle N]
+#   quest-vr-record stop
+#   quest-vr-record status
+#
+# Why scrcpy: `adb shell screenrecord` captures a surface the VR compositor
+# bypasses (black). scrcpy reads the panel framebuffer; the headset encoder does
+# the work and no window opens, so it costs the running app very little.
+#
+# The default eye framing is computed from the panel size reported by
+# `wm size` (3664x1920 on a Quest 3S), so the same script works on Quest 2/3/3S.
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quest-vr-record"
+mkdir -p "$STATE_DIR"
+PID_FILE="$STATE_DIR/pid"
+OUT_FILE="$STATE_DIR/out"
+LOG_FILE="$STATE_DIR/log"
+
+serial() {
+    if [ -n "${QUEST_SERIAL:-}" ]; then
+        printf '%s\n' "$QUEST_SERIAL"
+        return
+    fi
+    adb devices -l | awk '/Quest/ && $2=="device" && $1 !~ /:/ {print $1; exit}'
+}
+
+panel_size() {
+    local s size
+    s=$(serial)
+    [ -n "$s" ] || return 1
+    size=$(adb -s "$s" shell wm size 2>/dev/null | sed -n 's/^Physical size: \([0-9]*x[0-9]*\).*/\1/p' | head -1)
+    [ -n "$size" ] || size=3664x1920
+    printf '%s\n' "$size"
+}
+
+running() {
+    [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+cmd="${1:-status}"
+case "$cmd" in
+    start)
+        out="${2:?usage: quest-vr-record start <out.mkv> [left|right|both] [--raw] [--angle N]}"
+        shift 2
+        eye=left
+        if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then
+            eye="$1"
+            shift
+        fi
+        raw=0
+        angle=""
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --raw) raw=1; shift ;;
+                --angle) angle="${2:-}"; shift 2 ;;
+                *) echo "unknown flag: $1" >&2; exit 2 ;;
+            esac
+        done
+        case "$eye" in left|right|both) ;; *) echo "eye must be left|right|both" >&2; exit 2 ;; esac
+
+        if running; then
+            echo "already recording to $(cat "$OUT_FILE") (pid $(cat "$PID_FILE"))" >&2
+            exit 1
+        fi
+        s=$(serial)
+        [ -n "$s" ] || { echo "no Quest on USB (adb devices -l)" >&2; exit 3; }
+
+        size=$(panel_size "$s")
+        width=${size%x*}
+        height=${size#*x}
+        half=$((width / 2))
+        crop=()
+        max_size=()
+        case "$eye" in
+            both)
+                # Full side-by-side panel, downscaled to stay under encoder limits.
+                max_size=(--max-size=1920)
+                ;;
+            left|right)
+                x=0
+                [ "$eye" = right ] && x=$half
+                if [ "$raw" -eq 1 ]; then
+                    crop=(--crop="${half}:${height}:${x}:0")
+                else
+                    # 16:9 window centred vertically. Quest 3S eye buffers are
+                    # already level; pass --angle 22 only if the capture is tilted.
+                    target=$((half * 9 / 16))
+                    y=$(((height - target) / 2))
+                    crop=(--crop="${half}:${target}:${x}:${y}")
+                fi
+                ;;
+        esac
+
+        mkdir -p "$(dirname "$out")"
+        scrcpy_args=(-s "$s" --no-window --no-playback --no-control --no-audio
+            --max-fps=60 --video-bit-rate=16M --record="$out" --record-format=mkv)
+        [ ${#crop[@]} -gt 0 ] && scrcpy_args+=("${crop[@]}")
+        [ ${#max_size[@]} -gt 0 ] && scrcpy_args+=("${max_size[@]}")
+        [ -n "$angle" ] && scrcpy_args+=(--angle="$angle")
+
+        nohup scrcpy "${scrcpy_args[@]}" >"$LOG_FILE" 2>&1 &
+        echo $! >"$PID_FILE"
+        echo "$out" >"$OUT_FILE"
+        sleep 2
+        if ! running; then
+            echo "scrcpy exited:" >&2
+            cat "$LOG_FILE" >&2
+            rm -f "$PID_FILE"
+            exit 4
+        fi
+        echo "recording $out (pid $(cat "$PID_FILE"), ${eye} eye, ${size})"
+        ;;
+    stop)
+        if ! running; then
+            echo "not recording"
+            exit 0
+        fi
+        pid=$(cat "$PID_FILE")
+        kill -TERM "$pid" 2>/dev/null || true
+        for _ in $(seq 1 50); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.2
+        done
+        out=$(cat "$OUT_FILE")
+        rm -f "$PID_FILE"
+        ls -la "$out"
+        ;;
+    status)
+        if running; then
+            echo "recording $(cat "$OUT_FILE") (pid $(cat "$PID_FILE"))"
+        else
+            echo "not recording"
+        fi
+        ;;
+    *)
+        echo "usage: quest-vr-record start|stop|status" >&2
+        exit 2
+        ;;
+esac

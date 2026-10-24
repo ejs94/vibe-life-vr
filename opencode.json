@@ -1,0 +1,123 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "blender": {
+        "type": "local",
+        "command": [
+          "uv",
+          "run",
+          "--python",
+          "3.12",
+          "--project",
+          "../mcp-tools/blender-mcp/mcp",
+          "blender-mcp"
+        ],
+        "cwd": "."
+      },
+      "repowise": {
+        "type": "local",
+        "command": [
+          "uv",
+          "run",
+          "--python",
+          "3.12",
+          "--project",
+          "../mcp-tools/repowise",
+          "repowise",
+          "mcp",
+          ".",
+          "--transport",
+          "stdio"
+        ],
+        "cwd": "."
+      },
+      "graphify": {
+        "type": "local",
+        "command": [
+          "uv",
+          "run",
+          "--python",
+          "3.12",
+          "--project",
+          "../mcp-tools/graphify",
+          "--extra",
+          "mcp",
+          "graphify-mcp",
+          "--graph",
+          "graphify-out/graph.json",
+          "--transport",
+          "stdio"
+        ],
+        "cwd": "."
+      }
+    }
+  },
+  "references": {
+    "vr-docs": {
+      "path": "Documentation/vr",
+      "description": "VR port architecture, roadmap, mod compatibility, upstream sync policy, and engineering decisions. Read before changing cross-cutting VR behavior."
+    },
+    "mcp-tools": {
+      "path": "../mcp-tools",
+      "description": "Companion asset and code-intelligence tooling (repowise, graphify, blender-mcp, desloppify, goldsrc-mdl-compiler). Read before changing MCP integration or the hand/MDL pipeline."
+    }
+  },
+  "permissions": [
+    {
+      "action": "shell",
+      "resource": "sudo *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "su *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git push --force*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git push *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git reset --hard *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git clean *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "rm -rf *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "adb shell rm *",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.keystore",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.jks",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "secrets/*",
+      "effect": "deny"
+    }
+  ]
+}
