@@ -76,13 +76,13 @@
     },
     {
       "action": "shell",
-      "resource": "git push --force*",
-      "effect": "deny"
+      "resource": "git push *",
+      "effect": "ask"
     },
     {
       "action": "shell",
-      "resource": "git push *",
-      "effect": "ask"
+      "resource": "git push --force*",
+      "effect": "deny"
     },
     {
       "action": "shell",

@@ -50,6 +50,15 @@ permissions:
   - action: shell
     resource: "git log *"
     effect: allow
+  - action: shell
+    resource: "sudo *"
+    effect: deny
+  - action: shell
+    resource: "su *"
+    effect: deny
+  - action: shell
+    resource: "git push --force*"
+    effect: deny
 ---
 
 You are the hardware-in-the-loop tester for the Xash3D VR port. You drive a

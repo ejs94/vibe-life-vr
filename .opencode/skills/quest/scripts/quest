@@ -274,7 +274,7 @@ cmd_state() {
     state=$(printf '%s\n' "$pw" | sed -n 's/^ *State: //p' | head -1)
     prox=$(printf '%s\n' "$pw" | sed -n 's/^ *Virtual proximity state: //p' | head -1)
     autosleep=$(printf '%s\n' "$pw" | sed -n 's/^ *isAutosleepDisabled: //p' | head -1)
-    don=$(printf '%s\n' "$pw" | grep 'onMountSensorChanged: don:' | head -1 | sed -n 's/.*don: \([a-z]*\).*/\1/p')
+    don=$(printf '%s\n' "$pw" | grep 'onMountSensorChanged: don:' | head -1 | sed -n 's/.*don: \([a-z]*\).*/\1/p' || true)
 
     resumed=$(adb_sh "dumpsys activity activities | grep topResumedActivity | head -3" 2>/dev/null |
         grep -oE 'u[0-9]+ [A-Za-z0-9._]+/' | sed 's/^u[0-9]* //; s:/$::' | awk '!seen[$0]++' || true)
@@ -511,6 +511,33 @@ cmd_wake() {
     printf '{"ok":true,"woke":%s}\n' "$woke"
 }
 
+cmd_sleep() {
+    require_device
+    local w
+    w=$(wakefulness_line)
+    case "$w" in
+        *Asleep*|*Dozing*)
+            printf '{"ok":true,"slept":false,"alreadyAsleep":true}\n'
+            return 0
+            ;;
+    esac
+    # KEYCODE_SLEEP is honored on Horizon OS even while the profile lock
+    # screen is up. KEYCODE_POWER only sleeps an unlocked headset.
+    adb_sh 'input keyevent KEYCODE_SLEEP' >/dev/null 2>&1 || true
+    local i
+    for i in $(seq 1 10); do
+        sleep 0.4
+        w=$(wakefulness_line)
+        case "$w" in
+            *Asleep*|*Dozing*)
+                printf '{"ok":true,"slept":true,"alreadyAsleep":false}\n'
+                return 0
+                ;;
+        esac
+    done
+    die 'headset did not sleep (KEYCODE_POWER sent, still awake after 4s)'
+}
+
 # ------------------------------------------------------------ off-head verbs
 
 cmd_mount() {
@@ -647,7 +674,7 @@ eyes      screenshot <out.jpg> [--width W] [--height H] | elements [--pkg p] [--
           crashes [pkg]
 hands     tap <x> <y> | tap --text <t> [--id i] [--desc d] [--pkg p] [--exact] [--index N]
           swipe x1 y1 x2 y2 [ms] | type <text> | press <key> [--source gamepad] [--long]
-          exists --text <t> | wait-for --text <t> [--gone] [--timeout S] | wake
+          exists --text <t> | wait-for --text <t> [--gone] [--timeout S] | wake | sleep
 off-head  mount on|off|status [--pin NNNN]     (env QUEST_MQST_PIN)
 apps      install <apk> | apps [--system] | vr-launch <pkg> | launch <pkg> | stop <pkg>
           storage-grant <pkg> | push <src> [dst] | pull <src> [dst] | sh <cmd>
@@ -682,6 +709,7 @@ case "$cmd" in
     exists) cmd_exists "$@" ;;
     wait-for) cmd_wait_for "$@" ;;
     wake) cmd_wake ;;
+    sleep) cmd_sleep ;;
     mount) cmd_mount "$@" ;;
     install) cmd_install "$@" ;;
     apps) cmd_apps "$@" ;;

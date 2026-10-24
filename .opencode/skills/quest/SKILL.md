@@ -90,6 +90,7 @@ the `xash-vr-quest` skill for the exact Quest HIL loop.
 | `exists`, `wait-for` | same selectors; `wait-for` adds `--gone` and `--timeout S` (default 20) |
 | `press <key>` | `back home enter menu volup voldown delete tab`, any `KEYCODE_*` or a number; `--source gamepad\|keyboard\|dpad\|joystick` `--long` |
 | `mount on\|off\|status` | `--pin NNNN` or `QUEST_MQST_PIN` |
+| `wake`, `sleep` | no flags; `wake` checks wakefulness first, `sleep` is idempotent |
 | `logs [tag]` | `--grep re` `--lines N` (default 500) `--level V\|D\|I\|W\|E` |
 | `crashes [pkg]` | reads the crash buffer, where native crashes land |
 | `storage-grant <pkg>` | grants "all files access", which `adb install -g` does not |
@@ -100,10 +101,27 @@ Wrong guesses: there is no `quest record` (use `quest-vr-record`);
 `quest wake`); `quest launch` on a VR app opens its 2D activity (use
 `vr-launch`).
 
+## Battery: sleep, wake, and stay-awake
+
+- `quest sleep` puts the headset to sleep and `quest wake` wakes it. Both are
+  idempotent: they check the current wakefulness first, so a second call does
+  not toggle the headset back. `sleep` uses `KEYCODE_SLEEP` and works on the
+  profile lock screen; `wake` uses `KEYCODE_POWER` and usually lands on that
+  lock screen.
+- `quest mount off` restores normal proximity and autosleep behavior. Use
+  `quest mount on` only for off-head HIL work; it keeps the headset awake and
+  drains the battery.
+- `scripts/quest_proximity.sh enable` restores normal sleep timers;
+  `disable` forces stay-awake. Do not leave the stay-awake path enabled after
+  testing.
+- For long storage, a full shutdown (`adb shell reboot -p`) saves the most
+  power, but ADB disconnects; press the power button to boot again.
+
 ## Gotchas
 
-- `KEYCODE_POWER` toggles. Sending it to an awake headset puts it to sleep.
-  `quest wake` checks first.
+- `quest sleep` sends `KEYCODE_SLEEP`, which works even while the profile lock
+  screen is up. `quest wake` sends `KEYCODE_POWER`; `KEYCODE_WAKEUP` is a no-op
+  on Horizon OS. Waking usually lands on the profile lock screen.
 - Captures and downloads land in the wearer's Android user (often 10), which
   the adb shell cannot read; `quest screenshot` goes through MediaStore with
   `--user` for that reason.
