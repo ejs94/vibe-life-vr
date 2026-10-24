@@ -23,6 +23,15 @@
 - HIL de assets carregou `models/v_shotgun.mdl` no Quest e gerou eye buffer válido (`out/evidence/mmod_quest`).
 - Repositório local renomeado para `vibe-life-vr` e GitHub renomeado para `ejs94/vibe-life-vr`.
 
+## 🔫 Reload Manual — Glock Vertical Slice (24/10/2026)
+
+- Adicionado `vr_manual_reload` (default `0`) no HLSDK server.
+- Fluxo em três estágios: ejetar pente, inserir pente novo e engatilhar o slide.
+- O pente ejeta com `MOVETYPE_BOUNCE` do GoldSrc; a física existente do mapa é reutilizada, sem um segundo mundo Box3D para um prop curto.
+- Munição preservada: o pente ejetado devolve os rounds ao reserva no final.
+- HIL no Quest 3S aprovado: `manual eject`, `manual insert` e `manual complete` observados.
+- Teste headless reproduzível: `scripts/test_manual_reload.sh`.
+
 ---
 
 ## 🔄 Migração para OpenCode (24/10/2026)

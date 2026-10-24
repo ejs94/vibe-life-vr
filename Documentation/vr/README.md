@@ -142,6 +142,7 @@ All VR CVars are archived (`FCVAR_ARCHIVE`) and registered early in `Host_Init()
 | `vr_lefthanded` | `0` | `0`, `1` | `1` = primary weapon in left hand; A/B (jump/reload) move to X/Y, sticks/triggers swap |
 | `vr_lefthanded_mirror_grip` | `1` | `0`, `1` | Mirror the lateral weapon grip offset when left-handed |
 | `vr_weapon_pitchadjust` | `0`* | `-30`–`+30` | Fine pitch adjustment angle for physical weapon alignment (*Launcher defaults to `10`) |
+| `vr_manual_reload` | `0` | `0`, `1` | Staged Glock reload: B ejects the magazine, B inserts a fresh one, B racks the slide (server HLSDK) |
 | `vr_proximity_scope` | `0` | `0`, `1` | Optional automatic scope engage when the crossbow is brought close to the eye |
 | `vr_scope_mode` | `1` | `0`, `1` | `1` = picture-in-picture crossbow scope; `0` = off |
 | `vr_scope_zoom` | `4.0` | `2.0`–`8.0` | PiP magnification factor (source region = eye size / zoom) |

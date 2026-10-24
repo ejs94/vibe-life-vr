@@ -84,6 +84,7 @@ Run the relevant gates before claiming success:
 python3 scripts/verify_grip_pose_math.py
 python3 scripts/check_hand_asset.py
 python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe log
+./scripts/test_manual_reload.sh          # Glock staged reload vertical slice
 ./scripts/test_quest_auto.sh 25 crossfire
 ```
 
