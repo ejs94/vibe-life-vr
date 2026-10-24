@@ -647,6 +647,8 @@ O recarregamento manual deve ser escalonado em 3 etapas para não atrasar a esta
 2. **Etapa 2 (Recarga Semi-Manual Tática):** Botão do controle ejeta o magazine vazio (com física de queda do pente); a mão secundária se aproxima do magwell da arma e engata o novo pente com vibração háptica.
 3. **Etapa 3 (Full Manual Reload Estilo Alyx):** Coleta física do pente na cintura/colete (`hitbox` do coldre), inserção manual no magwell da arma e engatilhamento físico do ferrolho/slide release. Controlado pela CVar arquivada `vr_manual_reload (0/1)`.
 
+**Estado em 24/10/2026:** a Glock já tem a fatia vertical da Etapa 2: `vr_manual_reload 1` ativa três estágios por B (ejetar, inserir, engatilhar), com pente ejetado em `MOVETYPE_BOUNCE` e munição preservada. O Box3D foi avaliado, mas não entrou nesta fatia: o GoldSrc já fornece colisão BSP, bounce, fricção e replicação para o pente curto; um segundo mundo Box3D exigiria extrair/adaptar a geometria BSP e manter dois estados físicos. Ele fica reservado para a interação mão↔pente e para objetos segurados, quando a colisão do prop com a mão passar a importar.
+
 ---
 
 ## 14. Parecer Arquitetural sobre o PrimeXT e Full Body Motion (VRIK)
