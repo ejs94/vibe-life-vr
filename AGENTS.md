@@ -83,6 +83,7 @@ Run the relevant gates before claiming success:
 ./scripts/run_regression_battery.sh     # 18-gate regression battery
 python3 scripts/verify_grip_pose_math.py
 python3 scripts/check_hand_asset.py
+python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe log
 ./scripts/test_quest_auto.sh 25 crossfire
 ```
 

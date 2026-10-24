@@ -55,8 +55,13 @@ sync whenever a bundled asset changes.
 * **Changes made:** the MDLs are used as compiled by the pack author. The VR
   overlay hides the baked HEV hands with `vr_hide_arms 2`, supplies the
   standalone `models/v_hand.mdl` instead, and calibrates grip/muzzle sockets in
-  [`models/vr_weapons.json`](models/vr_weapons.json). Do not edit the binary
-  MDLs by hand; rebuild from source with `scripts/build_pxstudiomdl.sh`.
+  [`models/vr_weapons.json`](models/vr_weapons.json). Grip offsets are derived
+  from the runtime `[VR_GRIP_BONE]` telemetry by
+  [`scripts/calibrate_weapon_grips.py`](../../scripts/calibrate_weapon_grips.py);
+  the reusable capture pass is
+  [`scripts/grip_calibrate.cfg`](../../scripts/grip_calibrate.cfg). Do not edit
+  the binary MDLs by hand; rebuild from source with
+  `scripts/build_pxstudiomdl.sh`.
 
 ### MMOD viewmodel audit
 
