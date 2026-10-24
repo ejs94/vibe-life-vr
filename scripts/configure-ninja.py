@@ -28,6 +28,19 @@ def check_repo(name, branch, url, path):
 		git_process.communicate()
 
 
+def apply_patch(path, patch):
+	"""Apply a local patch unless the checkout already contains it."""
+	if not os.path.exists(patch) or not os.path.exists(path):
+		return
+	reverse = subprocess.run(
+		["git", "-C", path, "apply", "--reverse", "--check", patch],
+		stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+	if reverse.returncode == 0:
+		return
+	print("Applying {}...".format(patch))
+	subprocess.check_call(["git", "-C", path, "apply", patch])
+
+
 def run_cmake(root, out, toolchain, abi, build_type, ndk_root, min_sdk, *args):
 	cmake_exec = ["cmake", "-H{}".format(root),
 		"-DCMAKE_BUILD_TYPE={}".format(build_type),
@@ -78,6 +91,7 @@ def main():
 	# configure hlsdk-portable
 	hlsdk_path = os.path.join(args.wscript_path, "3rdparty", "hlsdk-portable")
 	check_repo("hlsdk-portable", "mobile_hacks", "https://github.com/FWGS/hlsdk-portable", hlsdk_path)
+	apply_patch(hlsdk_path, os.path.join(args.wscript_path, "3rdparty", "patches", "hlsdk-vibe-life.patch"))
 
 	hlsdk_out_path = os.path.join(args.configuration_dir, "hlsdk-portable")
 

@@ -31,6 +31,7 @@
 - Munição preservada: o pente ejetado devolve os rounds ao reserva no final.
 - HIL no Quest 3S aprovado: `manual eject`, `manual insert` e `manual complete` observados.
 - Teste headless reproduzível: `scripts/test_manual_reload.sh`.
+- As mudanças do HLSDK agora são exportadas em `3rdparty/patches/hlsdk-vibe-life.patch`; `scripts/configure-ninja.py` aplica o patch automaticamente em checkouts limpos.
 
 ---
 

@@ -1,0 +1,1611 @@
+diff --git a/.gitignore b/.gitignore
+index ec09d1ed..4f4294bd 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -41,4 +41,7 @@ local.properties
+ .settings
+ 
+ #Finder cache
+-.DS_Store
+\ No newline at end of file
++.DS_Store
++
++# repowise owner-digest key (local)
++.repowise/events.key
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index d928f396..034e5162 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -30,5 +30,7 @@
+     <queries>
+         <package android:name="su.xash.engine" />
+         <package android:name="su.xash.engine.test" />
++        <package android:name="su.xash.engine.vr" />
++        <package android:name="su.xash.engine.vr.test" />
+     </queries>
+ </manifest>
+\ No newline at end of file
+diff --git a/android/app/src/main/java/su/xash/hlsdk/MainActivity.java b/android/app/src/main/java/su/xash/hlsdk/MainActivity.java
+index af87c398..338b8462 100644
+--- a/android/app/src/main/java/su/xash/hlsdk/MainActivity.java
++++ b/android/app/src/main/java/su/xash/hlsdk/MainActivity.java
+@@ -12,19 +12,25 @@ public class MainActivity extends Activity {
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+ 
+-        String pkg = "su.xash.engine.test";
+-
+-        try {
+-            getPackageManager().getPackageInfo(pkg, 0);
+-        } catch (PackageManager.NameNotFoundException e) {
++        String[] candidatePkgs = {
++            "su.xash.engine.vr.test",
++            "su.xash.engine.vr",
++            "su.xash.engine.test",
++            "su.xash.engine"
++        };
++        String pkg = null;
++        for (String candidate : candidatePkgs) {
+             try {
+-                pkg = "su.xash.engine";
+-                getPackageManager().getPackageInfo(pkg, 0);
+-            } catch (PackageManager.NameNotFoundException ex) {
+-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous")).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+-                finish();
+-                return;
+-            }
++                getPackageManager().getPackageInfo(candidate, 0);
++                pkg = candidate;
++                break;
++            } catch (PackageManager.NameNotFoundException ignored) {}
++        }
++
++        if (pkg == null) {
++            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous")).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
++            finish();
++            return;
+         }
+ 
+         startActivity(new Intent().setComponent(new ComponentName(pkg, "su.xash.engine.XashActivity"))
+diff --git a/cl_dll/StudioModelRenderer.cpp b/cl_dll/StudioModelRenderer.cpp
+index 53d320a4..6a2470e6 100644
+--- a/cl_dll/StudioModelRenderer.cpp
++++ b/cl_dll/StudioModelRenderer.cpp
+@@ -943,6 +943,20 @@ void CStudioModelRenderer::StudioSetupBones( void )
+ 
+ 		if( pbones[i].parent == -1 )
+ 		{
++			// In VR, 1998 flat viewmodels hide spare reload props (like Glock Box02 clip or Speedload Master)
++			// at Z < -15 units. Collapse them to zero transform when not actively reloading.
++			if( m_pCurrentEntity == gEngfuncs.GetViewModel() && CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f && i > 0 )
++			{
++				mstudioseqdesc_t *pseq = (mstudioseqdesc_t *)( (byte *)m_pStudioHeader + m_pStudioHeader->seqindex ) + m_pCurrentEntity->curstate.sequence;
++				bool is_reload = ( pseq && strstr( pseq->label, "reload" ) != NULL );
++				if( !is_reload || pos[i][2] < -15.0f )
++				{
++					memset( (*m_pbonetransform)[i], 0, sizeof( float ) * 12 );
++					memset( (*m_plighttransform)[i], 0, sizeof( float ) * 12 );
++					continue;
++				}
++			}
++
+ 			if( IEngineStudio.IsHardware() )
+ 			{
+ 				ConcatTransforms( (*m_protationmatrix), bonematrix, (*m_pbonetransform)[i] );
+@@ -1655,10 +1669,34 @@ void CStudioModelRenderer::StudioRenderFinal_Hardware( void )
+ 	}
+ 	else
+ 	{
++		bool is_viewmodel = ( m_pCurrentEntity == gEngfuncs.GetViewModel() );
++		bool is_reloading = false;
++		if( is_viewmodel && CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f && m_pStudioHeader->numseq > 0 )
++		{
++			int seq_idx = m_pCurrentEntity->curstate.sequence;
++			if( seq_idx >= 0 && seq_idx < m_pStudioHeader->numseq )
++			{
++				mstudioseqdesc_t *pseq = (mstudioseqdesc_t *)( (byte *)m_pStudioHeader + m_pStudioHeader->seqindex ) + seq_idx;
++				if( pseq && strstr( pseq->label, "reload" ) != NULL )
++					is_reloading = true;
++			}
++		}
++
+ 		for( i = 0; i < m_pStudioHeader->numbodyparts; i++ )
+ 		{
+ 			IEngineStudio.StudioSetupModel( i, (void **)&m_pBodyPart, (void **)&m_pSubModel );
+ 
++			// Suppress spare reload submodels in VR unless actively performing a reload sequence
++			if( is_viewmodel && CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f && !is_reloading && m_pSubModel )
++			{
++				if( !strcasecmp( m_pSubModel->name, "clip_reference" ) ||
++				    !strcasecmp( m_pSubModel->name, "python_speedload" ) ||
++				    ( !strcasecmp( m_pSubModel->name, "shell" ) && m_pRenderModel && strstr( m_pRenderModel->name, "shotgun" ) ) )
++				{
++					continue;
++				}
++			}
++
+ 			if( m_fDoInterp )
+ 			{
+ 				// interpolation messes up bounding boxes.
+diff --git a/cl_dll/ammo.cpp b/cl_dll/ammo.cpp
+index 6d4b852e..966db6c3 100644
+--- a/cl_dll/ammo.cpp
++++ b/cl_dll/ammo.cpp
+@@ -433,7 +433,7 @@ void WeaponsResource::SelectSlot( int iSlot, int fAdvance, int iDirection )
+ 		return;
+ 
+ 	WEAPON *p = NULL;
+-	bool fastSwitch = CVAR_GET_FLOAT( "hud_fastswitch" ) != 0;
++	bool fastSwitch = (CVAR_GET_FLOAT( "hud_fastswitch" ) != 0) || (CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f);
+ 
+ 	if ( ( gpActiveSel == NULL ) || ( gpActiveSel == (WEAPON *) 1 ) || ( iSlot != gpActiveSel->iSlot ) )
+ 	{
+@@ -787,6 +787,15 @@ void CHudAmmo::UserCmd_NextWeapon( void )
+ 				if( wsp && gWR.HasAmmo( wsp ) )
+ 				{
+ 					gpActiveSel = wsp;
++					bool fastSwitch = (CVAR_GET_FLOAT( "hud_fastswitch" ) != 0) || (CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f);
++					if( fastSwitch )
++					{
++						ServerCmd( wsp->szName );
++						g_weaponselect = wsp->iId;
++						gpLastSel = wsp;
++						gpActiveSel = NULL;
++						PlaySound( "common/wpn_select.wav", 1 );
++					}
+ 					return;
+ 				}
+ 			}
+@@ -828,6 +837,15 @@ void CHudAmmo::UserCmd_PrevWeapon( void )
+ 				if( wsp && gWR.HasAmmo( wsp ) )
+ 				{
+ 					gpActiveSel = wsp;
++					bool fastSwitch = (CVAR_GET_FLOAT( "hud_fastswitch" ) != 0) || (CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f);
++					if( fastSwitch )
++					{
++						ServerCmd( wsp->szName );
++						g_weaponselect = wsp->iId;
++						gpLastSel = wsp;
++						gpActiveSel = NULL;
++						PlaySound( "common/wpn_select.wav", 1 );
++					}
+ 					return;
+ 				}
+ 			}
+diff --git a/cl_dll/ev_common.cpp b/cl_dll/ev_common.cpp
+index ebba9cb2..dc3f9057 100644
+--- a/cl_dll/ev_common.cpp
++++ b/cl_dll/ev_common.cpp
+@@ -116,6 +116,20 @@ void EV_GetGunPosition( event_args_t *args, float *pos, float *origin )
+ 		// in spec mode use entity viewheigh, not own
+ 		if( EV_IsLocal( idx ) && !IS_FIRSTPERSON_SPEC )
+ 		{
++			cl_entity_t *vm = gEngfuncs.GetViewModel();
++			if( vm && vm->model )
++			{
++				if( !VectorIsNull( vm->attachment[0] ) )
++				{
++					VectorCopy( vm->attachment[0], pos );
++					return;
++				}
++				if( !VectorIsNull( vm->origin ) )
++				{
++					VectorCopy( vm->origin, pos );
++					return;
++				}
++			}
+ 			// Grab predicted result for local player
+ 			gEngfuncs.pEventAPI->EV_LocalPlayerViewheight( view_ofs );
+ 		}
+@@ -178,10 +192,36 @@ void EV_GetDefaultShellInfo( event_args_t *args, float *origin, float *velocity,
+ 	fR = gEngfuncs.pfnRandomFloat( 50, 70 );
+ 	fU = gEngfuncs.pfnRandomFloat( 100, 150 );
+ 
++	cl_entity_t *vm = (EV_IsPlayer( idx ) && EV_IsLocal( idx )) ? gEngfuncs.GetViewModel() : NULL;
++	qboolean isVRViewModel = false;
++	vec3_t vm_fwd, vm_rt, vm_up;
++
++	float distVM = 99999.0f;
++	if( vm && vm->model )
++	{
++		float dx = vm->origin[0] - origin[0];
++		float dy = vm->origin[1] - origin[1];
++		float dz = vm->origin[2] - origin[2];
++		distVM = sqrtf( dx * dx + dy * dy + dz * dz );
++	}
++	if( vm && vm->model && distVM < 120.0f && (vm->origin[0] != 0.0f || vm->origin[1] != 0.0f || vm->origin[2] != 0.0f) )
++	{
++		isVRViewModel = true;
++		gEngfuncs.pfnAngleVectors( vm->angles, vm_fwd, vm_rt, vm_up );
++	}
++
+ 	for( i = 0; i < 3; i++ )
+ 	{
+-		ShellVelocity[i] = velocity[i] + right[i] * fR + up[i] * fU + forward[i] * 25;
+-		ShellOrigin[i] = origin[i] + view_ofs[i] + up[i] * upScale + forward[i] * forwardScale + right[i] * rightScale;
++		if( isVRViewModel )
++		{
++			ShellVelocity[i] = velocity[i] * 0.5f + vm_rt[i] * fR + vm_up[i] * fU + vm_fwd[i] * 35.0f;
++			ShellOrigin[i] = vm->origin[i] + vm_up[i] * upScale + vm_fwd[i] * forwardScale + vm_rt[i] * rightScale;
++		}
++		else
++		{
++			ShellVelocity[i] = velocity[i] * 0.5f + right[i] * fR + up[i] * fU + forward[i] * 35.0f;
++			ShellOrigin[i] = origin[i] + view_ofs[i] + up[i] * upScale + forward[i] * forwardScale + right[i] * rightScale;
++		}
+ 	}
+ }
+ 
+diff --git a/cl_dll/ev_hldm.cpp b/cl_dll/ev_hldm.cpp
+index 50d72cac..af9bde50 100644
+--- a/cl_dll/ev_hldm.cpp
++++ b/cl_dll/ev_hldm.cpp
+@@ -430,6 +430,28 @@ void EV_HLDM_FireBullets( int idx, float *forward, float *right, float *up, int
+ 		// do damage, paint decals
+ 		if( tr.fraction != 1.0f )
+ 		{
++			// VR Debug Bullet Impact Visualizer: record impact and spawn 3D visual markers
++			cvar_t *pCvarImpacts = gEngfuncs.pfnGetCvarPointer( "vr_debug_impacts" );
++			if( pCvarImpacts && pCvarImpacts->value > 0.0f )
++			{
++				char impactCmd[128];
++				snprintf( impactCmd, sizeof( impactCmd ), "vr_record_impact %.1f %.1f %.1f %.1f %.1f %.1f %.2f %.2f %.2f\n",
++					vecSrc[0], vecSrc[1], vecSrc[2],
++					tr.endpos[0], tr.endpos[1], tr.endpos[2],
++					tr.plane.normal[0], tr.plane.normal[1], tr.plane.normal[2] );
++				gEngfuncs.pfnClientCmd( impactCmd );
++
++				if( gEngfuncs.pEfxAPI )
++				{
++					float bmin[3], bmax[3];
++					bmin[0] = tr.endpos[0] - 2.5f; bmin[1] = tr.endpos[1] - 2.5f; bmin[2] = tr.endpos[2] - 2.5f;
++					bmax[0] = tr.endpos[0] + 2.5f; bmax[1] = tr.endpos[1] + 2.5f; bmax[2] = tr.endpos[2] + 2.5f;
++					gEngfuncs.pEfxAPI->R_ParticleBox( bmin, bmax, 0, 255, 64, 4.0f );
++					gEngfuncs.pEfxAPI->R_ParticleLine( vecSrc, tr.endpos, 0, 255, 128, 3.0f );
++					gEngfuncs.pEfxAPI->R_SparkShower( tr.endpos );
++				}
++			}
++
+ 			switch( iBulletType )
+ 			{
+ 			default:
+@@ -481,6 +503,13 @@ static void EV_FireGlock_Impl( event_args_t *args )
+ 	VectorCopy( args->angles, angles );
+ 	VectorCopy( args->velocity, velocity );
+ 
++	if( EV_IsLocal( idx ) )
++	{
++		cl_entity_t *vm = gEngfuncs.GetViewModel();
++		if( vm && !VectorIsNull( vm->angles ) )
++			VectorCopy( vm->angles, angles );
++	}
++
+ 	empty = args->bparam1;
+ 	AngleVectors( angles, forward, right, up );
+ 
+@@ -544,6 +573,13 @@ void EV_FireShotGunDouble( event_args_t *args )
+ 	VectorCopy( args->angles, angles );
+ 	VectorCopy( args->velocity, velocity );
+ 
++	if( EV_IsLocal( idx ) )
++	{
++		cl_entity_t *vm = gEngfuncs.GetViewModel();
++		if( vm && !VectorIsNull( vm->angles ) )
++			VectorCopy( vm->angles, angles );
++	}
++
+ 	AngleVectors( angles, forward, right, up );
+ 
+ 	shell = gEngfuncs.pEventAPI->EV_FindModelIndex("models/shotgunshell.mdl");// brass shell
+@@ -598,6 +634,13 @@ void EV_FireShotGunSingle( event_args_t *args )
+ 	VectorCopy( args->angles, angles );
+ 	VectorCopy( args->velocity, velocity );
+ 
++	if( EV_IsLocal( idx ) )
++	{
++		cl_entity_t *vm = gEngfuncs.GetViewModel();
++		if( vm && !VectorIsNull( vm->angles ) )
++			VectorCopy( vm->angles, angles );
++	}
++
+ 	AngleVectors( angles, forward, right, up );
+ 
+ 	shell = gEngfuncs.pEventAPI->EV_FindModelIndex("models/shotgunshell.mdl");// brass shell
+@@ -655,6 +698,13 @@ void EV_FireMP5( event_args_t *args )
+ 	VectorCopy( args->angles, angles );
+ 	VectorCopy( args->velocity, velocity );
+ 
++	if( EV_IsLocal( idx ) )
++	{
++		cl_entity_t *vm = gEngfuncs.GetViewModel();
++		if( vm && !VectorIsNull( vm->angles ) )
++			VectorCopy( vm->angles, angles );
++	}
++
+ 	AngleVectors( angles, forward, right, up );
+ 
+ 	shell = gEngfuncs.pEventAPI->EV_FindModelIndex("models/shell.mdl");// brass shell
+@@ -738,6 +788,13 @@ void EV_FirePython( event_args_t *args )
+ 	VectorCopy( args->angles, angles );
+ 	VectorCopy( args->velocity, velocity );
+ 
++	if( EV_IsLocal( idx ) )
++	{
++		cl_entity_t *vm = gEngfuncs.GetViewModel();
++		if( vm && !VectorIsNull( vm->angles ) )
++			VectorCopy( vm->angles, angles );
++	}
++
+ 	AngleVectors( angles, forward, right, up );
+ 
+ 	if( EV_IsLocal( idx ) )
+diff --git a/cl_dll/eventscripts.h b/cl_dll/eventscripts.h
+index c61bf300..779eec33 100644
+--- a/cl_dll/eventscripts.h
++++ b/cl_dll/eventscripts.h
+@@ -14,6 +14,10 @@
+ #define	DEFAULT_VIEWHEIGHT	28
+ #define VEC_DUCK_VIEW 12
+ 
++#ifndef VectorIsNull
++#define VectorIsNull(v) ((v)[0] == 0.0f && (v)[1] == 0.0f && (v)[2] == 0.0f)
++#endif
++
+ #define FTENT_FADEOUT			0x00000080
+ 
+ // Some of these are HL/TFC specific?
+diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
+index 3b3187de..60133d67 100644
+--- a/cl_dll/view.cpp
++++ b/cl_dll/view.cpp
+@@ -182,6 +182,10 @@ float V_CalcBob( struct ref_params_s *pparams )
+ 	static float lasttime;
+ 	vec3_t	vel;
+ 
++	// In VR, disable artificial locomotion bobbing (prevents motion sickness and controller decoupling)
++	if( CVAR_GET_FLOAT( "vr_worldscale" ) > 0.0f )
++		return 0.0f;
++
+ 	if( pparams->onground == -1 ||
+ 		 pparams->time == lasttime )
+ 	{
+@@ -587,24 +591,28 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+ 	view->origin[2] += waterOffset;
+ 	VectorAdd( view->origin, pparams->viewheight, view->origin );
+ 
+-	// Let the viewmodel shake at about 10% of the amplitude
+-	gEngfuncs.V_ApplyShake( view->origin, view->angles, 0.9f );
+-
+-	for( i = 0; i < 3; i++ )
++	// Flat-screen viewmodel shake, bobbing and camera tilt (suppressed in VR since viewmodel is 1:1 anchored to 6DoF hand pose)
++	if( CVAR_GET_FLOAT( "vr_worldscale" ) <= 0.0f )
+ 	{
+-		view->origin[i] += bob * 0.4f * pparams->forward[i];
+-	}
+-	view->origin[2] += bob;
++		// Let the viewmodel shake at about 10% of the amplitude
++		gEngfuncs.V_ApplyShake( view->origin, view->angles, 0.9f );
++
++		for( i = 0; i < 3; i++ )
++		{
++			view->origin[i] += bob * 0.4f * pparams->forward[i];
++		}
++		view->origin[2] += bob;
+ 
+-	// throw in a little tilt.
+-	view->angles[YAW] -= bob * 0.5f;
+-	view->angles[ROLL] -= bob * 1.0f;
+-	view->angles[PITCH] -= bob * 0.3f;
++		// throw in a little tilt.
++		view->angles[YAW] -= bob * 0.5f;
++		view->angles[ROLL] -= bob * 1.0f;
++		view->angles[PITCH] -= bob * 0.3f;
+ 
+-	// pushing the view origin down off of the same X/Z plane as the ent's origin will give the
+-	// gun a very nice 'shifting' effect when the player looks up/down. If there is a problem
+-	// with view model distortion, this may be a cause. (SJB). 
+-	view->origin[2] -= 1.0f;
++		// pushing the view origin down off of the same X/Z plane as the ent's origin will give the
++		// gun a very nice 'shifting' effect when the player looks up/down. If there is a problem
++		// with view model distortion, this may be a cause. (SJB). 
++		view->origin[2] -= 1.0f;
++	}
+ 
+ 	// fudge position around to keep amount of weapon visible
+ 	// roughly equal with different FOV
+@@ -625,11 +633,12 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+ 		view->origin[2] += 0.5f;
+ 	}
+ 
+-	// Add in the punchangle, if any
+-	VectorAdd( pparams->viewangles, pparams->punchangle, pparams->viewangles );
+-
+-	// Include client side punch, too
+-	VectorAdd( pparams->viewangles, (float *)&g_ev_punchangle, pparams->viewangles );
++	// Add in the punchangle, if any (suppressed in VR to avoid violently shaking the headset camera)
++	if( CVAR_GET_FLOAT( "vr_worldscale" ) <= 0.0f )
++	{
++		VectorAdd( pparams->viewangles, pparams->punchangle, pparams->viewangles );
++		VectorAdd( pparams->viewangles, (float *)&g_ev_punchangle, pparams->viewangles );
++	}
+ 
+ 	V_DropPunchAngle( pparams->frametime, (float *)&g_ev_punchangle );
+ 
+diff --git a/dlls/client.cpp b/dlls/client.cpp
+index da2e9e1d..da55c78c 100644
+--- a/dlls/client.cpp
++++ b/dlls/client.cpp
+@@ -457,6 +457,81 @@ void Host_Say( edict_t *pEntity, int teamonly )
+ 	}
+ }
+ 
++// VR off-hand grab: find the closest item/weapon around the hand position and
++// pick it up through the same Touch() path used by walking over it.
++static qboolean VR_IsGrabbableClassname( const char *pszClassname )
++{
++	if( !pszClassname )
++		return false;
++
++	return ( !strncmp( pszClassname, "item_", 5 ) ||
++	         !strncmp( pszClassname, "weapon_", 7 ) ||
++	         !strncmp( pszClassname, "ammo_", 5 ) ||
++	         FStrEq( pszClassname, "weaponbox" ));
++}
++
++static void VR_GrabCommand( edict_t *pEntity )
++{
++	if( CMD_ARGC() < 4 )
++		return;
++
++	if( CVAR_GET_FLOAT( "vr_offhand_grab" ) <= 0.0f )
++		return;
++
++	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)&pEntity->v );
++	if( !pPlayer || !pPlayer->IsAlive( ))
++		return;
++
++	Vector hand( atof( CMD_ARGV( 1 )), atof( CMD_ARGV( 2 )), atof( CMD_ARGV( 3 )));
++
++	// Reject spoofed positions far away from the player.
++	if( ( hand - pPlayer->pev->origin ).Length() > 140.0f )
++		return;
++
++	CBaseEntity *pBest = NULL;
++	float bestDist = 99999.0f;
++
++	for( CBaseEntity *pEnt = UTIL_FindEntityInSphere( NULL, hand, 30.0f );
++	     pEnt; pEnt = UTIL_FindEntityInSphere( pEnt, hand, 30.0f ))
++	{
++		if( pEnt == pPlayer || pEnt->pev->solid == SOLID_NOT )
++			continue;
++		if( FBitSet( pEnt->pev->flags, FL_KILLME ))
++			continue;
++
++		const char *pszClassname = STRING( pEnt->pev->classname );
++		if( !VR_IsGrabbableClassname( pszClassname ))
++			continue;
++
++		// Do not grab through walls.
++		TraceResult tr;
++		UTIL_TraceLine( pPlayer->EyePosition(), pEnt->pev->origin, ignore_monsters, pEnt->edict(), &tr );
++		if( tr.flFraction < 0.95f && !tr.fStartSolid )
++			continue;
++
++		float dist = ( pEnt->pev->origin - hand ).Length();
++		if( dist < bestDist )
++		{
++			bestDist = dist;
++			pBest = pEnt;
++		}
++	}
++
++	if( pBest )
++	{
++		if( CVAR_GET_FLOAT( "vr_debug_grab" ) > 0.0f )
++			ALERT( at_console, "[VR_GRAB] picking %s at %.1f\n",
++				STRING( pBest->pev->classname ), bestDist );
++
++		pBest->Touch( pPlayer );
++	}
++	else if( CVAR_GET_FLOAT( "vr_debug_grab" ) > 0.0f )
++	{
++		ALERT( at_console, "[VR_GRAB] nothing in reach at %.1f %.1f %.1f\n",
++			hand.x, hand.y, hand.z );
++	}
++}
++
+ /*
+ ===========
+ ClientCommand
+@@ -601,6 +676,41 @@ void ClientCommand( edict_t *pEntity )
+ 		if( pPlayer->IsObserver() )
+ 			pPlayer->Observer_FindNextPlayer( atoi( CMD_ARGV( 1 ) ) ? true : false );
+ 	}
++	else if( FStrEq( pcmd, "vr_grab" ) )
++	{
++		VR_GrabCommand( pEntity );
++	}
++	else if( FStrEq( pcmd, "vr_test_teleport" ) )
++	{
++		// Test-only helper for the ladder regression, gated by vr_debug_ladder.
++		if( CVAR_GET_FLOAT( "vr_debug_ladder" ) > 0.0f && CMD_ARGC() >= 4 )
++		{
++			Vector pos( atof( CMD_ARGV( 1 )), atof( CMD_ARGV( 2 )), atof( CMD_ARGV( 3 )));
++			UTIL_SetOrigin( pev, pos );
++			pev->velocity = g_vecZero;
++			pev->flags &= ~FL_ONGROUND;
++		}
++	}
++	else if( FStrEq( pcmd, "vr_test_ladder_report" ) )
++	{
++		if( CVAR_GET_FLOAT( "vr_debug_ladder" ) > 0.0f )
++		{
++			TraceResult tr;
++			Vector end = pev->origin;
++			end.y -= 64.0f;
++			UTIL_TraceLine( pev->origin, end, ignore_monsters, pEntity, &tr );
++
++			ALERT( at_console, "[VR_LADDER] origin=(%.1f %.1f %.1f) movetype=%d vel=(%.1f %.1f %.1f) onground=%d contents=%d button=0x%x\n",
++				pev->origin.x, pev->origin.y, pev->origin.z, pev->movetype,
++				pev->velocity.x, pev->velocity.y, pev->velocity.z,
++				FBitSet( pev->flags, FL_ONGROUND ) ? 1 : 0,
++				POINT_CONTENTS( pev->origin ), pev->button );
++			ALERT( at_console, "[VR_LADDER] forward -Y trace: frac=%.2f end=(%.1f %.1f %.1f) startSolid=%d allSolid=%d hit=%s\n",
++				tr.flFraction, tr.vecEndPos.x, tr.vecEndPos.y, tr.vecEndPos.z,
++				tr.fStartSolid ? 1 : 0, tr.fAllSolid ? 1 : 0,
++				tr.pHit ? STRING( tr.pHit->v.classname ) : "none" );
++		}
++	}
+ 	else if( g_pGameRules->ClientCommand( GetClassPtr( (CBasePlayer *)pev ), pcmd ) )
+ 	{
+ 		// MenuSelect returns true only if the command is properly handled,  so don't print a warning
+diff --git a/dlls/combat.cpp b/dlls/combat.cpp
+index 0543cc8b..05058aec 100644
+--- a/dlls/combat.cpp
++++ b/dlls/combat.cpp
+@@ -1481,6 +1481,12 @@ Vector CBaseEntity::FireBulletsPlayer( ULONG cShots, Vector vecSrc, Vector vecDi
+ 	if( pevAttacker == NULL )
+ 		pevAttacker = pev;  // the default attacker is ourselves
+ 
++	// VR Two-Handed Stabilization: Holding weapon with secondary off-hand reduces bullet spread by 50%
++	if( pevAttacker && pevAttacker->vuser4.x > 0.0f )
++	{
++		vecSpread = vecSpread * 0.5f;
++	}
++
+ 	ClearMultiDamage();
+ 	gMultiDamage.type = DMG_BULLET | DMG_NEVERGIB;
+ 
+@@ -1503,6 +1509,14 @@ Vector CBaseEntity::FireBulletsPlayer( ULONG cShots, Vector vecSrc, Vector vecDi
+ 		// do damage, paint decals
+ 		if( tr.flFraction != 1.0f )
+ 		{
++			// VR bullet impact validation: log exact collision coordinates
++			if( CVAR_GET_FLOAT( "vr_debug_impacts" ) > 0.0f )
++			{
++				ALERT( at_console, "^2[VR_SV_BULLET] Hit at (%.1f, %.1f, %.1f) dist=%.1f\n",
++					tr.vecEndPos.x, tr.vecEndPos.y, tr.vecEndPos.z,
++					( tr.vecEndPos - vecSrc ).Length() );
++			}
++
+ 			CBaseEntity *pEntity = CBaseEntity::Instance( tr.pHit );
+ 
+ 			vecDir = vecDir.Normalize();
+diff --git a/dlls/egon.cpp b/dlls/egon.cpp
+index ab6fe24c..21f647af 100644
+--- a/dlls/egon.cpp
++++ b/dlls/egon.cpp
+@@ -173,7 +173,10 @@ void CEgon::Attack( void )
+ 		return;
+ 	}
+ 
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++	else
++		UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+ 	Vector vecAiming = gpGlobals->v_forward;
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+ 
+diff --git a/dlls/game.cpp b/dlls/game.cpp
+index 5c4bb6ca..f08ebb3e 100644
+--- a/dlls/game.cpp
++++ b/dlls/game.cpp
+@@ -55,6 +55,8 @@ cvar_t allow_spectators = { "allow_spectators", "0", FCVAR_SERVER };	// 0 preven
+ cvar_t multibyte_only = { "mp_multibyte_only", "0", FCVAR_SERVER };
+ 
+ cvar_t mp_chattime	= { "mp_chattime","10", FCVAR_SERVER };
++cvar_t vr_test_weapons = { "vr_test_weapons", "0", FCVAR_SERVER };
++cvar_t vr_manual_reload = { "vr_manual_reload", "0", FCVAR_SERVER };
+ 
+ // Engine Cvars
+ cvar_t *g_psv_gravity;
+@@ -520,6 +522,8 @@ void GameDLLInit( void )
+ 
+ 	CVAR_REGISTER( &mp_chattime );
+ 	CVAR_REGISTER( &sv_busters );
++	CVAR_REGISTER( &vr_test_weapons );
++	CVAR_REGISTER( &vr_manual_reload );
+ 
+ 
+ // REGISTER CVARS FOR SKILL LEVEL STUFF
+diff --git a/dlls/gauss.cpp b/dlls/gauss.cpp
+index 734950f4..d2017a00 100644
+--- a/dlls/gauss.cpp
++++ b/dlls/gauss.cpp
+@@ -317,11 +317,12 @@ void CGauss::StartFire( void )
+ {
+ 	float flDamage;
+ 
+-	if( m_pPlayer->m_flStartCharge > gpGlobals->time )
+-		m_pPlayer->m_flStartCharge = gpGlobals->time;
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++	else
++		UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+ 	Vector vecAiming = gpGlobals->v_forward;
+-	Vector vecSrc = m_pPlayer->GetGunPosition(); // + gpGlobals->v_up * -8 + gpGlobals->v_right * 8;
++	Vector vecSrc = m_pPlayer->GetGunPosition();
+ 
+ 	if( gpGlobals->time - m_pPlayer->m_flStartCharge > GetFullChargeTime() )
+ 	{
+diff --git a/dlls/glock.cpp b/dlls/glock.cpp
+index f4594530..b5953fc4 100644
+--- a/dlls/glock.cpp
++++ b/dlls/glock.cpp
+@@ -43,6 +43,8 @@ void CGlock::Spawn()
+ 	pev->classname = MAKE_STRING( "weapon_9mmhandgun" ); // hack to allow for old names
+ 	Precache();
+ 	m_iId = WEAPON_GLOCK;
++	m_iVrReloadStage = 0;
++	m_iVrSavedClip = 0;
+ 	SET_MODEL( ENT( pev ), "models/w_9mmhandgun.mdl" );
+ 
+ #ifdef MOBILE_HACKS
+@@ -60,6 +62,7 @@ void CGlock::Precache( void )
+ 	PRECACHE_MODEL( "models/v_9mmhandgun.mdl" );
+ 	PRECACHE_MODEL( "models/w_9mmhandgun.mdl" );
+ 	PRECACHE_MODEL( "models/p_9mmhandgun.mdl" );
++	PRECACHE_MODEL( "models/w_9mmclip.mdl" );
+ 
+ 	m_iShell = PRECACHE_MODEL( "models/shell.mdl" );// brass shell
+ 
+@@ -170,6 +173,11 @@ void CGlock::GlockFire( float flSpread, float flCycleTime, BOOL fUseAutoAim )
+ 	{
+ 		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );
+ 	}
++	else if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
+ 	else
+ 	{
+ 		vecAiming = gpGlobals->v_forward;
+@@ -189,6 +197,167 @@ void CGlock::GlockFire( float flSpread, float flCycleTime, BOOL fUseAutoAim )
+ 	m_flTimeWeaponIdle = UTIL_WeaponTimeBase() + UTIL_SharedRandomFloat( m_pPlayer->random_seed, 10, 15 );
+ }
+ 
++/*
++==================
++CGlock::VRDropMagazine
++
++Reuses GoldSrc MOVETYPE_BOUNCE physics for the ejected magazine. This avoids a
++second physics world for a single short-lived prop; Box3D remains reserved for
++the full hand/magazine interaction pass.
++==================
++*/
++void CGlock::VRDropMagazine( void )
++{
++#if !CLIENT_DLL
++	Vector vecOrigin = m_pPlayer->GetGunPosition();
++	Vector vecAngles = m_pPlayer->pev->v_angle;
++
++	// The muzzle sits ahead of the magwell; drop the magazine below and behind it.
++	vecOrigin = vecOrigin - gpGlobals->v_forward * 5.0f - gpGlobals->v_up * 6.0f;
++	vecOrigin = vecOrigin + gpGlobals->v_right * 2.0f;
++
++	CBaseEntity *pMag = CBaseEntity::Create( "info_target", vecOrigin, vecAngles, NULL );
++	if( !pMag )
++		return;
++
++	SET_MODEL( ENT( pMag->pev ), "models/w_9mmclip.mdl" );
++	UTIL_SetSize( pMag->pev, Vector( -1.0f, -1.0f, -1.0f ), Vector( 1.0f, 1.0f, 1.0f ) );
++	pMag->pev->movetype = MOVETYPE_BOUNCE;
++	pMag->pev->solid = SOLID_BBOX;
++	pMag->pev->gravity = 1.0f;
++	pMag->pev->friction = 0.8f;
++	pMag->pev->velocity = m_pPlayer->pev->vuser3 * 0.25f;
++	pMag->pev->velocity.z -= 80.0f;
++	pMag->pev->velocity = pMag->pev->velocity + gpGlobals->v_right * 30.0f;
++	pMag->pev->avelocity = Vector( 0.0f, 0.0f, 180.0f );
++	pMag->pev->nextthink = gpGlobals->time + 15.0f;
++	pMag->SetThink( &CBaseEntity::SUB_Remove );
++#endif
++}
++
++/*
++==================
++CGlock::VRManualReloadThink
++
++Staged manual reload for the Glock:
++  1. B ejects the current magazine.
++  2. B inserts a fresh magazine from reserve.
++  3. B racks the slide and completes the reload.
++
++The spatial off-hand gate will replace the second and third B presses once the
++off-hand magwell/slide flags are exposed by the engine. Keeping the staged
++fallback makes the feature usable with every controller and accessibility mode.
++==================
++*/
++bool CGlock::VRManualReloadThink( void )
++{
++#if CLIENT_DLL
++	return false;
++#else
++	if( CVAR_GET_FLOAT( "vr_manual_reload" ) <= 0.0f )
++	{
++		m_iVrReloadStage = 0;
++		return false;
++	}
++
++	const bool pressed = ( m_pPlayer->m_afButtonPressed & IN_RELOAD ) != 0;
++	const float now = UTIL_WeaponTimeBase();
++
++	if( m_iVrReloadStage == 0 )
++	{
++		if( !pressed )
++			return false;
++		if( m_iClip <= 0 && m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 )
++			return false;
++
++		m_iVrSavedClip = m_iClip;
++		m_iClip = 0;
++		m_iVrReloadStage = 1;
++		m_fInReload = TRUE;
++		m_pPlayer->m_flNextAttack = now + 0.35f;
++		SendWeaponAnim( GLOCK_RELOAD, 0 );
++		EMIT_SOUND_DYN( ENT( m_pPlayer->pev ), CHAN_ITEM, "items/9mmclip2.wav", 1.0f, ATTN_NORM, 0, 100 );
++		VRDropMagazine();
++
++		if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++			ALERT( at_console, "[VR_RELOAD] manual eject %s clip=%d reserve=%d\n",
++				STRING( pev->classname ), m_iClip, m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] );
++		return true;
++	}
++
++	// Stages 1 and 2 consume the weapon frame until the player advances them.
++	if( now < m_pPlayer->m_flNextAttack )
++		return true;
++
++	if( !pressed )
++		return true;
++
++	if( m_iVrReloadStage == 1 )
++	{
++		if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 )
++		{
++			m_iClip = m_iVrSavedClip;
++			m_iVrSavedClip = 0;
++			m_iVrReloadStage = 0;
++			m_fInReload = FALSE;
++			if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++				ALERT( at_console, "[VR_RELOAD] manual abort %s (no reserve ammo)\n", STRING( pev->classname ));
++			return true;
++		}
++
++		m_iVrReloadStage = 2;
++		m_pPlayer->m_flNextAttack = now + 0.35f;
++		SendWeaponAnim( GLOCK_RELOAD, 0 );
++		EMIT_SOUND_DYN( ENT( m_pPlayer->pev ), CHAN_ITEM, "items/9mmclip1.wav", 1.0f, ATTN_NORM, 0, 100 );
++		if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++			ALERT( at_console, "[VR_RELOAD] manual insert %s stage=2\n", STRING( pev->classname ));
++		return true;
++	}
++
++	// Final stage: seat the magazine, then rack the slide.
++	{
++		int take = Q_min( iMaxClip() - m_iClip, m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] );
++		m_iClip += take;
++		m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] -= take;
++
++		// Keep the rounds from the ejected magazine in reserve instead of
++		// silently deleting them.
++		if( m_iVrSavedClip > 0 )
++		{
++			int cap = iMaxAmmo1();
++			int &reserve = m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType];
++			reserve = Q_min( cap, reserve + m_iVrSavedClip );
++			m_iVrSavedClip = 0;
++		}
++
++		m_pPlayer->TabulateAmmo();
++		m_iVrReloadStage = 0;
++		m_fInReload = FALSE;
++		m_pPlayer->m_flNextAttack = now + 0.15f;
++		m_flTimeWeaponIdle = now + 1.0f;
++		SendWeaponAnim( GLOCK_RELOAD_NOT_EMPTY, 0 );
++		EMIT_SOUND_DYN( ENT( m_pPlayer->pev ), CHAN_ITEM, "weapons/pl_gun3.wav", 0.7f, ATTN_NORM, 0, 100 );
++
++		if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++			ALERT( at_console, "[VR_RELOAD] manual complete %s clip=%d reserve=%d\n",
++				STRING( pev->classname ), m_iClip, m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] );
++		return true;
++	}
++#endif
++}
++
++void CGlock::ItemPostFrame( void )
++{
++#if !CLIENT_DLL
++	if( ( m_pPlayer->m_afButtonPressed & IN_RELOAD ) && CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++		ALERT( at_console, "[VR_RELOAD] glock itempost cvar=%.1f stage=%d clip=%d\n",
++			CVAR_GET_FLOAT( "vr_manual_reload" ), m_iVrReloadStage, m_iClip );
++	if( VRManualReloadThink( ))
++		return;
++#endif
++	CBasePlayerWeapon::ItemPostFrame();
++}
++
+ void CGlock::Reload( void )
+ {
+ 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 || m_iClip == GLOCK_MAX_CLIP )
+diff --git a/dlls/handgrenade.cpp b/dlls/handgrenade.cpp
+index cbc575c3..d1ca23ac 100644
+--- a/dlls/handgrenade.cpp
++++ b/dlls/handgrenade.cpp
+@@ -156,10 +156,20 @@ void CHandGrenade::WeaponIdle( void )
+ 
+ 		UTIL_MakeVectors( angThrow );
+ 
+-		Vector vecSrc = m_pPlayer->pev->origin + m_pPlayer->pev->view_ofs + gpGlobals->v_forward * 16.0f;
++		Vector vecSrc;
++		if( m_pPlayer->pev->vuser1 != g_vecZero )
++			vecSrc = m_pPlayer->pev->origin + m_pPlayer->pev->vuser1 + gpGlobals->v_forward * 6.0f;
++		else
++			vecSrc = m_pPlayer->pev->origin + m_pPlayer->pev->view_ofs + gpGlobals->v_forward * 16.0f;
+ 
+ 		Vector vecThrow = gpGlobals->v_forward * flVel + m_pPlayer->pev->velocity;
+ 
++		// Add physical 6DoF controller swing momentum in VR
++		if( m_pPlayer->pev->vuser3.Length() > 40.0f )
++		{
++			vecThrow = vecThrow + m_pPlayer->pev->vuser3 * 1.25f;
++		}
++
+ 		// alway explode 3 seconds after the pin was pulled
+ 		float time = m_flStartThrow - gpGlobals->time + 3.0f;
+ 		if( time < 0.0f )
+diff --git a/dlls/hornetgun.cpp b/dlls/hornetgun.cpp
+index 1ae35df2..5401894d 100644
+--- a/dlls/hornetgun.cpp
++++ b/dlls/hornetgun.cpp
+@@ -132,9 +132,16 @@ void CHgun::PrimaryAttack()
+ 		return;
+ 	}
+ #if !CLIENT_DLL
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle );
++	Vector aimAngles = (m_pPlayer->pev->vuser2 != g_vecZero) ? m_pPlayer->pev->vuser2 : m_pPlayer->pev->v_angle;
++	UTIL_MakeVectors( aimAngles );
+ 
+-	CBaseEntity *pHornet = CBaseEntity::Create( "hornet", m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -12.0f, m_pPlayer->pev->v_angle, m_pPlayer->edict() );
++	Vector vecSrc;
++	if( m_pPlayer->pev->vuser1 != g_vecZero )
++		vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 12.0f;
++	else
++		vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -12.0f;
++
++	CBaseEntity *pHornet = CBaseEntity::Create( "hornet", vecSrc, aimAngles, m_pPlayer->edict() );
+ 	pHornet->pev->velocity = gpGlobals->v_forward * 300.0f;
+ 
+ 	float flRechargeTimePause = 0.5f;
+@@ -184,45 +191,48 @@ void CHgun::SecondaryAttack( void )
+ 	CBaseEntity *pHornet;
+ 	Vector vecSrc;
+ 
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle );
++	Vector aimAngles = (m_pPlayer->pev->vuser2 != g_vecZero) ? m_pPlayer->pev->vuser2 : m_pPlayer->pev->v_angle;
++	UTIL_MakeVectors( aimAngles );
+ 
+-	vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -12.0f;
++	qboolean is_vr = (m_pPlayer->pev->vuser1 != g_vecZero || m_pPlayer->pev->vuser2 != g_vecZero);
++	if( is_vr )
++		vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 12.0f;
++	else
++		vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -12.0f;
+ 
++	// In VR, apply a tighter spiral jitter around the physical muzzle
++	float spreadScale = is_vr ? 0.35f : 1.0f;
+ 	m_iFirePhase++;
+ 	switch( m_iFirePhase )
+ 	{
+ 	case 1:
+-		vecSrc = vecSrc + gpGlobals->v_up * 8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (8.0f * spreadScale);
+ 		break;
+ 	case 2:
+-		vecSrc = vecSrc + gpGlobals->v_up * 8.0f;
+-		vecSrc = vecSrc + gpGlobals->v_right * 8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (8.0f * spreadScale) + gpGlobals->v_right * (8.0f * spreadScale);
+ 		break;
+ 	case 3:
+-		vecSrc = vecSrc + gpGlobals->v_right * 8.0f;
++		vecSrc = vecSrc + gpGlobals->v_right * (8.0f * spreadScale);
+ 		break;
+ 	case 4:
+-		vecSrc = vecSrc + gpGlobals->v_up * -8.0f;
+-		vecSrc = vecSrc + gpGlobals->v_right * 8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (-8.0f * spreadScale) + gpGlobals->v_right * (8.0f * spreadScale);
+ 		break;
+ 	case 5:
+-		vecSrc = vecSrc + gpGlobals->v_up * -8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (-8.0f * spreadScale);
+ 		break;
+ 	case 6:
+-		vecSrc = vecSrc + gpGlobals->v_up * -8.0f;
+-		vecSrc = vecSrc + gpGlobals->v_right * -8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (-8.0f * spreadScale) + gpGlobals->v_right * (-8.0f * spreadScale);
+ 		break;
+ 	case 7:
+-		vecSrc = vecSrc + gpGlobals->v_right * -8.0f;
++		vecSrc = vecSrc + gpGlobals->v_right * (-8.0f * spreadScale);
+ 		break;
+ 	case 8:
+-		vecSrc = vecSrc + gpGlobals->v_up * 8.0f;
+-		vecSrc = vecSrc + gpGlobals->v_right * -8.0f;
++		vecSrc = vecSrc + gpGlobals->v_up * (8.0f * spreadScale) + gpGlobals->v_right * (-8.0f * spreadScale);
+ 		m_iFirePhase = 0;
+ 		break;
+ 	}
+ 
+-	pHornet = CBaseEntity::Create( "hornet", vecSrc, m_pPlayer->pev->v_angle, m_pPlayer->edict() );
++	pHornet = CBaseEntity::Create( "hornet", vecSrc, aimAngles, m_pPlayer->edict() );
+ 	pHornet->pev->velocity = gpGlobals->v_forward * 1200.0f;
+ 	pHornet->pev->angles = UTIL_VecToAngles( pHornet->pev->velocity );
+ 
+diff --git a/dlls/mp5.cpp b/dlls/mp5.cpp
+index 53323a74..32c91740 100644
+--- a/dlls/mp5.cpp
++++ b/dlls/mp5.cpp
+@@ -155,7 +155,16 @@ void CMP5::PrimaryAttack()
+ 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+-	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	Vector vecAiming;
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
++	else
++	{
++		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	}
+ 	Vector vecDir;
+ #if CLIENT_DLL
+ 	if( bIsMultiplayer() )
+@@ -219,12 +228,24 @@ void CMP5::SecondaryAttack( void )
+ 	// player "shoot" animation
+ 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+- 	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++	Vector vecMuzzle = m_pPlayer->GetGunPosition();
++	Vector vecAim;
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAim = gpGlobals->v_forward;
++	}
++	else
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++		vecAim = gpGlobals->v_forward;
++		vecMuzzle = m_pPlayer->pev->origin + m_pPlayer->pev->view_ofs + gpGlobals->v_forward * 16.0f;
++	}
+ 
+ 	// we don't add in player velocity anymore.
+ 	CGrenade::ShootContact( m_pPlayer->pev,
+-					m_pPlayer->pev->origin + m_pPlayer->pev->view_ofs + gpGlobals->v_forward * 16.0f,
+-					gpGlobals->v_forward * 800.0f );
++					vecMuzzle,
++					vecAim * 800.0f );
+ 
+ 	int flags;
+ #if CLIENT_WEAPONS
+diff --git a/dlls/multiplay_gamerules.cpp b/dlls/multiplay_gamerules.cpp
+index 6b1f10d9..a9fe06b3 100644
+--- a/dlls/multiplay_gamerules.cpp
++++ b/dlls/multiplay_gamerules.cpp
+@@ -532,6 +532,12 @@ void CHalfLifeMultiplay::PlayerSpawn( CBasePlayer *pPlayer )
+ 		pPlayer->GiveAmmo( 68, "9mm", _9MM_MAX_CARRY );// 4 full reloads
+ 	}
+ 
++	// VR Test Mode: automatically equip HEV suit and entire arsenal on player spawn
++	if( CVAR_GET_FLOAT( "vr_test_weapons" ) > 0.0f )
++	{
++		pPlayer->CheatImpulseCommands( 101 );
++	}
++
+ 	pPlayer->m_iAutoWepSwitch = iOldAutoWepSwitch;
+ }
+ 
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index 5f70d6a8..6b702734 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -364,13 +364,13 @@ int CBasePlayer::TakeHealth( float flHealth, int bitsDamageType )
+ 
+ Vector CBasePlayer::GetGunPosition()
+ {
+-	//UTIL_MakeVectors( pev->v_angle );
+-	//m_HackedGunPos = pev->view_ofs;
+-	Vector origin;
+-
+-	origin = pev->origin + pev->view_ofs;
++	// In VR, pev->vuser1 contains the real 6DoF muzzle offset relative to pev->origin
++	if( pev->vuser1 != g_vecZero )
++	{
++		return pev->origin + pev->vuser1;
++	}
+ 
+-	return origin;
++	return pev->origin + pev->view_ofs;
+ }
+ 
+ //=========================================================
+@@ -3571,7 +3571,7 @@ void CBasePlayer::ImpulseCommands()
+ void CBasePlayer::CheatImpulseCommands( int iImpulse )
+ {
+ #if !HLDEMO_BUILD
+-	if( g_enable_cheats->value == 0 )
++	if( g_enable_cheats->value == 0 && CVAR_GET_FLOAT( "vr_test_weapons" ) <= 0.0f )
+ 	{
+ 		return;
+ 	}
+@@ -4346,6 +4346,14 @@ void CBasePlayer::EnableControl( BOOL fControl )
+ //=========================================================
+ Vector CBasePlayer::GetAutoaimVector( float flDelta )
+ {
++	// In VR 6DoF, bullets must fire precisely along the physical controller aim angles (pev->vuser2).
++	// Deflecting shots with flat autoaim bends trajectory away from the visible physical gun/laser.
++	if( pev->vuser1 != g_vecZero || pev->vuser4.y > 0.0f )
++	{
++		UTIL_MakeVectors( pev->vuser2 );
++		return gpGlobals->v_forward;
++	}
++
+ 	if( g_iSkillLevel == SKILL_HARD )
+ 	{
+ 		UTIL_MakeVectors( pev->v_angle + pev->punchangle );
+diff --git a/dlls/python.cpp b/dlls/python.cpp
+index 567187c0..fc0b800a 100644
+--- a/dlls/python.cpp
++++ b/dlls/python.cpp
+@@ -186,10 +186,18 @@ void CPython::PrimaryAttack()
+ 	// player "shoot" animation
+ 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+-
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+-	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );
++	Vector vecAiming;
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
++	else
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );
++	}
+ 
+ 	Vector vecDir;
+ 	vecDir = m_pPlayer->FireBulletsPlayer( 1, vecSrc, vecAiming, VECTOR_CONE_1DEGREES, 8192, BULLET_PLAYER_357, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
+diff --git a/dlls/rpg.cpp b/dlls/rpg.cpp
+index 86ae6d2c..75803e65 100644
+--- a/dlls/rpg.cpp
++++ b/dlls/rpg.cpp
+@@ -467,12 +467,18 @@ void CRpg::PrimaryAttack()
+ 		// player "shoot" animation
+ 		m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+-		UTIL_MakeVectors( m_pPlayer->pev->v_angle );
+-		Vector vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -8.0f;
++		Vector vecAimAngles = (m_pPlayer->pev->vuser2 != g_vecZero) ? m_pPlayer->pev->vuser2 : m_pPlayer->pev->v_angle;
++		UTIL_MakeVectors( vecAimAngles );
+ 
+-		CRpgRocket *pRocket = CRpgRocket::CreateRpgRocket( vecSrc, m_pPlayer->pev->v_angle, m_pPlayer, this );
++		Vector vecSrc;
++		if( m_pPlayer->pev->vuser1 != g_vecZero )
++			vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 12.0f;
++		else
++			vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 16.0f + gpGlobals->v_right * 8.0f + gpGlobals->v_up * -8.0f;
++
++		CRpgRocket *pRocket = CRpgRocket::CreateRpgRocket( vecSrc, vecAimAngles, m_pPlayer, this );
+ 
+-		UTIL_MakeVectors( m_pPlayer->pev->v_angle );// RpgRocket::Create stomps on globals, so remake.
++		UTIL_MakeVectors( vecAimAngles );// RpgRocket::Create stomps on globals, so remake.
+ 		pRocket->pev->velocity = pRocket->pev->velocity + gpGlobals->v_forward * DotProduct( m_pPlayer->pev->velocity, gpGlobals->v_forward );
+ #endif
+ 
+@@ -572,7 +578,8 @@ void CRpg::UpdateSpot( void )
+ 			m_pSpot = CLaserSpot::CreateSpot();
+ 		}
+ 
+-		UTIL_MakeVectors( m_pPlayer->pev->v_angle );
++		Vector vecAimAngles = (m_pPlayer->pev->vuser2 != g_vecZero) ? m_pPlayer->pev->vuser2 : m_pPlayer->pev->v_angle;
++		UTIL_MakeVectors( vecAimAngles );
+ 		Vector vecSrc = m_pPlayer->GetGunPosition();
+ 		Vector vecAiming = gpGlobals->v_forward;
+ 
+diff --git a/dlls/satchel.cpp b/dlls/satchel.cpp
+index f5fa886b..bb3d0e4d 100644
+--- a/dlls/satchel.cpp
++++ b/dlls/satchel.cpp
+@@ -443,9 +443,22 @@ void CSatchel::Throw( void )
+ 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] )
+ 	{
+ #if !CLIENT_DLL
+-		Vector vecSrc = m_pPlayer->pev->origin;
++		Vector vecSrc;
++		if( m_pPlayer->pev->vuser1 != g_vecZero )
++		{
++			vecSrc = m_pPlayer->GetGunPosition() + gpGlobals->v_forward * 8.0f;
++		}
++		else
++		{
++			vecSrc = m_pPlayer->pev->origin;
++		}
+ 
+ 		Vector vecThrow = gpGlobals->v_forward * 274 + m_pPlayer->pev->velocity;
++		if( m_pPlayer->pev->vuser3 != g_vecZero && m_pPlayer->pev->vuser3.Length() > 40.0f )
++		{
++			// Add physical controller swing velocity
++			vecThrow = vecThrow + m_pPlayer->pev->vuser3 * 1.25f;
++		}
+ 
+ 		CBaseEntity *pSatchel = Create( "monster_satchel", vecSrc, Vector( 0, 0, 0 ), m_pPlayer->edict() );
+ 		pSatchel->pev->velocity = vecThrow;
+diff --git a/dlls/shotgun.cpp b/dlls/shotgun.cpp
+index 7b263a21..e6910c27 100644
+--- a/dlls/shotgun.cpp
++++ b/dlls/shotgun.cpp
+@@ -148,7 +148,16 @@ void CShotgun::PrimaryAttack()
+ 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+-	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	Vector vecAiming;
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
++	else
++	{
++		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	}
+ 
+ 	Vector vecDir;
+ 
+@@ -218,7 +227,16 @@ void CShotgun::SecondaryAttack( void )
+ 	m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ 
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+-	Vector vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	Vector vecAiming;
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
++	else
++	{
++		vecAiming = m_pPlayer->GetAutoaimVector( AUTOAIM_5DEGREES );
++	}
+ 
+ 	Vector vecDir;
+ 
+diff --git a/dlls/singleplay_gamerules.cpp b/dlls/singleplay_gamerules.cpp
+index 93d15215..a10274ae 100644
+--- a/dlls/singleplay_gamerules.cpp
++++ b/dlls/singleplay_gamerules.cpp
+@@ -211,6 +211,12 @@ void CHalfLifeRules::PlayerSpawn( CBasePlayer *pPlayer )
+ 	    || g_iModType == MOD_SEWER_BETA )
+ 		pPlayer->GiveNamedItem( "item_suit" );
+ #endif // MOBILE_HACKS
++
++	// VR Test Mode: automatically equip HEV suit and entire arsenal on player spawn
++	if( CVAR_GET_FLOAT( "vr_test_weapons" ) > 0.0f )
++	{
++		pPlayer->CheatImpulseCommands( 101 );
++	}
+ }
+ 
+ //=========================================================
+diff --git a/dlls/squeakgrenade.cpp b/dlls/squeakgrenade.cpp
+index 0db5109e..500fc1ea 100644
+--- a/dlls/squeakgrenade.cpp
++++ b/dlls/squeakgrenade.cpp
+@@ -526,31 +526,41 @@ void CSqueak::PrimaryAttack()
+ 		Vector trace_origin, forward;
+ 		float flVel;
+ 
+-		UTIL_MakeVectors( Vector( 0, m_pPlayer->pev->v_angle.y, m_pPlayer->pev->v_angle.z ));
+-		forward = gpGlobals->v_forward;
+-		UTIL_MakeVectors( m_pPlayer->pev->v_angle );
+-
+-		if( m_pPlayer->pev->v_angle.x <= 0 )
++		if( m_pPlayer->pev->vuser2 != g_vecZero )
+ 		{
+-			flVel = 1;
++			// VR 6DoF Mode: Origin is physical hand position, forward direction is controller aim angles
++			trace_origin = m_pPlayer->GetGunPosition();
++			UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++			forward = gpGlobals->v_forward;
+ 		}
+ 		else
+ 		{
+-			flVel = m_pPlayer->pev->v_angle.x / 90.0f;
+-		}
++			UTIL_MakeVectors( Vector( 0, m_pPlayer->pev->v_angle.y, m_pPlayer->pev->v_angle.z ));
++			forward = gpGlobals->v_forward;
++			UTIL_MakeVectors( m_pPlayer->pev->v_angle );
+ 
+-		// HACK HACK:  Ugly hacks to handle change in origin based on new physics code for players
+-		// Move origin up if crouched and start trace a bit outside of body ( 20 units instead of 16 )
+-		trace_origin = m_pPlayer->pev->origin;
+-		if( m_pPlayer->pev->flags & FL_DUCKING )
+-		{
+-			trace_origin = trace_origin - Vector( 0, 0, 1 ) * ( flVel + 1.0f ) * -18;
+-		}
++			if( m_pPlayer->pev->v_angle.x <= 0 )
++			{
++				flVel = 1;
++			}
++			else
++			{
++				flVel = m_pPlayer->pev->v_angle.x / 90.0f;
++			}
+ 
+-		forward = forward * flVel + gpGlobals->v_forward * ( 1 - flVel );
++			// HACK HACK:  Ugly hacks to handle change in origin based on new physics code for players
++			// Move origin up if crouched and start trace a bit outside of body ( 20 units instead of 16 )
++			trace_origin = m_pPlayer->pev->origin;
++			if( m_pPlayer->pev->flags & FL_DUCKING )
++			{
++				trace_origin = trace_origin - Vector( 0, 0, 1 ) * ( flVel + 1.0f ) * -18;
++			}
++
++			forward = forward * flVel + gpGlobals->v_forward * ( 1 - flVel );
++		}
+ 
+ 		// find place to toss monster
+-		UTIL_TraceLine( trace_origin + forward * 24.0f, trace_origin + gpGlobals->v_forward * 60.0f, dont_ignore_monsters, NULL, &tr );
++		UTIL_TraceLine( trace_origin + forward * 12.0f, trace_origin + forward * 60.0f, dont_ignore_monsters, NULL, &tr );
+ 
+ 		int flags;
+ #if CLIENT_WEAPONS
+@@ -565,8 +575,15 @@ void CSqueak::PrimaryAttack()
+ 			// player "shoot" animation
+ 			m_pPlayer->SetAnimation( PLAYER_ATTACK1 );
+ #if !CLIENT_DLL
+-			CBaseEntity *pSqueak = CBaseEntity::Create( "monster_snark", tr.vecEndPos, m_pPlayer->pev->v_angle, m_pPlayer->edict() );
+-			pSqueak->pev->velocity = forward * 200.0f + m_pPlayer->pev->velocity;
++			Vector spawnAngle = ( m_pPlayer->pev->vuser2 != g_vecZero ) ? m_pPlayer->pev->vuser2 : m_pPlayer->pev->v_angle;
++			CBaseEntity *pSqueak = CBaseEntity::Create( "monster_snark", tr.vecEndPos, spawnAngle, m_pPlayer->edict() );
++			Vector tossVel = forward * 200.0f + m_pPlayer->pev->velocity;
++			if( m_pPlayer->pev->vuser3 != g_vecZero && m_pPlayer->pev->vuser3.Length() > 40.0f )
++			{
++				tossVel = tossVel + m_pPlayer->pev->vuser3 * 1.25f;
++			}
++			pSqueak->pev->velocity = tossVel;
++			ALERT( at_console, "^2[VR_WEAPON] 6DoF Snark tossed with velocity (%.1f, %.1f, %.1f)\n", tossVel.x, tossVel.y, tossVel.z );
+ #endif
+ 			// play hunt sound
+ 			float flRndSound = RANDOM_FLOAT( 0.0f, 1.0f );
+diff --git a/dlls/tripmine.cpp b/dlls/tripmine.cpp
+index 90379807..5e19e982 100644
+--- a/dlls/tripmine.cpp
++++ b/dlls/tripmine.cpp
+@@ -454,9 +454,20 @@ void CTripmine::PrimaryAttack( void )
+ 	if( m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] <= 0 )
+ 		return;
+ 
+-	UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
+ 	Vector vecSrc = m_pPlayer->GetGunPosition();
+-	Vector vecAiming = gpGlobals->v_forward;
++	Vector vecAiming;
++
++	// VR 6DoF Mode: Align placement trace with physical hand controller aim direction (pev->vuser2)
++	if( m_pPlayer->pev->vuser2 != g_vecZero )
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->vuser2 );
++		vecAiming = gpGlobals->v_forward;
++	}
++	else
++	{
++		UTIL_MakeVectors( m_pPlayer->pev->v_angle + m_pPlayer->pev->punchangle );
++		vecAiming = gpGlobals->v_forward;
++	}
+ 
+ 	TraceResult tr;
+ 
+@@ -478,7 +489,9 @@ void CTripmine::PrimaryAttack( void )
+ 			Vector angles = UTIL_VecToAngles( tr.vecPlaneNormal );
+ 
+ 			CBaseEntity::Create( "monster_tripmine", tr.vecEndPos + tr.vecPlaneNormal * 8.0f, angles, m_pPlayer->edict() );
+-
++#if !CLIENT_DLL
++			ALERT( at_console, "^2[VR_WEAPON] 6DoF Tripmine placed at (%.1f, %.1f, %.1f)\n", tr.vecEndPos.x, tr.vecEndPos.y, tr.vecEndPos.z );
++#endif
+ 			m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType]--;
+ 
+ 			// player "shoot" animation
+diff --git a/dlls/weapons.cpp b/dlls/weapons.cpp
+index dd1bb43d..5160f44e 100644
+--- a/dlls/weapons.cpp
++++ b/dlls/weapons.cpp
+@@ -638,6 +638,13 @@ void CBasePlayerWeapon::ItemPostFrame( void )
+ 		m_pPlayer->TabulateAmmo();
+ 
+ 		m_fInReload = FALSE;
++
++		if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++		{
++			ALERT( at_console, "[VR_RELOAD] complete %s clip=%d reserve=%d\n",
++				STRING( pev->classname ), m_iClip,
++				m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] );
++		}
+ 	}
+ 
+ 	if( !(m_pPlayer->pev->button & IN_ATTACK ) )
+@@ -1018,6 +1025,13 @@ BOOL CBasePlayerWeapon::DefaultReload( int iClipSize, int iAnim, float fDelay, i
+ 	//!!UNDONE -- reload sound goes here !!!
+ 	SendWeaponAnim( iAnim, UseDecrement() ? 1 : 0 );
+ 
++	if( CVAR_GET_FLOAT( "vr_debug_reload" ) > 0.0f )
++	{
++		ALERT( at_console, "[VR_RELOAD] start %s clip=%d max=%d reserve=%d\n",
++			STRING( pev->classname ), m_iClip, iClipSize,
++			m_pPlayer->m_rgAmmo[m_iPrimaryAmmoType] );
++	}
++
+ 	m_fInReload = TRUE;
+ 
+ 	m_flTimeWeaponIdle = UTIL_WeaponTimeBase() + 3.0f;
+diff --git a/dlls/weapons.h b/dlls/weapons.h
+index b87e64d1..fabd6cd6 100644
+--- a/dlls/weapons.h
++++ b/dlls/weapons.h
+@@ -480,6 +480,7 @@ public:
+ 	BOOL Deploy( void );
+ 	void Reload( void );
+ 	void WeaponIdle( void );
++	void ItemPostFrame( void );
+ 
+ 	virtual BOOL UseDecrement( void )
+ 	{ 
+@@ -495,6 +496,14 @@ private:
+ 
+ 	unsigned short m_usFireGlock1;
+ 	unsigned short m_usFireGlock2;
++
++	// Vibe-Life staged manual reload. 0 = idle, 1 = magazine ejected,
++	// 2 = fresh magazine inserted and waiting for the slide rack.
++	int m_iVrReloadStage;
++	int m_iVrSavedClip;
++
++	bool VRManualReloadThink( void );
++	void VRDropMagazine( void );
+ };
+ 
+ class CCrowbar : public CBasePlayerWeapon
+diff --git a/pm_shared/pm_shared.c b/pm_shared/pm_shared.c
+index 925d040c..39e01175 100644
+--- a/pm_shared/pm_shared.c
++++ b/pm_shared/pm_shared.c
+@@ -2204,10 +2204,44 @@ void PM_LadderMove( physent_t *pLadder )
+ 		if( pmove->cmd.buttons & IN_MOVERIGHT )
+ 			right += flSpeed;
+ 
++		// Incorporate continuous analog thumbstick locomotion for VR
++		if( pmove->cmd.forwardmove != 0.0f || pmove->cmd.sidemove != 0.0f )
++		{
++			float fRatio = flSpeed / 400.0f;
++			forward += pmove->cmd.forwardmove * fRatio;
++			right += pmove->cmd.sidemove * fRatio;
++		}
++
++		if( forward > flSpeed )
++			forward = flSpeed;
++		else if( forward < -flSpeed )
++			forward = -flSpeed;
++
++		if( right > flSpeed )
++			right = flSpeed;
++		else if( right < -flSpeed )
++			right = -flSpeed;
++
+ 		if( pmove->cmd.buttons & IN_JUMP )
+ 		{
+ 			pmove->movetype = MOVETYPE_WALK;
+-			VectorScale( trace.plane.normal, 270, pmove->velocity );
++
++			// vuser4[1] is the authoritative VR flag. Do not fall back to
++			// vuser1: the HLSDK reuses that slot for HUD/ammo data.
++			qboolean is_vr = ( pmove->vuser4[1] > 0.0f );
++			if( is_vr && ( ( pmove->cmd.buttons & IN_FORWARD ) || pmove->cmd.forwardmove > 50.0f ) )
++			{
++				// In VR, pushing stick forward and jumping at the ladder top boosts onto the ledge safely
++				pmove->velocity[0] = -trace.plane.normal[0] * 80.0f;
++				pmove->velocity[1] = -trace.plane.normal[1] * 80.0f;
++				pmove->velocity[2] = 240.0f;
++				if( pmove->Con_DPrintf )
++					pmove->Con_DPrintf( "^2[VR_LADDER] Smooth ledge boost jump applied on ladder top\n" );
++			}
++			else
++			{
++				VectorScale( trace.plane.normal, 270, pmove->velocity );
++			}
+ 		}
+ 		else
+ 		{
+@@ -2215,42 +2249,53 @@ void PM_LadderMove( physent_t *pLadder )
+ 			{
+ 				vec3_t velocity, perp, cross, lateral, tmp;
+ 				float normal;
++				qboolean is_vr = ( pmove->vuser4[1] > 0.0f );
+ 
+-				//ALERT( at_console, "pev %.2f %.2f %.2f - ",
+-				//	pev->velocity.x, pev->velocity.y, pev->velocity.z );
+-				// Calculate player's intended velocity
+-				//Vector velocity = ( forward * gpGlobals->v_forward ) + ( right * gpGlobals->v_right );
+-				VectorScale( vpn, forward, velocity );
+-				VectorMA( velocity, right, v_right, velocity );
+-
+-				// Perpendicular in the ladder plane
+-				//		Vector perp = CrossProduct( Vector( 0, 0, 1 ), trace.vecPlaneNormal );
+-				//		perp = perp.Normalize();
+-				VectorClear( tmp );
+-				tmp[2] = 1;
+-				CrossProduct( tmp, trace.plane.normal, perp );
+-				VectorNormalize( perp );
+-
+-				// decompose velocity into ladder plane
+-				normal = DotProduct( velocity, trace.plane.normal );
+-				// This is the velocity into the face of the ladder
+-				VectorScale( trace.plane.normal, normal, cross );
+-
+-				// This is the player's additional velocity
+-				VectorSubtract( velocity, cross, lateral );
+-
+-				// This turns the velocity into the face of the ladder into velocity that
+-				// is roughly vertically perpendicular to the face of the ladder.
+-				// NOTE: It IS possible to face up and move down or face down and move up
+-				// because the velocity is a sum of the directional velocity and the converted
+-				// velocity through the face of the ladder -- by design.
+-				CrossProduct( trace.plane.normal, perp, tmp );
+-				VectorMA( lateral, -normal, tmp, pmove->velocity );
+-				if( onFloor && normal > 0 )	// On ground moving away from the ladder
++				if( is_vr )
+ 				{
+-					VectorMA( pmove->velocity, MAX_CLIMB_SPEED, trace.plane.normal, pmove->velocity );
++					// Decouple VR ladder climb from head pitch:
++					// Forward stick always climbs UP, Backward stick always climbs DOWN.
++					// Right/Left stick strafes laterally across ladder rungs.
++					VectorClear( tmp );
++					tmp[2] = 1.0f;
++					CrossProduct( tmp, trace.plane.normal, perp );
++					VectorNormalize( perp );
++
++					// Vertical vector along ladder plane (pointing straight up)
++					CrossProduct( trace.plane.normal, perp, tmp );
++
++					VectorScale( tmp, forward, pmove->velocity );
++					VectorMA( pmove->velocity, right, perp, pmove->velocity );
++
++					if( onFloor && forward < 0 ) // Backing off ladder on ground
++					{
++						VectorMA( pmove->velocity, MAX_CLIMB_SPEED, trace.plane.normal, pmove->velocity );
++					}
++				}
++				else
++				{
++					// Standard flat-screen engine calculation
++					VectorScale( vpn, forward, velocity );
++					VectorMA( velocity, right, v_right, velocity );
++
++					VectorClear( tmp );
++					tmp[2] = 1;
++					CrossProduct( tmp, trace.plane.normal, perp );
++					VectorNormalize( perp );
++
++					// decompose velocity into ladder plane
++					normal = DotProduct( velocity, trace.plane.normal );
++					VectorScale( trace.plane.normal, normal, cross );
++
++					VectorSubtract( velocity, cross, lateral );
++
++					CrossProduct( trace.plane.normal, perp, tmp );
++					VectorMA( lateral, -normal, tmp, pmove->velocity );
++					if( onFloor && normal > 0 ) // On ground moving away from the ladder
++					{
++						VectorMA( pmove->velocity, MAX_CLIMB_SPEED, trace.plane.normal, pmove->velocity );
++					}
+ 				}
+-				//pev->velocity = lateral - ( CrossProduct( trace.vecPlaneNormal, perp ) * normal );
+ 			}
+ 			else
+ 			{
+@@ -2266,7 +2311,7 @@ physent_t *PM_Ladder( void )
+ 	physent_t *pe;
+ 	hull_t *hull;
+ 	int num;
+-	vec3_t test;
++	vec3_t hullOffset, probe;
+ 
+ 	for( i = 0; i < pmove->nummoveent; i++ )
+ 	{
+@@ -2275,17 +2320,52 @@ physent_t *PM_Ladder( void )
+ 		if( pe->model && (modtype_t)pmove->PM_GetModelType( pe->model ) == mod_brush && pe->skin == CONTENTS_LADDER )
+ 		{
+ 
+-			hull = (hull_t *)pmove->PM_HullForBsp( pe, test );
++			hull = (hull_t *)pmove->PM_HullForBsp( pe, hullOffset );
+ 			num = hull->firstclipnode;
+ 
+ 			// Offset the test point appropriately for this hull.
+-			VectorSubtract( pmove->origin, test, test );
++			VectorSubtract( pmove->origin, hullOffset, probe );
+ 
+ 			// Test the player's hull for intersection with this model
+-			if( pmove->PM_HullPointContents( hull, num, test ) == CONTENTS_EMPTY )
+-				continue;
++			if( pmove->PM_HullPointContents( hull, num, probe ) != CONTENTS_EMPTY )
++				return pe;
++
++			// VR assist: allow attaching from a small distance when the
++			// player is actively moving toward the ladder. Ladder brushes are
++			// often a thin panel embedded in a wall, so the player's origin
++			// cannot physically enter it; probe a short segment along the
++			// intended movement direction instead.
++			float probeFwd = pmove->cmd.forwardmove;
++			float probeSide = pmove->cmd.sidemove;
++
++			// Button-based input (e.g. +forward) has no analog move value.
++			if( pmove->cmd.buttons & IN_FORWARD ) probeFwd = 400.0f;
++			if( pmove->cmd.buttons & IN_BACK ) probeFwd = -400.0f;
++			if( pmove->cmd.buttons & IN_MOVERIGHT ) probeSide = 400.0f;
++			if( pmove->cmd.buttons & IN_MOVELEFT ) probeSide = -400.0f;
++
++			if( pmove->vuser4[1] > 0.0f && ( probeFwd != 0.0f || probeSide != 0.0f ))
++			{
++				vec3_t fwd, right, dir;
+ 
+-			return pe;
++				AngleVectors( pmove->angles, fwd, right, NULL );
++				VectorScale( fwd, probeFwd, dir );
++				VectorMA( dir, probeSide, right, dir );
++
++				if( Length( dir ) > 1.0f )
++				{
++					VectorNormalize( dir );
++
++					for( float d = 4.0f; d <= 32.0f; d += 4.0f )
++					{
++						VectorMA( pmove->origin, d, dir, probe );
++						VectorSubtract( probe, hullOffset, probe );
++
++						if( pmove->PM_HullPointContents( hull, num, probe ) != CONTENTS_EMPTY )
++							return pe;
++					}
++				}
++			}
+ 		}
+ 	}
+ 
