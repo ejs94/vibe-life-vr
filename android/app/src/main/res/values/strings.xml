@@ -98,8 +98,6 @@
 	<string name="vr_lefthanded_summary">Swap dominant aiming hand and controller sticks</string>
 	<string name="vr_twohanded_title">Two-Handed Stabilization</string>
 	<string name="vr_twohanded_summary">Grip secondary controller near primary to stabilize long weapons</string>
-	<string name="vr_button_b_title">Upper Button Action</string>
-	<string name="vr_button_b_summary">Action for dominant upper button (Right B / Left Y): Secondary Fire (HL2:VR) or Flashlight</string>
 	<string name="vr_debug_impacts_title">Bullet Impact Markers</string>
 	<string name="vr_debug_impacts_summary">Draw 3D crosshairs and flight tracers at bullet impact points</string>
 	<string name="vr_calibration_stick_title">Stick 6DoF Weapon Calibrator</string>

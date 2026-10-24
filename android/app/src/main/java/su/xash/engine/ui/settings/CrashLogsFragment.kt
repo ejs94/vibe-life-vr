@@ -54,15 +54,15 @@ class CrashLogsFragment : PreferenceFragmentCompat() {
 
 	private fun showCrashLog(entry: CrashReports.Entry) {
 		val ctx = requireContext()
+		// Local-only viewer: no e-mail and no share/upload actions.
 		AlertDialog.Builder(ctx)
 			.setTitle(entry.name)
 			.setView(monospaceTextView(ctx, entry.summary()))
-			.setPositiveButton(R.string.crash_send_to_developers) { _, _ -> CrashReports.sendByEmail(ctx, entry) }
-			.setNeutralButton(R.string.crash_share) { _, _ -> CrashReports.share(ctx, entry) }
 			.setNegativeButton(R.string.crash_log_delete) { _, _ ->
 				entry.dir.deleteRecursively()
 				populate()
 			}
+			.setPositiveButton(android.R.string.ok, null)
 			.show()
 	}
 }

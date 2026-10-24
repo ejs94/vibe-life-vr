@@ -114,6 +114,9 @@ extensions.configure<ApplicationExtension> {
 	sourceSets {
 		getByName("main") {
 			assets.directories.add("../../3rdparty/extras/xash-extras")
+			if (enableVr) {
+				assets.directories.add("../../assets")
+			}
 			java.directories.add("../../3rdparty/SDL/android-project/app/src/main/java")
 		}
 	}
@@ -161,8 +164,6 @@ dependencies {
 	implementation(libs.navigation.ui.ktx)
 	implementation(libs.preference.ktx)
 	implementation(libs.swiperefreshlayout)
-
-	implementation(libs.acra.http)
 }
 
 fun getBuildNum(): Int {

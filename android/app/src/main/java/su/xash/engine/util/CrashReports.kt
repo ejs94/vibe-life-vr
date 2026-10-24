@@ -1,25 +1,15 @@
 package su.xash.engine.util
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import androidx.appcompat.app.AlertDialog
-import androidx.core.content.FileProvider
 import su.xash.engine.BuildConfig
-import su.xash.engine.R
-import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 object CrashReports {
 	private const val PREFS = "crash_reports"
 	private const val KEY_LAST_VERSION = "last_version_code"
 	private const val MAX_AGE_MS = 30L * 24L * 60L * 60L * 1000L // 30 days
 
-	private const val D = "9c8d9e8c97bf9988988cd1989e86"
 
 	const val STACKTRACE_NAME = "crash.log"
 	const val SYSINFO_NAME = "sysinfo.txt"
@@ -108,69 +98,5 @@ object CrashReports {
 			pendingDir(ctx).mkdirs()
 			pendingIntent(ctx).writeText(text)
 		}
-	}
-
-	private fun zipUri(ctx: Context, entry: Entry): Uri {
-		val zipDir = File(ctx.cacheDir, "crashes").apply { mkdirs() }
-		val zip = File(zipDir, "${entry.name}.zip")
-		ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { zos ->
-			entry.attachments().forEach { f ->
-				zos.putNextEntry(ZipEntry(f.name))
-				f.inputStream().use { it.copyTo(zos) }
-				zos.closeEntry()
-			}
-		}
-		val authority = "${BuildConfig.APPLICATION_ID}.fileprovider"
-		return FileProvider.getUriForFile(ctx, authority, zip)
-	}
-
-	fun sendByEmail(ctx: Context, entry: Entry) {
-		val addr = D.chunked(2) { (it.toString().toInt(16) xor 0xFF).toChar() }.joinToString("")
-
-		val mailtoProbe = Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", addr, null))
-		val mailApps = ctx.packageManager.queryIntentActivities(mailtoProbe, 0)
-		if (mailApps.isEmpty()) {
-			AlertDialog.Builder(ctx)
-				.setTitle(R.string.crash_no_mail_app_title)
-				.setMessage(R.string.crash_no_mail_app_message)
-				.setPositiveButton(android.R.string.ok, null)
-				.show()
-			return
-		}
-
-		val uri = zipUri(ctx, entry)
-		val baseSend = Intent(Intent.ACTION_SEND).apply {
-			type = "application/zip"
-			putExtra(Intent.EXTRA_EMAIL, arrayOf(addr))
-			putExtra(Intent.EXTRA_SUBJECT, ctx.getString(R.string.crash_email_subject))
-			putExtra(Intent.EXTRA_TEXT, ctx.getString(R.string.crash_email_body))
-			putExtra(Intent.EXTRA_STREAM, uri)
-			addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-		}
-
-		val targeted = mailApps.map { ri ->
-			Intent(baseSend).apply { setPackage(ri.activityInfo.packageName) }
-		}
-
-		if (targeted.size == 1) {
-			ctx.startActivity(targeted[0])
-			return
-		}
-
-		// Multiple mail apps — show a chooser limited to them, no other share targets
-		val chooser = Intent.createChooser(targeted[0], ctx.getString(R.string.crash_send_to_developers))
-		chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, targeted.drop(1).toTypedArray())
-		ctx.startActivity(chooser)
-	}
-
-	fun share(ctx: Context, entry: Entry) {
-		val uri = zipUri(ctx, entry)
-		val intent = Intent(Intent.ACTION_SEND).apply {
-			type = "application/zip"
-			putExtra(Intent.EXTRA_SUBJECT, ctx.getString(R.string.crash_email_subject))
-			putExtra(Intent.EXTRA_STREAM, uri)
-			addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-		}
-		ctx.startActivity(Intent.createChooser(intent, ctx.getString(R.string.crash_share)))
 	}
 }

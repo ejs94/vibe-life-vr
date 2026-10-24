@@ -58,13 +58,4 @@
 		<item>1.4</item>
 	</string-array>
 
-	<!-- Upper Face Button Action -->
-	<string-array name="vr_button_b_entries">
-		<item>Secondary Fire (+attack2, HL2:VR)</item>
-		<item>Flashlight (impulse 100)</item>
-	</string-array>
-	<string-array name="vr_button_b_values">
-		<item>0</item>
-		<item>1</item>
-	</string-array>
 </resources>

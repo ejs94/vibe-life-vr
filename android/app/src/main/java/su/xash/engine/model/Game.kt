@@ -180,7 +180,6 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 		val debugImpacts = vrPref.getBoolean("vr_debug_impacts", true)
 		val calibrationStick = vrPref.getBoolean("vr_calibration_stick", false)
 		val vignette = vrPref.getBoolean("vr_vignette", false)
-		val buttonBAction = vrPref.getString("vr_button_b_action", "0") ?: "0"
 
 		val vrArgs = buildString {
 			// vr_smoothturn: 0 = snap turn, 1 = smooth turn
@@ -192,7 +191,6 @@ class Game(val ctx: Context, val basedir: File, val gameInfoFile: File) {
 			append("+vr_headtorch ").append(if (headtorch) "1" else "0").append(" ")
 			append("+vr_lefthanded ").append(if (lefthanded) "1" else "0").append(" ")
 			append("+vr_twohanded ").append(if (twohanded) "1" else "0").append(" ")
-			append("+vr_button_b_action ").append(buttonBAction).append(" ")
 			append("+vr_debug_impacts ").append(if (debugImpacts) "1" else "0").append(" ")
 			append("+vr_calibration_stick ").append(if (calibrationStick) "1" else "0").append(" ")
 			append("+vr_refresh_rate ").append(refreshRate).append(" ")

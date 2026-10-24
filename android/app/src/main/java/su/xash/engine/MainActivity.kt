@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
@@ -23,7 +22,6 @@ import su.xash.engine.databinding.ActivityMainBinding
 import su.xash.engine.model.AppUpdater
 import su.xash.engine.util.CrashReports
 import su.xash.engine.util.dialogContentView
-import su.xash.engine.util.monospaceTextView
 import su.xash.engine.util.showDownloadProgressDialog
 import java.io.File
 import java.text.SimpleDateFormat
@@ -59,7 +57,7 @@ class MainActivity : AppCompatActivity() {
 		binding.navigationRail.setupWithNavController(navController)
 
 		CrashReports.prune(this)
-		showPendingCrashReport()
+		archivePendingCrashReport()
 
 		checkForEngineUpdate()
 	}
@@ -237,11 +235,13 @@ class MainActivity : AppCompatActivity() {
 		return navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
 	}
 
-	private fun showPendingCrashReport() {
+	private fun archivePendingCrashReport() {
 		val pending = CrashReports.pendingStacktrace(this)
 		if (!pending.exists() || pending.length() == 0L)
 			return
 
+		// Keep the crash bundle locally for diagnostics. No dialog, no email and
+		// no external upload: the report never leaves the device.
 		val historyDir = CrashReports.historyDir(this).apply { mkdirs() }
 		val ts = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
 		val entryDir = File(historyDir, "crash-$ts").apply { mkdirs() }
@@ -250,15 +250,6 @@ class MainActivity : AppCompatActivity() {
 		moveOrCopy(CrashReports.pendingSysinfo(this), File(entryDir, CrashReports.SYSINFO_NAME))
 		moveOrCopy(CrashReports.pendingIntent(this), File(entryDir, CrashReports.INTENT_NAME))
 		moveOrCopy(CrashReports.pendingEngineLog(this), File(entryDir, CrashReports.ENGINELOG_NAME))
-
-		val entry = CrashReports.Entry(entryDir)
-		AlertDialog.Builder(this)
-			.setTitle(R.string.crash_dialog_title)
-			.setView(monospaceTextView(this, entry.summary()))
-			.setPositiveButton(R.string.crash_send_to_developers) { _, _ -> CrashReports.sendByEmail(this, entry) }
-			.setNeutralButton(R.string.crash_share) { _, _ -> CrashReports.share(this, entry) }
-			.setNegativeButton(R.string.crash_dismiss, null)
-			.show()
 	}
 
 	private fun moveOrCopy(src: File, dst: File) {
