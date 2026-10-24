@@ -27,8 +27,8 @@ Half-Life SDK game code, and the Quest/PCVR packaging in this repository.
 
 ## 3. Working Directory
 
-Run project commands from the repository root (`xash3d-fwgs-vr/`). If a session
-starts at the workspace root, `cd xash3d-fwgs-vr` first or use it as the shell
+Run project commands from the repository root (`vibe-life-vr/`). If a session
+starts at the workspace root, `cd vibe-life-vr` first or use it as the shell
 working directory.
 
 Prefix any shell command that mutates `$PATH` (for example an inline
@@ -125,9 +125,10 @@ python3 scripts/check_hand_asset.py
 - `v_hand.mdl` is the standalone two-hand model. Rebuild and validate it with
   the scripts in `scripts/` (for example `build_twohand_mdl.py`,
   `check_hand_asset.py`) instead of hand-editing binary assets.
-- Deploy `v_hand.mdl` and `vr_weapons.json` to
-  `/sdcard/xash/valve/models/` for HIL. The engine launches the base `valve`
-  gamedir even though the APK also bundles `valve_vr`.
+- Deploy the overlay models (`assets/valve_vr/models/*.mdl`, including
+  `v_hand.mdl`) and `vr_weapons.json` to `/sdcard/xash/valve/models/` for HIL.
+  The engine launches the base `valve` gamedir even though the APK also bundles
+  `valve_vr`.
 
 ## 9. Quest HIL Facts
 
