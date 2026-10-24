@@ -40,9 +40,11 @@ typedef struct {
     qboolean attack2;
     qboolean altfire;
     qboolean jump;
+    qboolean jumpLeft;
     qboolean duck;
     qboolean use;
     qboolean reload;
+    qboolean reloadLeft;
     qboolean flashlight;
     qboolean menu;
     qboolean sprint;
@@ -82,6 +84,7 @@ EXPORT qboolean XR_GetRightHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetLeftHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetRightHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles );
 EXPORT qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles );
+EXPORT qboolean XR_GetHandPresenceTransform( int hand, vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_IsTwoHandStabilized( void );
 EXPORT void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float *out_thumb );
 
@@ -92,6 +95,7 @@ EXPORT void XR_DispatchWeaponHaptic( const char *event_name );
 
 EXPORT qboolean XR_GetPointerLaserRay( vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v );
 EXPORT qboolean XR_GetPointerLaserRayHand( int hand, vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v );
+EXPORT qboolean XR_GetPointerLaserScreen( int hand, int *out_sx, int *out_sy, int *out_ex, int *out_ey, qboolean *out_hit );
 EXPORT int XR_GetActivePointerHand( void );
 EXPORT void XR_UpdatePointerCursor( void );
 qboolean XR_GetPointerCursorPos( int *out_x, int *out_y, qboolean *out_hit );
@@ -110,6 +114,7 @@ static inline qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_mu
 static inline qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
+static inline qboolean XR_GetHandPresenceTransform( int hand, vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_IsTwoHandStabilized( void ) { return false; }
 static inline void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float *out_thumb ) {
     if (out_trigger) *out_trigger = 0.0f;
@@ -127,6 +132,7 @@ static inline void XR_DispatchWeaponHaptic( const char *event_name ) {}
 
 static inline qboolean XR_GetPointerLaserRay( vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v ) { return false; }
 static inline qboolean XR_GetPointerLaserRayHand( int hand, vec3_t out_start, vec3_t out_end, qboolean *out_hit, float *out_u, float *out_v ) { return false; }
+static inline qboolean XR_GetPointerLaserScreen( int hand, int *out_sx, int *out_sy, int *out_ex, int *out_ey, qboolean *out_hit ) { return false; }
 static inline int XR_GetActivePointerHand( void ) { return 1; }
 static inline void XR_UpdatePointerCursor( void ) {}
 static inline qboolean XR_GetPointerCursorPos( int *out_x, int *out_y, qboolean *out_hit ) { return false; }

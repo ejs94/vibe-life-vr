@@ -200,6 +200,40 @@ void XR_DestroySwapchains( void )
     }
 }
 
+// Apply the simulated head pose after every xrLocateViews call. XR_WaitFrame
+// and XR_EndFrame both locate the views, so applying the override in only one
+// of them lets the runtime pose leak into the next frame's input processing.
+static void XR_ApplyTestHeadOverride( void )
+{
+    if( !vr_test_head || vr_test_head->value <= 0.0f )
+        return;
+
+    float p = (vr_test_head_pitch ? vr_test_head_pitch->value : 0.0f) * (3.14159265f / 180.0f);
+    float y = (vr_test_head_yaw   ? vr_test_head_yaw->value   : 0.0f) * (3.14159265f / 180.0f);
+    float r = (vr_test_head_roll  ? vr_test_head_roll->value  : 0.0f) * (3.14159265f / 180.0f);
+
+    // OpenXR Euler mapping: Pitch around +X, Yaw around +Y, Roll around -Z
+    float cp = cosf(p * 0.5f), sp = sinf(p * 0.5f);
+    float cy = cosf(y * 0.5f), sy = sinf(y * 0.5f);
+    float cr = cosf(-r * 0.5f), sr = sinf(-r * 0.5f);
+
+    XrQuaternionf q;
+    q.w = cy * cp * cr - sy * sp * sr;
+    q.x = cy * sp * cr + sy * cp * sr;
+    q.y = sy * cp * cr - cy * sp * sr;
+    q.z = cy * cp * sr + sy * sp * cr;
+
+    float head_y_drop = (vr_test_head_drop ? vr_test_head_drop->value : 0.0f);
+
+    for( int eye = 0; eye < 2; eye++ )
+    {
+        g_xrViews[eye].pose.orientation = q;
+        g_xrViews[eye].pose.position.x = (eye == 0) ? -0.032f : 0.032f;
+        g_xrViews[eye].pose.position.y = 1.65f + head_y_drop;
+        g_xrViews[eye].pose.position.z = 0.0f;
+    }
+}
+
 qboolean XR_WaitFrame( XrFrameState *outFrameState )
 {
     if (!g_xrSessionRunning) return false;
@@ -228,32 +262,7 @@ qboolean XR_WaitFrame( XrFrameState *outFrameState )
         xrLocateViews(g_xrSession, &locateInfo, &viewState, 2, &viewCount, g_xrViews);
 
         // Simulated head orientation for headless / automated regression testing
-        if (vr_test_head && vr_test_head->value > 0.0f)
-        {
-            float p = (vr_test_head_pitch ? vr_test_head_pitch->value : 0.0f) * (3.14159265f / 180.0f);
-            float y = (vr_test_head_yaw   ? vr_test_head_yaw->value   : 0.0f) * (3.14159265f / 180.0f);
-            float r = (vr_test_head_roll  ? vr_test_head_roll->value  : 0.0f) * (3.14159265f / 180.0f);
-
-            // OpenXR Euler mapping: Pitch around +X, Yaw around +Y, Roll around -Z
-            float cp = cosf(p * 0.5f), sp = sinf(p * 0.5f);
-            float cy = cosf(y * 0.5f), sy = sinf(y * 0.5f);
-            float cr = cosf(-r * 0.5f), sr = sinf(-r * 0.5f);
-
-            XrQuaternionf q;
-            q.w = cy * cp * cr - sy * sp * sr;
-            q.x = cy * sp * cr + sy * cp * sr;
-            q.y = sy * cp * cr - cy * sp * sr;
-            q.z = cy * cp * sr + sy * sp * cr;
-
-            float head_y_drop = (vr_test_head_drop ? vr_test_head_drop->value : 0.0f);
-            for (int eye = 0; eye < 2; eye++)
-            {
-                g_xrViews[eye].pose.orientation = q;
-                g_xrViews[eye].pose.position.x = (eye == 0) ? -0.032f : 0.032f;
-                g_xrViews[eye].pose.position.y = 1.65f + head_y_drop;
-                g_xrViews[eye].pose.position.z = 0.0f;
-            }
-        }
+        XR_ApplyTestHeadOverride();
     }
 
     if (outFrameState)
@@ -357,6 +366,10 @@ void XR_EndFrame( void )
     uint32_t viewCount = 2;
     xrLocateViews(g_xrSession, &locateInfo, &viewState, 2, &viewCount, g_xrViews);
 
+    // Keep the simulated pose consistent after the second locate call so the
+    // next frame's input reads the same head orientation the test requested.
+    XR_ApplyTestHeadOverride();
+
     // Prepare stereo projection layers
     XrCompositionLayerProjectionView projViews[2];
     for (int eye = 0; eye < 2; eye++)
@@ -380,8 +393,8 @@ void XR_EndFrame( void )
     projLayer.viewCount = 2;
     projLayer.views = projViews;
 
-    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
-    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.4f;
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.15f;
+    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.15f;
     float quadHeight = menuScale * ((float)g_xrEyeSwapchains[0].height / (float)g_xrEyeSwapchains[0].width);
 
     XrCompositionLayerQuad quadLayer = {0};
@@ -464,8 +477,19 @@ void XR_AnchorMenuQuad( void )
     // Query head pose in room/local reference space
     XrSpaceLocation headLoc = {0};
     headLoc.type = XR_TYPE_SPACE_LOCATION;
-    if (XR_FAILED(xrLocateSpace(g_xrViewSpace, g_xrLocalSpace, syncTime, &headLoc)))
+
+    // Use the simulated head pose when the regression harness requests one;
+    // xrLocateSpace() reads the real runtime pose and would ignore vr_test_head.
+    if (vr_test_head && vr_test_head->value > 0.0f)
+    {
+        headLoc.pose = g_xrViews[0].pose;
+        headLoc.locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    }
+    else if (XR_FAILED(xrLocateSpace(g_xrViewSpace, g_xrLocalSpace, syncTime, &headLoc)))
+    {
         return;
+    }
 
     if (!(headLoc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) ||
         !(headLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
@@ -501,16 +525,22 @@ void XR_AnchorMenuQuad( void )
         fz = -1.0f;
     }
 
-    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.15f;
 
     // Anchor quad floating in room space in front of player, slightly lowered for ergonomic gaze
     float anchorX = hx + fx * menuDist;
     float anchorY = hy - 0.05f;
     float anchorZ = hz + fz * menuDist;
 
-    // Quad faces back towards player (-fx, -fz)
-    float theta = atan2f(fx, -fz);
+    // The quad's front normal is +Z, so it must point back toward the player
+    // (-forward). A yaw of +Z is (sin(theta), 0, cos(theta)); solving for
+    // -forward gives atan2(-fx, -fz). Using atan2(fx, -fz) made the panel face
+    // away from the player for every heading except 0/180 degrees.
+    float theta = atan2f(-fx, -fz);
     float halfTheta = theta * 0.5f;
+
+    Con_Printf( "[VR_MENU] anchor head=(%.2f %.2f %.2f) fwd=(%.2f %.2f) theta=%.1f\n",
+        hx, hy, hz, fx, fz, theta * (180.0f / (float)M_PI) );
     float quadQy = sinf(halfTheta);
     float quadQw = cosf(halfTheta);
 
@@ -583,8 +613,8 @@ EXPORT void XR_EndMenuFrame( void )
         }
     }
 
-    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.5f;
-    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.4f;
+    float menuDist = (vr_menu_distance && vr_menu_distance->value > 0.5f) ? vr_menu_distance->value : 1.15f;
+    float menuScale = (vr_menu_scale && vr_menu_scale->value > 0.5f) ? vr_menu_scale->value : 1.15f;
 
     XrCompositionLayerQuad quadLayer = {0};
     quadLayer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
@@ -676,7 +706,8 @@ void XR_QuatToEuler( const XrQuaternionf *q, vec3_t out_angles )
 
     out_angles[0] = pitch * (180.0f / (float)M_PI);
     out_angles[1] = yaw * (180.0f / (float)M_PI);
-    out_angles[2] = roll * (180.0f / (float)M_PI);
+    // In OpenXR, forward is -Z. Negate roll so clockwise controller wrist rotation rolls weapon right in GoldSrc.
+    out_angles[2] = -roll * (180.0f / (float)M_PI);
 }
 
 void XR_GetHeadOrientation( vec3_t out_angles )

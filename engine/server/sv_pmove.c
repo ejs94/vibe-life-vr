@@ -975,6 +975,21 @@ void SV_RunCmd( sv_client_t *cl, usercmd_t *ucmd, int random_seed )
 	clent->v.light_level = ucmd->lightlevel;
 	if( ucmd->impulse ) clent->v.impulse = ucmd->impulse;
 
+#ifdef XASH_OPENXR
+	// VR reload regression probe: confirms that the Right B button bit reaches
+	// the server. The actual clip refill is handled by the game DLL.
+	if( ( ucmd->buttons & IN_RELOAD ) && Cvar_VariableValue( "vr_debug_reload" ) > 0.0f )
+	{
+		static double s_nextReloadProbe = 0.0;
+
+		if( host.realtime >= s_nextReloadProbe )
+		{
+			s_nextReloadProbe = host.realtime + 0.25;
+			Con_Printf( "[VR_RELOAD] IN_RELOAD reached server\n" );
+		}
+	}
+#endif
+
 	svgame.globals->time = cl->timebase;
 	svgame.dllFuncs.pfnPlayerPreThink( clent );
 	SV_PlayerRunThink( clent, frametime, cl->timebase );

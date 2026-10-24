@@ -59,6 +59,29 @@ void UI_DrawVRPointerCursor( void )
 		byte g = (activeHand == 0) ? 170 : 225;
 		byte b = (activeHand == 0) ? 40  : 255;
 
+		// The 3D laser is skipped with the scene while the menu quad is shown.
+		// Draw the beam into the 2D menu canvas instead, from the hand's
+		// projected position to the cursor.
+		int sx = 0, sy = 0, ex = 0, ey = 0;
+		qboolean beamHit = false;
+		if( XR_GetPointerLaserScreen( activeHand, &sx, &sy, &ex, &ey, &beamHit ) && beamHit )
+		{
+			int dx = ex - sx;
+			int dy = ey - sy;
+			int steps = abs( dx ) > abs( dy ) ? abs( dx ) : abs( dy );
+
+			if( steps > 0 )
+			{
+				int stride = steps / 48 + 1;
+				for( int i = 0; i <= steps; i += stride )
+				{
+					int x = sx + dx * i / steps;
+					int y = sy + dy * i / steps;
+					ref.dllFuncs.FillRGBA( kRenderTransTexture, x - 1, y - 1, 3, 3, r, g, b, 110 );
+				}
+			}
+		}
+
 		// Reticle crosshair arms
 		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 12, cy - 1, 24, 2, r, g, b, 240 );
 		ref.dllFuncs.FillRGBA( kRenderTransTexture, cx - 1, cy - 12, 2, 24, r, g, b, 240 );

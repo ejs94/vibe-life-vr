@@ -20,6 +20,11 @@ GNU General Public License for more details.
 #include "pm_local.h"
 #include "studio.h"
 
+#ifdef XASH_OPENXR
+#include "../platform/openxr/xr_core.h"
+#include "../platform/openxr/xr_input.h"
+#endif
+
 #define MAX_FORWARD			6	// forward probes for set idealpitch
 #define MIN_CORRECTION_DISTANCE	0.25f	// use smoothing if error is > this
 #define MIN_PREDICTION_EPSILON	0.5f	// complain if error is > this and we have cl_showerror set
@@ -839,6 +844,30 @@ static void CL_SetupPMove( playermove_t *pmove, const local_state_t *from, const
 	VectorCopy( cd->vuser2, pmove->vuser2 );
 	VectorCopy( cd->vuser3, pmove->vuser3 );
 	VectorCopy( cd->vuser4, pmove->vuser4 );
+
+#ifdef XASH_OPENXR
+	// The HLSDK reuses clientdata vuser slots for HUD/ammo data, so the
+	// values above are not the VR state. Force the same flags the server
+	// publishes before its PMove, otherwise client prediction disagrees with
+	// the server (notably on ladders, where is_vr selects the climb path).
+	pmove->vuser4[0] = XR_IsTwoHandStabilized() ? 1.0f : 0.0f;
+	pmove->vuser4[1] = XR_IsActive() ? 1.0f : 0.0f;
+	pmove->vuser4[2] = 0.0f;
+
+	if( vr_debug_ladder && vr_debug_ladder->value > 0.0f )
+	{
+		static double s_nextLadderProbe = 0.0;
+
+		if( host.realtime >= s_nextLadderProbe )
+		{
+			s_nextLadderProbe = host.realtime + 0.5;
+			Con_Printf( "[VR_LADDER] client prediction is_vr=%.0f\n", pmove->vuser4[1] );
+		}
+	}
+#else
+	pmove->vuser4[1] = 0.0f;
+#endif
+
 	pmove->cmd = *ucmd;	// copy current cmds
 
 	Q_strncpy( pmove->physinfo, cls.physinfo, sizeof( pmove->physinfo ));

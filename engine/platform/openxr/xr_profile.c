@@ -112,6 +112,52 @@ void XR_GetWeaponGripOffset( const char *model_name, vec3_t out_offset )
 
 /*
 ====================
+XR_GetWeaponGripRot
+
+Returns the visual grip rotation (pitch, yaw, roll) in the palm's local frame.
+The out parameter is always cleared; the return value reports whether the
+manifest actually provided a grip_rot entry, so callers can fall back to the
+legacy Euler adjustment path for old profiles.
+====================
+*/
+qboolean XR_GetWeaponGripRot( const char *model_name, vec3_t out_rot )
+{
+    if( out_rot ) VectorClear( out_rot );
+
+    const vr_weapon_profile_t *prof = XR_FindWeaponProfile( model_name );
+    if( !prof || !prof->grip_rot_set )
+        return false;
+
+    if( out_rot ) VectorCopy( prof->grip_rot, out_rot );
+    return true;
+}
+
+/*
+====================
+XR_GetWeaponForegrip
+
+Returns the offhand foregrip socket in the weapon's local frame. The offset
+follows the same [forward, right, up] convention as grip_offset (right = -Y
+because of the GoldSrc AngleVectors convention). The rotation is applied on
+top of the weapon's visual orientation.
+====================
+*/
+qboolean XR_GetWeaponForegrip( const char *model_name, vec3_t out_offset, vec3_t out_rot )
+{
+    if( out_offset ) VectorClear( out_offset );
+    if( out_rot )    VectorClear( out_rot );
+
+    const vr_weapon_profile_t *prof = XR_FindWeaponProfile( model_name );
+    if( !prof || !prof->foregrip_set )
+        return false;
+
+    if( out_offset ) VectorCopy( prof->foregrip_offset, out_offset );
+    if( out_rot )    VectorCopy( prof->foregrip_rot, out_rot );
+    return true;
+}
+
+/*
+====================
 XR_GetWeaponPitchAdjust
 ====================
 */
@@ -128,6 +174,134 @@ void XR_GetWeaponPitchAdjust( const char *model_name, float *out_pitch, float *o
         if( out_yaw )   *out_yaw   = prof->yaw_adjust;
         if( out_roll )  *out_roll  = prof->roll_adjust;
     }
+}
+
+/*
+====================
+XR_ComposeLocalRotation
+
+Composes a local grip rotation on top of the hand's world orientation:
+
+    outAngles = angles( R(handWorldAngles) * R(localRot) )
+
+This is a true relative rotation, unlike adding Euler angles component-wise.
+Used for the visual weapon pose so large grip-alignment rotations stay correct
+while the authoritative aim angles remain untouched.
+====================
+*/
+EXPORT void XR_ComposeLocalRotation( const vec3_t parentAngles, const vec3_t localRot, vec3_t outAngles )
+{
+    vec4_t qHand, qLocal;
+    matrix3x4 mHand, mLocal, mOut;
+
+    AngleQuaternion( parentAngles, qHand, false );
+    AngleQuaternion( localRot, qLocal, false );
+
+    Matrix3x4_FromOriginQuat( mHand, qHand, vec3_origin );
+    Matrix3x4_FromOriginQuat( mLocal, qLocal, vec3_origin );
+    Matrix3x4_ConcatTransforms( mOut, mHand, mLocal );
+    Matrix3x4_AnglesFromMatrix( mOut, outAngles );
+}
+
+/*
+====================
+XR_GetWeaponPose
+
+Single source of truth for the 6DoF weapon pose. When the weapon profile
+provides grip_rot, the visual orientation is a true local rotation relative
+to the palm:
+
+  angles = angles( R(handAngles + turnYaw) * R(grip_rot) )
+  world  = viewOrigin + rotateY(handOrigin, turnYaw) * worldScale
+  origin = world + fwd*off_fwd + rt*off_rt + up*off_up
+
+Profiles without grip_rot keep the historical Euler adjustment path:
+
+  angles = handAngles + (pitch_adjust, turnYaw + yaw_adjust, roll_adjust)
+
+where off_* = global vr_weapon_offset_* + profile grip_offset. The per-weapon
+grip socket lives in weapon-model space and is therefore never mirrored; only
+the user's global lateral offset is mirrored for left-handed players. The wall
+pull-back and the synthetic muzzle fallback are deliberately NOT applied here.
+====================
+*/
+qboolean XR_GetWeaponPose( const char *model_name, const vec3_t handOrigin,
+    const vec3_t handAngles, float turnYaw, const vec3_t viewOrigin, float worldScale,
+    vec3_t outOrigin, vec3_t outAngles )
+{
+    if( !outOrigin || !outAngles )
+        return false;
+
+    float horg[3] = { 0.0f, 0.0f, 0.0f };
+    float hang[3] = { 0.0f, 0.0f, 0.0f };
+    if( handOrigin ) VectorCopy( handOrigin, horg );
+    if( handAngles ) VectorCopy( handAngles, hang );
+
+    // Query per-weapon calibration profile
+    vec3_t w_grip = { 0.0f, 0.0f, 0.0f };
+    vec3_t w_grip_rot = { 0.0f, 0.0f, 0.0f };
+    float w_pitch = 0.0f, w_yaw = 0.0f, w_roll = 0.0f;
+    XR_GetWeaponGripOffset( model_name, w_grip );
+    XR_GetWeaponPitchAdjust( model_name, &w_pitch, &w_yaw, &w_roll );
+    qboolean has_grip_rot = XR_GetWeaponGripRot( model_name, w_grip_rot );
+
+    // Rotate the head-relative hand displacement by the player's world turn yaw
+    float yaw_rad = DEG2RAD( turnYaw );
+    float cy = cosf( yaw_rad );
+    float sy = sinf( yaw_rad );
+    float world_dx = (horg[0] * cy - horg[1] * sy) * worldScale;
+    float world_dy = (horg[0] * sy + horg[1] * cy) * worldScale;
+    float world_dz = horg[2] * worldScale;
+
+    outOrigin[0] = viewOrigin[0] + world_dx;
+    outOrigin[1] = viewOrigin[1] + world_dy;
+    outOrigin[2] = viewOrigin[2] + world_dz;
+
+    if( has_grip_rot )
+    {
+        // True local socket rotation: weapon orientation follows the palm.
+        // The aim angles used for ballistics are computed separately in
+        // XR_GetPrimaryHandMuzzleTransform and are not affected here.
+        vec3_t hand_world_angles;
+        hand_world_angles[0] = hang[0];
+        hand_world_angles[1] = anglemod( hang[1] + turnYaw );
+        hand_world_angles[2] = hang[2];
+        XR_ComposeLocalRotation( hand_world_angles, w_grip_rot, outAngles );
+    }
+    else
+    {
+        outAngles[0] = hang[0] + w_pitch;
+        outAngles[1] = anglemod( hang[1] + turnYaw + w_yaw );
+        outAngles[2] = hang[2] + w_roll;
+    }
+
+    // Apply grip offsets in weapon local coordinate space.
+    //
+    // Note that AngleVectors returns right = -Y (GoldSrc convention), so the
+    // per-weapon grip_offset is stored as [model -X, model +Y, model -Z] via
+    // the components below. The per-weapon socket is model-space and therefore
+    // must NOT be mirrored for left-handed players; only the user's global
+    // lateral offset is mirrored.
+    vec3_t fwd, rt, up;
+    AngleVectors( outAngles, fwd, rt, up );
+
+    float global_rt = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f);
+
+    if( vr_lefthanded && vr_lefthanded->value > 0.0f &&
+        ( !vr_lefthanded_mirror_grip || vr_lefthanded_mirror_grip->value > 0.0f ))
+    {
+        global_rt = -global_rt;
+    }
+
+    float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0];
+    float off_rt  = global_rt + w_grip[1];
+    float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
+
+    VectorMA( outOrigin, off_fwd, fwd, outOrigin );
+    VectorMA( outOrigin, off_rt,  rt,  outOrigin );
+    VectorMA( outOrigin, off_up,  up,  outOrigin );
+
+    return true;
 }
 
 /*
@@ -514,6 +688,21 @@ static qboolean XR_ParseWeaponsJSON( const char *json_text, size_t length )
                         else if( !Q_strcmp( prop, "grip_offset" ) )
                         {
                             JSON_ReadFloatArray3( &p, wp->grip_offset );
+                        }
+                        else if( !Q_strcmp( prop, "grip_rot" ) )
+                        {
+                            JSON_ReadFloatArray3( &p, wp->grip_rot );
+                            wp->grip_rot_set = true;
+                        }
+                        else if( !Q_strcmp( prop, "foregrip_offset" ) )
+                        {
+                            JSON_ReadFloatArray3( &p, wp->foregrip_offset );
+                            wp->foregrip_set = true;
+                        }
+                        else if( !Q_strcmp( prop, "foregrip_rot" ) )
+                        {
+                            JSON_ReadFloatArray3( &p, wp->foregrip_rot );
+                            wp->foregrip_set = true;
                         }
                         else if( !Q_strcmp( prop, "pitch_adjust" ) )
                         {

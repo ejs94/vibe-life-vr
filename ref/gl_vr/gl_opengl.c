@@ -1292,6 +1292,7 @@ static void GL_InitCommands( void )
 #ifdef XASH_OPENXR
 	gEngfuncs.Cmd_AddCommand( "vr_recenter", R_VR_Recenter_f, "Recenter VR headset origin" );
 	gEngfuncs.Cmd_AddCommand( "vr_dumpeye", R_VR_DumpEye_f, "Dump OpenXR eye 0 buffer to PPM image" );
+	gEngfuncs.Cmd_AddCommand( "vr_telemetry", R_VR_Telemetry_f, "Print real-time 6DoF head, hands, weapon COM and hitbox telemetry to console" );
 #endif
 }
 

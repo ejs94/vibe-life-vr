@@ -26,6 +26,7 @@ GNU General Public License for more details.
 #include "cursor_type.h"
 #include "platform/platform.h"
 #include "../../platform/openxr/xr_input.h"
+#include "../../platform/openxr/xr_core.h"
 
 static qboolean	in_mouseactive;				// false when not focus app
 static qboolean	in_mouseinitialized;
@@ -657,6 +658,19 @@ void IN_EngineAppendMove( float frametime, usercmd_t *cmd, qboolean active )
 		IN_CollectInput( &forward, &side, &pitch, &yaw, false );
 
 		IN_JoyAppendMove( cmd, forward, side );
+
+#ifdef XASH_OPENXR
+		if( vr_debug_ladder && vr_debug_ladder->value > 0.0f )
+		{
+			static double s_nextCmdProbe = 0.0;
+			if( host.realtime >= s_nextCmdProbe )
+			{
+				s_nextCmdProbe = host.realtime + 0.5;
+				Con_Printf( "[VR_LADDER] final cmd fwd=%.1f side=%.1f msec=%d\n",
+					cmd->forwardmove, cmd->sidemove, cmd->msec );
+			}
+		}
+#endif
 
 		if( pitch || yaw )
 		{

@@ -363,7 +363,8 @@ void R_VR_ResetCalibration( void )
 void R_VR_Recenter_f( void )
 {
 	R_VR_ResetCalibration();
-	gEngfuncs.Con_Printf( "^2[VR] Recenter requested. Head origin will calibrate on next frame.\n" );
+	XR_ResetMenuAnchor();
+	gEngfuncs.Con_Printf( "^2[VR] Recenter requested. Head origin and menu anchor will calibrate on next frame.\n" );
 }
 
 static qboolean s_triggerEyeDump = false;
@@ -1790,6 +1791,163 @@ static void R_VR_CheckDumpEye0( GLuint currentFbo )
 }
 #endif
 
+#ifdef XASH_OPENXR
+static GLuint s_vrScopeTexture = 0;
+static int s_vrScopeTexW = 0;
+static int s_vrScopeTexH = 0;
+
+static void R_VR_EnsureScopeTexture( int w, int h )
+{
+	if( w <= 0 || h <= 0 )
+		return;
+
+	if( s_vrScopeTexture && s_vrScopeTexW == w && s_vrScopeTexH == h )
+		return;
+
+	if( s_vrScopeTexture )
+		pglDeleteTextures( 1, &s_vrScopeTexture );
+
+	pglGenTextures( 1, &s_vrScopeTexture );
+	pglBindTexture( GL_TEXTURE_2D, s_vrScopeTexture );
+	pglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	pglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+
+	s_vrScopeTexW = w;
+	s_vrScopeTexH = h;
+}
+
+// Picture-in-picture scope: copy the centre of the already-rendered eye image
+// into a texture and draw it as a circular lens with a black surround and a
+// reticle. This avoids a second scene pass, which is too expensive on Quest.
+static void R_VR_DrawScopeOverlay( int eyeW, int eyeH )
+{
+	if( eyeW <= 0 || eyeH <= 0 )
+		return;
+
+	float zoom = ( vr_scope_zoom && vr_scope_zoom->value > 1.0f ) ? vr_scope_zoom->value : 4.0f;
+	float radiusFrac = ( vr_scope_radius && vr_scope_radius->value > 0.1f ) ? vr_scope_radius->value : 0.42f;
+	qboolean reticle = ( !vr_scope_reticle || vr_scope_reticle->value > 0.0f );
+
+	int srcW = (int)( eyeW / zoom );
+	int srcH = (int)( eyeH / zoom );
+	if( srcW < 32 ) srcW = 32;
+	if( srcH < 32 ) srcH = 32;
+	if( srcW > eyeW ) srcW = eyeW;
+	if( srcH > eyeH ) srcH = eyeH;
+
+	int srcX = ( eyeW - srcW ) / 2;
+	int srcY = ( eyeH - srcH ) / 2;
+
+	R_VR_EnsureScopeTexture( srcW, srcH );
+	if( !s_vrScopeTexture )
+		return;
+
+	pglBindTexture( GL_TEXTURE_2D, s_vrScopeTexture );
+	pglCopyTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, srcX, srcY, srcW, srcH );
+
+	GLboolean depth = pglIsEnabled( GL_DEPTH_TEST );
+	GLboolean cull = pglIsEnabled( GL_CULL_FACE );
+	GLboolean blend = pglIsEnabled( GL_BLEND );
+	GLboolean alpha = pglIsEnabled( GL_ALPHA_TEST );
+	GLboolean tex = pglIsEnabled( GL_TEXTURE_2D );
+
+	pglMatrixMode( GL_PROJECTION );
+	pglPushMatrix();
+	pglLoadIdentity();
+	pglOrtho( 0, eyeW, 0, eyeH, -1, 1 );
+	pglMatrixMode( GL_MODELVIEW );
+	pglPushMatrix();
+	pglLoadIdentity();
+
+	pglDisable( GL_DEPTH_TEST );
+	pglDisable( GL_CULL_FACE );
+	pglDisable( GL_BLEND );
+	pglDisable( GL_ALPHA_TEST );
+	pglEnable( GL_TEXTURE_2D );
+	pglColor4f( 1, 1, 1, 1 );
+
+	float cx = eyeW * 0.5f;
+	float cy = eyeH * 0.5f;
+	float radius = Q_min( eyeW, eyeH ) * radiusFrac;
+	const int segments = 96;
+
+	pglBindTexture( GL_TEXTURE_2D, s_vrScopeTexture );
+	pglBegin( GL_TRIANGLE_FAN );
+	pglTexCoord2f( 0.5f, 0.5f );
+	pglVertex2f( cx, cy );
+	for( int i = 0; i <= segments; i++ )
+	{
+		float a = (float)i * 2.0f * M_PI_F / (float)segments;
+		float ca = cosf( a ), sa = sinf( a );
+		pglTexCoord2f( 0.5f + 0.5f * ca, 0.5f + 0.5f * sa );
+		pglVertex2f( cx + radius * ca, cy + radius * sa );
+	}
+	pglEnd();
+
+	// Opaque surround from the lens radius past the screen corners.
+	pglDisable( GL_TEXTURE_2D );
+	pglColor4f( 0, 0, 0, 1 );
+	float outer = sqrtf( (float)eyeW * (float)eyeW + (float)eyeH * (float)eyeH );
+	pglBegin( GL_TRIANGLE_STRIP );
+	for( int i = 0; i <= segments; i++ )
+	{
+		float a = (float)i * 2.0f * M_PI_F / (float)segments;
+		float ca = cosf( a ), sa = sinf( a );
+		pglVertex2f( cx + radius * ca, cy + radius * sa );
+		pglVertex2f( cx + outer * ca, cy + outer * sa );
+	}
+	pglEnd();
+
+	if( reticle )
+	{
+		pglColor4f( 0, 0, 0, 1 );
+		pglLineWidth( 3.0f );
+		pglBegin( GL_LINE_LOOP );
+		for( int i = 0; i < segments; i++ )
+		{
+			float a = (float)i * 2.0f * M_PI_F / (float)segments;
+			pglVertex2f( cx + radius * cosf( a ), cy + radius * sinf( a ));
+		}
+		pglEnd();
+
+		pglColor4f( 0.85f, 0.10f, 0.10f, 1.0f );
+		pglLineWidth( 1.5f );
+		float gap = radius * 0.08f;
+		float arm = radius * 0.55f;
+		pglBegin( GL_LINES );
+		pglVertex2f( cx - arm, cy ); pglVertex2f( cx - gap, cy );
+		pglVertex2f( cx + gap, cy ); pglVertex2f( cx + arm, cy );
+		pglVertex2f( cx, cy - arm ); pglVertex2f( cx, cy - gap );
+		pglVertex2f( cx, cy + gap ); pglVertex2f( cx, cy + arm );
+		pglEnd();
+
+		pglPointSize( 3.0f );
+		pglBegin( GL_POINTS );
+		pglVertex2f( cx, cy );
+		pglEnd();
+		pglLineWidth( 1.0f );
+		pglPointSize( 1.0f );
+	}
+
+	pglBindTexture( GL_TEXTURE_2D, 0 );
+
+	pglMatrixMode( GL_PROJECTION );
+	pglPopMatrix();
+	pglMatrixMode( GL_MODELVIEW );
+	pglPopMatrix();
+
+	if( depth ) pglEnable( GL_DEPTH_TEST ); else pglDisable( GL_DEPTH_TEST );
+	if( cull ) pglEnable( GL_CULL_FACE ); else pglDisable( GL_CULL_FACE );
+	if( blend ) pglEnable( GL_BLEND ); else pglDisable( GL_BLEND );
+	if( alpha ) pglEnable( GL_ALPHA_TEST ); else pglDisable( GL_ALPHA_TEST );
+	if( tex ) pglEnable( GL_TEXTURE_2D ); else pglDisable( GL_TEXTURE_2D );
+	pglColor4f( 1, 1, 1, 1 );
+}
+#endif
+
 /*
 ===============
 R_RenderFrame
@@ -1799,6 +1957,29 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 {
 	if( r_norefresh->value )
 		return;
+
+#ifdef XASH_OPENXR
+	// While the in-headset menu/console is open, the client draws the 2D UI
+	// into the screen target after this call. R_EndFrame blits that target into
+	// the menu quad. Rendering the 3D scene here would submit an OpenXR frame
+	// with the scene in eye 0 and the same swapchain reused as the quad layer,
+	// so the menu never appears.
+	{
+		static qboolean s_menuSceneSkipped = false;
+
+		if( XR_IsActive() && XR_IsQuadHudActive( ))
+		{
+			if( !s_menuSceneSkipped )
+			{
+				s_menuSceneSkipped = true;
+				gEngfuncs.Con_Printf( "[VR_MENU] scene skipped; using quad menu path\n" );
+			}
+			return;
+		}
+
+		s_menuSceneSkipped = false;
+	}
+#endif
 
 	// setup the initial render params
 	R_SetupRefParams( rvp );
@@ -1839,8 +2020,24 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 		XR_WaitFrame( NULL );
 		XR_BeginFrame();
 
+		// The crossbow's server-side zoom sets fov_x to 20. Keep the VR
+		// projection unchanged and draw a picture-in-picture lens instead.
+		qboolean vrScopeActive = false;
+		static qboolean s_vrScopeWasActive = false;
 
+		if( vr_scope_mode && vr_scope_mode->value > 0.0f &&
+		    tr.viewent && tr.viewent->model && Q_stristr( tr.viewent->model->name, "crossbow" ) &&
+		    RI.rvp.fov_x > 0.0f && RI.rvp.fov_x < 45.0f )
+		{
+			vrScopeActive = true;
+		}
 
+		if( vrScopeActive != s_vrScopeWasActive )
+		{
+			s_vrScopeWasActive = vrScopeActive;
+			gEngfuncs.Con_Printf( "[VR_SCOPE] PiP %s (fov=%.1f)\n",
+				vrScopeActive ? "active" : "inactive", RI.rvp.fov_x );
+		}
 
 		int orig_x = RI.rvp.viewport[0];
 		int orig_y = RI.rvp.viewport[1];
@@ -1866,6 +2063,13 @@ void R_RenderFrame( const ref_viewpass_t *rvp )
 			RI.rvp.viewport[3] = g_xrEyeSwapchains[eye].height;
 
 			R_RenderScene();
+
+#ifdef XASH_OPENXR
+			if( vrScopeActive )
+			{
+				R_VR_DrawScopeOverlay( g_xrEyeSwapchains[eye].width, g_xrEyeSwapchains[eye].height );
+			}
+#endif
 
 			if( eye == 0 )
 			{
@@ -1982,6 +2186,16 @@ static void R_RenderXRMenu( void )
 
 	if( !XR_BeginFrame() )
 		return;
+
+	{
+		static qboolean s_menuQuadLogged = false;
+
+		if( !s_menuQuadLogged )
+		{
+			s_menuQuadLogged = true;
+			gEngfuncs.Con_Printf( "[VR_MENU] submitting quad menu frame (screen fbo=%u)\n", tr.targets.screen.fbo );
+		}
+	}
 
 	XR_BeginEye( 0 );
 

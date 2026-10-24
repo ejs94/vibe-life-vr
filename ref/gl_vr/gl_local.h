@@ -520,6 +520,7 @@ extern int g_vr_eye;
 #ifdef XASH_OPENXR
 void R_VR_Recenter_f( void );
 void R_VR_DumpEye_f( void );
+void R_VR_Telemetry_f( void );
 #endif
 void R_ClearScene( void );
 void R_GetTextureParms( int *w, int *h, int texnum );

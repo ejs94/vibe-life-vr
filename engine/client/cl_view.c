@@ -130,38 +130,22 @@ static void V_SetupViewModel( void )
 		{
 			VectorCopy( aimAngles, view->angles );
 
-			// Compute hand position with grip offset in world coordinates
+			// Compute world weapon pose from the 6DoF hand pose via the single
+			// source of truth (this also applies the left-handed grip mirror).
 			vec3_t handOrigin, handAngles;
 			if( XR_GetPrimaryHandTransform( handOrigin, handAngles ) )
 			{
 				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 				float turn_yaw = XR_GetPlayerTurnYaw();
-				float yaw_rad = DEG2RAD( turn_yaw );
-				float cy = cosf( yaw_rad );
-				float sy = sinf( yaw_rad );
+				const char *wpn = ( view->model && view->model->name[0] ) ? view->model->name : "";
 
-				float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
-				float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
-				float world_dz = handOrigin[2] * scale;
+				XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, refState.vieworg, scale,
+					view->origin, view->angles );
 
-				view->origin[0] = refState.vieworg[0] + world_dx;
-				view->origin[1] = refState.vieworg[1] + world_dy;
-				view->origin[2] = refState.vieworg[2] + world_dz;
-
-				vec3_t w_grip = {0};
-				if( view->model && view->model->name[0] )
-					XR_GetWeaponGripOffset( view->model->name, w_grip );
-
-				vec3_t fwd, rt, up;
-				AngleVectors( view->angles, fwd, rt, up );
-
-				float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0];
-				float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + w_grip[1];
-				float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
-
-				VectorMA( view->origin, off_fwd, fwd, view->origin );
-				VectorMA( view->origin, off_rt,  rt,  view->origin );
-				VectorMA( view->origin, off_up,  up,  view->origin );
+				Con_DPrintf( "[VR_GRIP] src=viewmodel model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d pullback=0\n",
+					wpn, view->origin[0], view->origin[1], view->origin[2],
+					view->angles[0], view->angles[1], view->angles[2],
+					(vr_lefthanded && vr_lefthanded->value > 0.0f) ? 1 : 0 );
 			}
 
 			// Fallback muzzle position only if not yet calculated by studio bone hierarchy
@@ -396,6 +380,15 @@ qboolean V_PreRender( void )
 	if( host.status == HOST_SLEEP )
 		return false;
 
+#ifdef XASH_OPENXR
+	// OpenXR is up but the session is no longer running (headset removed, the
+	// system menu opened, or the app is stopping). The EGL/GL context is not
+	// valid in that state, so rendering another frame crashes inside gl4es
+	// (glViewport on a lost context). Pause until READY resumes the session.
+	if( XR_IsInitialized() && !XR_IsSessionRunning() )
+		return false;
+#endif
+
 	// if the screen is disabled (loading plaque is up)
 	if( cls.disable_screen )
 	{
@@ -457,6 +450,17 @@ void V_RenderView( void )
 
 	if( !cl.video_prepped || ( !ui_renderworld.value && UI_IsVisible() && !cl.background ))
 		return; // still loading
+
+#ifdef XASH_OPENXR
+	// In VR the UI is composited as a quad from the 2D screen target by
+	// R_RenderXRMenu, which only runs when no 3D scene was submitted this
+	// frame. The root menu also starts a background map (cl.background), so
+	// without this guard the world would render and the menu quad would never
+	// be composited, leaving the user on a dark screen. Skip the world whenever
+	// a menu/console is visible in VR.
+	if( XR_IsActive() && UI_IsVisible( ))
+		return;
+#endif
 
 	V_CalcViewRect ();	// compute viewport rectangle
 	V_SetRefParams( &rp );

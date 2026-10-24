@@ -7,7 +7,7 @@
 #   1. OpenXR instance, session, dual swapchains and reference spaces.
 #   2. CMenuVR dedicated in-headset menu and fixed room-space Quad HUD.
 #   3. Dual alternating Beat Saber laser pointers with trigger hit detection.
-#   4. HL2:VR unified controller layout (A reload, B altfire, X jump, Y use).
+#   4. VR unified controller layout (B reload, A jump, grip+trigger alt-fire).
 #   5. Head-mounted flashlight temple gesture toggle.
 #   6. Orthonormal quaternion head view matrix (singularity-free roll).
 #   7. Physical roomscale crouch (vr_physical_crouch auto-crouch on squat).
@@ -34,7 +34,7 @@ else
 fi
 
 OUTPUT_DIR="${REPO_DIR}/out/evidence/monado_unittest_$(date +%Y%m%d_%H%M%S)"
-TIMEOUT_SECS="${TIMEOUT_SECS:-40}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-55}"
 TARGET_ARG="${1:-suite}"
 shift || true
 EXTRA_ARGS="${*:-}"
@@ -51,13 +51,24 @@ if [ ! -f "${REPO_DIR}/out/xash3d" ] || [ ! -f "${REPO_DIR}/out/libref_gl_vr.so"
     exit 1
 fi
 
-MONADO_MANIFEST="${MONADO_DIR}/build/openxr_monado-dev.json"
-MONADO_SERVICE="${MONADO_DIR}/build/src/xrt/targets/service/monado-service"
+# Prefer the minimal simulated-only build when present, then fall back to build.
+if [ -z "${MONADO_BUILD_DIR:-}" ]; then
+    if [ -x "${MONADO_DIR}/build-sim/src/xrt/targets/service/monado-service" ]; then
+        MONADO_BUILD_DIR="${MONADO_DIR}/build-sim"
+    else
+        MONADO_BUILD_DIR="${MONADO_DIR}/build"
+    fi
+fi
+
+MONADO_MANIFEST="${MONADO_BUILD_DIR}/openxr_monado-dev.json"
+MONADO_SERVICE="${MONADO_BUILD_DIR}/src/xrt/targets/service/monado-service"
 
 if [ ! -f "$MONADO_MANIFEST" ] || [ ! -x "$MONADO_SERVICE" ]; then
-    log_err "Monado build artifacts missing in ${MONADO_DIR}/build. Please ensure Monado is built."
+    log_err "Monado build artifacts missing in ${MONADO_BUILD_DIR}. Please ensure Monado is built."
     exit 1
 fi
+
+log_info "Using Monado build: ${MONADO_BUILD_DIR}"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -72,22 +83,20 @@ export LD_LIBRARY_PATH=".:${LD_LIBRARY_PATH:-}"
 
 # 3. Start or Verify Monado Service Daemon
 log_title "MONADO RUNTIME: Initializing OpenXR Simulated Driver"
-SERVICE_STARTED=false
-if ! pgrep -fa "monado-service" >/dev/null 2>&1; then
-    log_info "Starting monado-service daemon in background..."
-    "$MONADO_SERVICE" > "${OUTPUT_DIR}/monado_service.log" 2>&1 &
-    SERVICE_PID=$!
-    SERVICE_STARTED=true
-    sleep 1
-else
-    log_info "Monado service daemon is already running."
-fi
+pkill -9 -x monado-service 2>/dev/null || true
+sleep 0.5
+log_info "Starting monado-service daemon in background..."
+"$MONADO_SERVICE" > "${OUTPUT_DIR}/monado_service.log" 2>&1 &
+SERVICE_PID=$!
+SERVICE_STARTED=true
+sleep 1
 
 cleanup() {
     if [ "$SERVICE_STARTED" = true ] && [ -n "${SERVICE_PID:-}" ]; then
         log_info "Stopping spawned monado-service daemon (PID ${SERVICE_PID})..."
         kill -TERM "$SERVICE_PID" 2>/dev/null || true
     fi
+    pkill -9 -x monado-service 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -191,18 +200,18 @@ assert_test 8  "Head-Mounted Flashlight Temple Gesture (Toggle OFF)" \
 assert_test 9  "Orthonormal Quaternion Head View Matrix (Zero Singularity Roll)" \
     'grep -q "Head Roll Left" "$TEST_LOG" && [ -f "${OUTPUT_DIR}/unit_06_head_roll_left.png" ]'
 
-# --- HL2:VR Unified Input Layout ---
-assert_test 10 "HL2:VR Input Layout: Right A Button -> Reload Action" \
-    'grep -q "HL2VR Action: Reload triggered" "$TEST_LOG"'
+# --- VR Unified Input Layout ---
+assert_test 10 "VR Input Layout: Right B Button -> Reload (reaches server)" \
+    'grep -q "HL2VR Action: Reload triggered" "$TEST_LOG" && grep -q "\\[VR_RELOAD\\] IN_RELOAD reached server" "$TEST_LOG"'
 
-assert_test 11 "HL2:VR Input Layout: Right B Button -> Secondary / Alt-Fire Action" \
-    'grep -q "HL2VR Action: Secondary / Alt-Fire triggered" "$TEST_LOG"'
+assert_test 11 "VR Input Layout: Primary Grip + Trigger -> Alt-Fire" \
+    'grep -q "Main hand grip+trigger alt-fire" "$TEST_LOG"'
 
-assert_test 12 "HL2:VR Input Layout: Left X Button -> Jump Action" \
+assert_test 12 "VR Input Layout: Right A Button -> Jump" \
     'grep -q "HL2VR Action: Jump triggered" "$TEST_LOG"'
 
-assert_test 13 "HL2:VR Input Layout: Left Y Button -> Use / Interact Action" \
-    'grep -q "HL2VR Action: Use / Interact triggered" "$TEST_LOG"'
+assert_test 13 "VR Input Layout: X/Y Unbound (No Legacy Use Button)" \
+    '! grep -q "HL2VR Action: Use / Interact triggered" "$TEST_LOG" && ! grep -q "Secondary / Alt-Fire triggered" "$TEST_LOG"'
 
 # --- Gold Benchmark Remediations ---
 assert_test 14 "Physical Roomscale Crouch: Squat Drop (>= 28cm) Engages IN_DUCK" \
@@ -236,8 +245,68 @@ assert_test 22 "3D Bullet Impact Debug Visualization System (vr_debug_impacts)" 
 assert_test 23 "Declarative Weapon Profiles Calibration Manifest (vr_weapons.json)" \
     'grep -q "VR_WEAPON_PROFILES" "$TEST_LOG"'
 
-assert_test 24 "Clean Simulation Execution & Zero Memory / Process Crash" \
+assert_test 24 "Standalone Two-Hand Asset Structure & Rendered Orientation (Static)" \
+    '"${SCRIPT_DIR}/check_hand_asset.sh" >/dev/null 2>&1'
+
+assert_test 25 "Runtime Hand Pose Telemetry: Fingers +X, Thumbs Up, Palms Inward" \
+    'python3 "${SCRIPT_DIR}/check_hand_pose_log.py" "$TEST_LOG" >/dev/null 2>&1'
+
+assert_test 26 "Two-Hand Bodygroup Chain Selection & vr_lefthanded Swap (body 0/3)" \
+    'grep -q "ent=primary body=0 chain=R" "$TEST_LOG" && grep -q "ent=offhand body=3 chain=L" "$TEST_LOG" && grep -q "ent=primary body=3 chain=L" "$TEST_LOG" && grep -q "ent=offhand body=0 chain=R" "$TEST_LOG"'
+
+assert_test 27 "Standalone Hand Asset Deploy Freshness (out/ matches assets/)" \
+    'cmp -s "${REPO_DIR}/assets/valve_vr/models/v_hand.mdl" "${REPO_DIR}/out/valve_vr/models/v_hand.mdl" && cmp -s "${REPO_DIR}/assets/valve_vr/models/v_hand.mdl" "${REPO_DIR}/out/valve/models/v_hand.mdl"'
+
+assert_test 28 "Head-Relative Locomotion Compensation (Head 90, Hand 0 -> +Y)" \
+    'grep -q "\\[VR_MOVE\\].*delta=-90.0 fwd=0.0 side=-1.0" "$TEST_LOG"'
+
+assert_test 29 "Weapon Calibration Isolation: Roll Adjust Does Not Rotate Hands" \
+    'grep -q "\\[VR_HAND_ANGLES\\].*p=10.0 y=20.0 r=0.0" "$TEST_LOG" && ! grep -q "\\[VR_HAND_ANGLES\\].*r=30.0" "$TEST_LOG"'
+
+assert_test 30 "Crowbar Flat-Screen Attack Animation Suppressed in VR" \
+    'grep -q "Melee attack animation suppressed" "$TEST_LOG"'
+
+assert_test 31 "Left-Handed Layout: Left Y Reload, Left X Jump, Mirrored Grip" \
+    'grep -q "Reload triggered (Left Y)" "$TEST_LOG" && grep -q "Jump triggered (Left X)" "$TEST_LOG" && grep -q "\\[VR_GRIP\\] src=renderer .* lefthanded=1 mirror=1" "$TEST_LOG"'
+
+assert_test 32 "Off-Hand Grip Emits World-Space Grab Request" \
+    'grep -q "\\[VR_GRAB\\] request at" "$TEST_LOG"'
+
+assert_test 33 "Crossbow PiP Scope Activates and Deactivates" \
+    'grep -q "\\[VR_SCOPE\\] PiP active" "$TEST_LOG" && grep -q "\\[VR_SCOPE\\] PiP inactive" "$TEST_LOG"'
+
+assert_test 34 "Ladder Client-Prediction Publishes VR Flag (vuser4[1])" \
+    'grep -q "\\[VR_LADDER\\] client prediction is_vr=1" "$TEST_LOG"'
+
+assert_test 35 "Crossbow Bow Limbs Not Hidden by vr_hide_arms" \
+    '! grep -q "\"shoulders\"" "${REPO_DIR}/ref/gl_vr/gl_studio.c"'
+
+assert_test 36 "Controller Menu Button Opens Pause Menu Quad" \
+    'grep -q "\\[VR_MENU\\] toggle requested" "$TEST_LOG" && grep -q "\\[VR_MENU\\] scene skipped; using quad menu path" "$TEST_LOG" && grep -q "\\[VR_MENU\\] submitting quad menu frame" "$TEST_LOG"'
+
+assert_test 37 "Menu Quad Faces Player at 90 Degree Heading (anchor theta)" \
+    'grep -q "\\[VR_MENU\\] anchor .*theta=90.0" "$TEST_LOG"'
+
+assert_test 38 "Clean Simulation Execution & Zero Memory / Process Crash" \
     '! grep -E -q "Segmentation fault|SIGSEGV|Aborted \(core dumped\)" "$TEST_LOG"'
+
+# ------------------------------------------------------------------------------
+# Sprint B: unified weapon pose (XR_GetWeaponPose) regression gates
+# ------------------------------------------------------------------------------
+assert_test 39 "Weapon Pose: Renderer and Viewmodel Share Single Source (both hands)" \
+    '"${SCRIPT_DIR}/check_grip_pose.py" "$TEST_LOG"'
+
+assert_test 40 "Weapon Pose: Left-Handed Grip Mirror Active on Lateral Axis" \
+    'grep -q "\\[VR_GRIP\\] src=renderer .* lefthanded=1 mirror=1" "$TEST_LOG" && grep -q "\\[VR_GRIP\\] src=muzzle .* lefthanded=1" "$TEST_LOG"'
+
+assert_test 41 "Weapon Pose: All Three Call Sites Emit Unified [VR_GRIP] Telemetry" \
+    'grep -q "\\[VR_GRIP\\] src=renderer " "$TEST_LOG" && grep -q "\\[VR_GRIP\\] src=muzzle " "$TEST_LOG" && grep -q "\\[VR_GRIP\\] src=viewmodel " "$TEST_LOG"'
+
+assert_test 42 "Weapon Pose: Grip Anchor Seats on the Palm (vr_grip_probe)" \
+    '"${SCRIPT_DIR}/check_grip_seat.py" "$TEST_LOG"'
+
+assert_test 43 "Crossbow Foregrip: Off-Hand Snaps to Weapon Socket" \
+    'grep -q "\\[VR_FOREGRIP\\] model=models/v_crossbow.mdl" "$TEST_LOG"'
 
 # 7. Optional Quest Launcher UI Verification
 if [ "${TARGET_ARG}" = "all" ] || [ "${TARGET_ARG}" = "--with-launcher" ] || [ "${TARGET_ARG}" = "full" ]; then

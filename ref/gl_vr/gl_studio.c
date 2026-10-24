@@ -39,6 +39,10 @@ CVAR_DEFINE_AUTO( r_shadows, "0", 0, "draw ugly shadows" );
 
 #ifdef XASH_OPENXR
 static cl_entity_t s_offhandEnt;
+static cl_entity_t s_primaryHandEnt;
+static model_t     *s_handModel = NULL;
+static model_t     *s_primaryHandModelOverride = NULL;
+static char         s_primaryHandModelName[64] = "";
 static qboolean    s_viewmodel_has_offhand = false;
 static qboolean    s_twohanded_active = false;
 static vec3_t      s_vrDebugRawHandOrigin = {0};
@@ -47,6 +51,11 @@ static qboolean    s_vrDebugHandActive = false;
 static vec3_t      s_vrDebugOffHandOrigin = {0};
 static vec3_t      s_vrDebugOffHandAngles = {0};
 static qboolean    s_vrDebugOffHandActive = false;
+static vec3_t      s_vrDebugWeaponCOM = {0};
+static int         s_vrDebugNumHitboxes = 0;
+static vec3_t      s_vrDebugMuzzlePos = {0};
+static char        s_vrDebugWeaponModelName[64] = {0};
+static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model );
 #endif
 
 static const vec3_t hullcolor[8] =
@@ -198,6 +207,121 @@ static void R_StudioSetupTimings( void )
 }
 
 /*
+====================
+R_VR_PrimaryHandIndex / R_VR_SecondaryHandIndex
+
+Resolve which physical controller drives the weapon hand and which one drives
+the free hand.
+====================
+*/
+static int R_VR_PrimaryHandIndex( void )
+{
+	return ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? VR_HAND_LEFT : VR_HAND_RIGHT;
+}
+
+static int R_VR_SecondaryHandIndex( void )
+{
+	return ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? VR_HAND_RIGHT : VR_HAND_LEFT;
+}
+
+/*
+====================
+R_VR_WeaponTrueDepth
+
+In VR the viewmodel lives in world space, so walls must be allowed to occlude
+it. Flat-screen GoldSrc compresses the viewmodel depth range to keep it in front
+of the world; that behaviour is only used when this cvar is disabled.
+====================
+*/
+static qboolean R_VR_WeaponTrueDepth( void )
+{
+	static cvar_t *vr_weapon_true_depth = NULL;
+	if( !vr_weapon_true_depth ) vr_weapon_true_depth = gEngfuncs.pfnGetCvarPointer( "vr_weapon_true_depth" );
+	return ( vr_weapon_true_depth && vr_weapon_true_depth->value > 0.0f );
+}
+
+/*
+====================
+R_HandEntityNeedsMirror
+
+models/v_hand.mdl contains an anatomical right chain and an anatomical left
+chain. Each hand entity selects the chain matching its controller (see
+R_DrawHandEntity), so the model is never reflected: a reflection would also
+invert the procedural finger curl direction.
+====================
+*/
+static qboolean R_HandEntityNeedsMirror( const cl_entity_t *e )
+{
+	(void)e;
+	return false;
+}
+
+/*
+====================
+R_VR_OffHandAttachedToWeapon
+
+True when the secondary hand is gripping the weapon two-handed. In that case
+the viewmodel already contains the off-hand and the standalone hand must stay
+hidden to avoid a duplicated third hand.
+====================
+*/
+static qboolean R_VR_OffHandAttachedToWeapon( void )
+{
+	if( XR_IsTwoHandStabilized( ))
+		return true;
+
+	static cvar_t *vr_twohanded = NULL;
+	if( !vr_twohanded ) vr_twohanded = gEngfuncs.pfnGetCvarPointer( "vr_twohanded" );
+	if( !vr_twohanded || vr_twohanded->value <= 0.0f )
+		return false;
+
+	float trigSec = 0.0f, gripSec = 0.0f, thmbSec = 0.0f;
+	XR_GetFingerCurlAxes( R_VR_SecondaryHandIndex(), &trigSec, &gripSec, &thmbSec );
+	return ( gripSec > 0.4f );
+}
+
+/*
+====================
+R_LoadVrHandModel
+
+Loads the standalone hand presence model, with an optional override for the
+empty primary hand.
+====================
+*/
+static model_t *R_LoadVrHandModel( qboolean primary )
+{
+	if( primary )
+	{
+		static cvar_t *vr_primary_hand_model = NULL;
+		if( !vr_primary_hand_model ) vr_primary_hand_model = gEngfuncs.pfnGetCvarPointer( "vr_primary_hand_model" );
+
+		if( vr_primary_hand_model && vr_primary_hand_model->string[0] )
+		{
+			// Reload when the user points the cvar at a different model
+			if( Q_strcmp( s_primaryHandModelName, vr_primary_hand_model->string ))
+			{
+				Q_strncpy( s_primaryHandModelName, vr_primary_hand_model->string, sizeof( s_primaryHandModelName ));
+				s_primaryHandModelOverride = gEngfuncs.Mod_ForName( vr_primary_hand_model->string, false, true );
+			}
+
+			if( s_primaryHandModelOverride && s_primaryHandModelOverride->type == mod_studio )
+				return s_primaryHandModelOverride;
+		}
+	}
+
+	if( !s_handModel )
+	{
+		s_handModel = gEngfuncs.Mod_ForName( "models/v_hand.mdl", false, true );
+		if( !s_handModel )
+			s_handModel = gEngfuncs.Mod_ForName( "models/v_hands.mdl", false, true );
+		if( !s_handModel )
+			s_handModel = gEngfuncs.Mod_ForName( "models/v_vhand.mdl", false, true );
+	}
+
+	return s_handModel;
+}
+
+/*
 ================
 R_AllowFlipViewModel
 
@@ -206,6 +330,9 @@ should a flip the viewmodel if cl_righthand is set to 1
 */
 static qboolean R_AllowFlipViewModel( cl_entity_t *e )
 {
+	if( e == &s_offhandEnt || e == &s_primaryHandEnt )
+		return R_HandEntityNeedsMirror( e );
+
 	if( cl_righthand && cl_righthand->value > 0 )
 	{
 		if( e == tr.viewent )
@@ -266,6 +393,13 @@ static qboolean R_StudioComputeBBox( vec3_t bbox[8] )
 		AddPointToBounds( p2, studio_mins, studio_maxs );
 		if( bbox ) VectorCopy( p2, bbox[i] );
 	}
+
+#ifdef XASH_OPENXR
+	// Hand presence entities are always near the player's face; skipping the
+	// frustum/vis cull guarantees they never pop out of existence.
+	if( !bbox && ( e == &s_offhandEnt || e == &s_primaryHandEnt ))
+		return true;
+#endif
 
 	if( !bbox && R_CullModel( e, studio_mins, studio_maxs ))
 		return false; // model culled
@@ -565,57 +699,79 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 		{
 			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 			float turn_yaw = XR_GetPlayerTurnYaw();
-			float yaw_rad = DEG2RAD( turn_yaw );
-			float cy = cosf( yaw_rad );
-			float sy = sinf( yaw_rad );
 
-			// Rotate local hand displacement by the player's world yaw orientation
-			float world_dx = (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
-			float world_dy = (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
-			float world_dz = handOrigin[2] * scale;
-
-			origin[0] = RI.rvp.vieworigin[0] + world_dx;
-			origin[1] = RI.rvp.vieworigin[1] + world_dy;
-			origin[2] = RI.rvp.vieworigin[2] + world_dz;
-
-			// Query per-weapon calibration profile
-			vec3_t w_grip = {0};
-			float w_pitch = 0.0f, w_yaw = 0.0f, w_roll = 0.0f;
-			if( e->model && e->model->name[0] )
-			{
-				XR_GetWeaponGripOffset( e->model->name, w_grip );
-				XR_GetWeaponPitchAdjust( e->model->name, &w_pitch, &w_yaw, &w_roll );
-			}
-
-			angles[0] = handAngles[0] + w_pitch;
-			angles[1] = anglemod( handAngles[1] + turn_yaw + w_yaw );
-			angles[2] = handAngles[2] + w_roll;
+			const char *wpn = ( e->model && e->model->name[0] ) ? e->model->name : "";
+			XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, RI.rvp.vieworigin, scale, origin, angles );
 
 			// Cache raw physical 6DoF hand pose for calibration debug visualizer
-			VectorCopy( origin, s_vrDebugRawHandOrigin );
-			VectorCopy( angles, s_vrDebugRawHandAngles );
+			// (world hand position + aim angles, before grip offsets)
+			{
+				float yaw_rad = DEG2RAD( turn_yaw );
+				float cy = cosf( yaw_rad );
+				float sy = sinf( yaw_rad );
+
+				s_vrDebugRawHandOrigin[0] = RI.rvp.vieworigin[0] + (handOrigin[0] * cy - handOrigin[1] * sy) * scale;
+				s_vrDebugRawHandOrigin[1] = RI.rvp.vieworigin[1] + (handOrigin[0] * sy + handOrigin[1] * cy) * scale;
+				s_vrDebugRawHandOrigin[2] = RI.rvp.vieworigin[2] + handOrigin[2] * scale;
+
+				// Historical behavior: the debug gizmo shows the aim angles
+				// including the per-weapon calibration adjustments.
+				VectorCopy( angles, s_vrDebugRawHandAngles );
+			}
 			s_vrDebugHandActive = true;
 
-			// Apply Grip Offsets in hand local coordinate space
-			vec3_t fwd, rt, up;
-			AngleVectors( angles, fwd, rt, up );
+			if( e->model && vr_lefthanded && vr_lefthanded->value > 0.0f &&
+			    ( !vr_lefthanded_mirror_grip || vr_lefthanded_mirror_grip->value > 0.0f ))
+			{
+				static model_t *s_lastMirrorLog = NULL;
+				if( s_lastMirrorLog != e->model )
+				{
+					s_lastMirrorLog = e->model;
+					gEngfuncs.Con_DPrintf( "[VR_GRIP] src=renderer model=%s lefthanded=1 mirror=1\n", e->model->name );
+				}
+			}
 
-			float off_fwd = (vr_weapon_offset_forward ? vr_weapon_offset_forward->value : 0.0f) + w_grip[0];
-			float off_rt  = (vr_weapon_offset_right ? vr_weapon_offset_right->value : 0.0f) + w_grip[1];
-			float off_up  = (vr_weapon_offset_up ? vr_weapon_offset_up->value : 0.0f) + w_grip[2];
+			// Pull the weapon toward the eye when its grip would sit inside a
+			// wall. PM_STUDIO_IGNORE keeps the viewmodel itself from blocking
+			// the trace.
+			static cvar_t *vr_weapon_pullback = NULL;
+			if( !vr_weapon_pullback ) vr_weapon_pullback = gEngfuncs.pfnGetCvarPointer( "vr_weapon_pullback" );
 
-			VectorMA( origin, off_fwd, fwd, origin );
-			VectorMA( origin, off_rt,  rt,  origin );
-			VectorMA( origin, off_up,  up,  origin );
+			float pullback_active = 0.0f;
+			if( vr_weapon_pullback && vr_weapon_pullback->value > 0.0f && gEngfuncs.CL_TraceLine )
+			{
+				vec3_t eye = Vec3( RI.rvp.vieworigin );
+				pmtrace_t tr = gEngfuncs.CL_TraceLine( eye, origin, PM_STUDIO_IGNORE );
+
+				if( tr.fraction < 1.0f )
+				{
+					vec3_t dir;
+					float dist = VectorDistance( eye, origin );
+					float allowed = dist * tr.fraction - 4.0f;
+
+					if( allowed < 8.0f ) allowed = 8.0f;
+
+					VectorSubtract( origin, eye, dir );
+					VectorNormalize( dir );
+					VectorMA( eye, allowed, dir, origin );
+					pullback_active = 1.0f;
+				}
+			}
 
 			VectorCopy( origin, e->origin );
 			VectorCopy( angles, e->angles );
+
+			gEngfuncs.Con_DPrintf( "[VR_GRIP] src=renderer model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d pullback=%d\n",
+				wpn, origin[0], origin[1], origin[2], angles[0], angles[1], angles[2],
+				(vr_lefthanded && vr_lefthanded->value > 0.0f) ? 1 : 0, (int)pullback_active );
 		}
 	}
-	else if( e == &s_offhandEnt && XR_IsActive() )
+	else if( ( e == &s_offhandEnt || e == &s_primaryHandEnt ) && XR_IsActive() )
 	{
 		vec3_t handOrigin, handAngles;
-		if( XR_GetSecondaryHandTransform( handOrigin, handAngles ))
+		int hand = ( e == &s_primaryHandEnt ) ? R_VR_PrimaryHandIndex() : R_VR_SecondaryHandIndex();
+
+		if( XR_GetHandPresenceTransform( hand, handOrigin, handAngles ))
 		{
 			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 			float turn_yaw = XR_GetPlayerTurnYaw();
@@ -636,10 +792,65 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			angles[1] = anglemod( handAngles[1] + turn_yaw );
 			angles[2] = handAngles[2];
 
-			// Cache raw secondary 6DoF hand pose for calibration debug visualizer
-			VectorCopy( origin, s_vrDebugOffHandOrigin );
-			VectorCopy( angles, s_vrDebugOffHandAngles );
-			s_vrDebugOffHandActive = true;
+			// The standalone two-hand model is centered on the palm, which is
+			// the same anchor as the tracked controller grip, so the default
+			// offsets are zero. The cvars remain for per-user fine tuning.
+			{
+				float off_fwd = vr_hand_offset_forward ? vr_hand_offset_forward->value : 0.0f;
+				float off_rt  = vr_hand_offset_right ? vr_hand_offset_right->value : 0.0f;
+				float off_up  = vr_hand_offset_up ? vr_hand_offset_up->value : 0.0f;
+
+				if( off_fwd != 0.0f || off_rt != 0.0f || off_up != 0.0f )
+				{
+					vec3_t fwd, rt, up;
+					AngleVectors( angles, fwd, rt, up );
+					VectorMA( origin, off_fwd, fwd, origin );
+					VectorMA( origin, off_rt, rt, origin );
+					VectorMA( origin, off_up, up, origin );
+				}
+			}
+
+			if( e == &s_offhandEnt )
+			{
+				// Cache raw secondary 6DoF hand pose for calibration debug visualizer
+				VectorCopy( origin, s_vrDebugOffHandOrigin );
+				VectorCopy( angles, s_vrDebugOffHandAngles );
+				s_vrDebugOffHandActive = true;
+			}
+
+			// Two-handed foregrip socket: while the off-hand is gripping the
+			// weapon, snap its palm to the weapon's foregrip landmark instead of
+			// leaving it at the physical controller position.
+			if( e == &s_offhandEnt && R_VR_OffHandAttachedToWeapon( ))
+			{
+				static cvar_t *vr_foregrip = NULL;
+				if( !vr_foregrip ) vr_foregrip = gEngfuncs.pfnGetCvarPointer( "vr_foregrip" );
+				const char *wpn = ( tr.viewent && tr.viewent->model && tr.viewent->model->name[0] ) ? tr.viewent->model->name : "";
+				vec3_t fg_off, fg_rot;
+
+				if( vr_foregrip && vr_foregrip->value > 0.0f && wpn[0] &&
+				    XR_GetWeaponForegrip( wpn, fg_off, fg_rot ))
+				{
+					vec3_t ph_origin, ph_angles, wpn_origin, wpn_angles;
+					if( XR_GetPrimaryHandTransform( ph_origin, ph_angles ))
+					{
+						XR_GetWeaponPose( wpn, ph_origin, ph_angles, turn_yaw, RI.rvp.vieworigin, scale,
+							wpn_origin, wpn_angles );
+
+						vec3_t fg_fwd, fg_rt, fg_up;
+						AngleVectors( wpn_angles, fg_fwd, fg_rt, fg_up );
+
+						origin[0] = wpn_origin[0] + fg_fwd[0] * fg_off[0] + fg_rt[0] * fg_off[1] + fg_up[0] * fg_off[2];
+						origin[1] = wpn_origin[1] + fg_fwd[1] * fg_off[0] + fg_rt[1] * fg_off[1] + fg_up[1] * fg_off[2];
+						origin[2] = wpn_origin[2] + fg_fwd[2] * fg_off[0] + fg_rt[2] * fg_off[1] + fg_up[2] * fg_off[2];
+
+						XR_ComposeLocalRotation( wpn_angles, fg_rot, angles );
+
+						gEngfuncs.Con_DPrintf( "[VR_FOREGRIP] model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f)\n",
+							wpn, origin[0], origin[1], origin[2], angles[0], angles[1], angles[2] );
+					}
+				}
+			}
 
 			VectorCopy( origin, e->origin );
 			VectorCopy( angles, e->angles );
@@ -649,7 +860,9 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 
 	Matrix3x4_CreateFromEntity( g_studio.rotationmatrix, angles, origin, 1.0f );
 
-	if( tr.fFlipViewModel )
+	// Mirrored viewmodels (cl_righthand) and right-controller hands flip the
+	// local Y axis so the mesh remains anatomically correct.
+	if( R_AllowFlipViewModel( e ))
 	{
 		g_studio.rotationmatrix[0][1] = -g_studio.rotationmatrix[0][1];
 		g_studio.rotationmatrix[1][1] = -g_studio.rotationmatrix[1][1];
@@ -942,22 +1155,13 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 		const char *name = pbones[i].name;
 		if( !name ) continue;
 
-		// Identify Left vs Right hand
-		qboolean is_left = false;
-		if( e == &s_offhandEnt )
-		{
-			// Off-hand entity is always the non-dominant hand
-			is_left = !(vr_lefthanded && vr_lefthanded->value > 0.0f);
-		}
-		else if( Q_stristr( name, "L " ) || Q_stristr( name, "L_" ) || Q_stristr( name, "Left" ) || Q_stristr( name, "L Finger" ) )
-			is_left = true;
-		else if( Q_stristr( name, "R " ) || Q_stristr( name, "R_" ) || Q_stristr( name, "Right" ) || Q_stristr( name, "R Finger" ) )
-			is_left = false;
-		else
-		{
-			// Default based on dominant hand if not specified
-			is_left = (vr_lefthanded && vr_lefthanded->value > 0.0f);
-		}
+		// The viewmodel and the primary hand entity are driven by the primary
+		// controller; the off-hand entity by the secondary controller. The
+		// two-hand model draws the chain that matches its controller, so the
+		// analog source follows the entity rather than the bone name.
+		qboolean is_left = ( e == &s_offhandEnt )
+			? !( vr_lefthanded && vr_lefthanded->value > 0.0f )
+			: ( vr_lefthanded && vr_lefthanded->value > 0.0f );
 
 		float trg = is_left ? trigL : trigR;
 		float grp = is_left ? gripL : gripR;
@@ -968,9 +1172,14 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 		// Thumb: Finger0, Finger01, Finger02 / Bone27, Bone28, Bone29
 		if( Q_stristr( name, "Finger0" ) || Q_stristr( name, "Thumb" ) || !Q_strcmp( name, "Bone27" ) || !Q_strcmp( name, "Bone28" ) || !Q_strcmp( name, "Bone29" ) )
 		{
-			if( Q_stristr( name, "02" ) || !Q_strcmp( name, "Bone29" ) )
+			// Compare the last two characters, not a substring: "Bip01"
+			// itself contains "01", which misclassifies the thumb base.
+			const int nl = Q_strlen( name );
+			const qboolean ends01 = ( nl >= 2 && name[nl-2] == '0' && name[nl-1] == '1' );
+			const qboolean ends02 = ( nl >= 2 && name[nl-2] == '0' && name[nl-1] == '2' );
+			if( ends02 || !Q_strcmp( name, "Bone29" ) )
 				curl_angle = 0.50f * thm * scale;
-			else if( Q_stristr( name, "01" ) || !Q_strcmp( name, "Bone28" ) )
+			else if( ends01 || !Q_strcmp( name, "Bone28" ) )
 				curl_angle = 0.55f * thm * scale;
 			else
 				curl_angle = 0.35f * thm * scale;
@@ -1023,15 +1232,33 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 		if( curl_angle > 0.001f )
 		{
 			float half_a = curl_angle * 0.5f;
+			if( R_AllowFlipViewModel( e ))
+				half_a = -half_a; // a reflection inverts the curl direction
 			float s = sinf( half_a );
 			float c = cosf( half_a );
 
-			// Post-multiply quaternion q[i] by delta_q = (0, 0, s, c) to apply rotation around local Z
 			float qx = q[i][0], qy = q[i][1], qz = q[i][2], qw = q[i][3];
-			q[i][0] = qx * c + qy * s;
-			q[i][1] = qy * c - qx * s;
-			q[i][2] = qz * c + qw * s;
-			q[i][3] = qw * c - qz * s;
+
+			if( e == &s_offhandEnt || e == &s_primaryHandEnt )
+			{
+				// Rimrook two-hand rig: the finger bones' local Y axis is the
+				// curl axis. Their local Z is the palm normal (rotating around
+				// it bends the fingers sideways instead of closing the fist).
+				// Post-multiply by delta_q = (0, s, 0, c) for a local Y rotation.
+				q[i][0] = qx * c - qz * s;
+				q[i][1] = qw * s + qy * c;
+				q[i][2] = qx * s + qz * c;
+				q[i][3] = qw * c - qy * s;
+			}
+			else
+			{
+				// Valve viewmodel rigs curl around the bone's local Z axis.
+				// Post-multiply quaternion q[i] by delta_q = (0, 0, s, c).
+				q[i][0] = qx * c + qy * s;
+				q[i][1] = qy * c - qx * s;
+				q[i][2] = qz * c + qw * s;
+				q[i][3] = qw * c - qz * s;
+			}
 
 			curls_applied++;
 		}
@@ -1054,6 +1281,30 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 
 /*
 ====================
+R_StudioFindSequence
+
+Returns the index of the first sequence whose label contains the given
+case-insensitive substring, or -1 when it is not present.
+====================
+*/
+static int R_StudioFindSequence( studiohdr_t *header, const char *name )
+{
+	if( !header || !name || !name[0] )
+		return -1;
+
+	mstudioseqdesc_t *seq = (mstudioseqdesc_t *)((byte *)header + header->seqindex);
+
+	for( int i = 0; i < header->numseq; i++ )
+	{
+		if( seq[i].label[0] && Q_stristr( seq[i].label, name ))
+			return i;
+	}
+
+	return -1;
+}
+
+/*
+====================
 StudioSetupBones
 
 ====================
@@ -1068,6 +1319,7 @@ static void R_StudioSetupBones( cl_entity_t *e )
 	static vec4_t	q3[MAXSTUDIOBONES];
 	static vec3_t	pos4[MAXSTUDIOBONES];
 	static vec4_t	q4[MAXSTUDIOBONES];
+	qboolean	skip_sequence_blend = false;
 
 	if( e->curstate.sequence >= m_pStudioHeader->numseq )
 		e->curstate.sequence = 0;
@@ -1098,6 +1350,78 @@ static void R_StudioSetupBones( cl_entity_t *e )
 			{
 				f = (float)(pseqdesc->numframes - 1);
 			}
+		}
+
+		// VR has no flat-screen equip animation: replace the draw/deploy sequence
+		// with the resting idle pose and suppress the 0.2s transition blend.
+		static cvar_t *vr_weapon_no_deploy = NULL;
+		if( !vr_weapon_no_deploy ) vr_weapon_no_deploy = gEngfuncs.pfnGetCvarPointer( "vr_weapon_no_deploy" );
+		if( vr_weapon_no_deploy && vr_weapon_no_deploy->value > 0.0f )
+		{
+			if( Q_stristr( pseqdesc->label, "draw" ) || Q_stristr( pseqdesc->label, "deploy" ))
+			{
+				int idle_seq = R_StudioFindSequence( m_pStudioHeader, "idle" );
+
+				if( idle_seq >= 0 )
+				{
+					pseqdesc = (mstudioseqdesc_t *)((byte *)m_pStudioHeader + m_pStudioHeader->seqindex) + idle_seq;
+					f = 0.0f;
+				}
+				else if( pseqdesc->numframes > 1 )
+				{
+					f = (float)(pseqdesc->numframes - 1);
+				}
+
+				static model_t *s_lastNoDeployModel = NULL;
+				if( e->model && s_lastNoDeployModel != e->model )
+				{
+					s_lastNoDeployModel = e->model;
+					gEngfuncs.Con_DPrintf( "[VR_WEAPON] No-deploy: %s equip animation replaced by idle pose\n", e->model->name );
+				}
+
+				skip_sequence_blend = true;
+			}
+			else if( Q_stristr( pseqdesc->label, "holster" ) && pseqdesc->numframes > 1 )
+			{
+				// Switching away: hold the first holster frame (ready pose) so
+				// the old weapon stays in hand until it is swapped out instead
+				// of lowering through the flat-screen animation.
+				f = 0.0f;
+				skip_sequence_blend = true;
+			}
+		}
+
+		// Flat-screen melee swings (Crowbar attack1/2/3) rotate the whole
+		// viewmodel through a canned arc. In VR the player's physical swing is
+		// the animation, so freeze the weapon in its idle pose while the server
+		// still resolves the damage.
+		static cvar_t *vr_melee_suppress_attack_anim = NULL;
+		if( !vr_melee_suppress_attack_anim ) vr_melee_suppress_attack_anim = gEngfuncs.pfnGetCvarPointer( "vr_melee_suppress_attack_anim" );
+
+		if( vr_melee_suppress_attack_anim && vr_melee_suppress_attack_anim->value > 0.0f &&
+		    e->model && Q_stristr( e->model->name, "crowbar" ) &&
+		    Q_stristr( pseqdesc->label, "attack" ))
+		{
+			int idle_seq = R_StudioFindSequence( m_pStudioHeader, "idle" );
+
+			if( idle_seq >= 0 )
+			{
+				pseqdesc = (mstudioseqdesc_t *)((byte *)m_pStudioHeader + m_pStudioHeader->seqindex) + idle_seq;
+				f = 0.0f;
+			}
+			else
+			{
+				f = 0.0f;
+			}
+
+			static model_t *s_lastMeleeSuppressModel = NULL;
+			if( s_lastMeleeSuppressModel != e->model )
+			{
+				s_lastMeleeSuppressModel = e->model;
+				gEngfuncs.Con_DPrintf( "[VR_WEAPON] Melee attack animation suppressed: %s\n", e->model->name );
+			}
+
+			skip_sequence_blend = true;
 		}
 	}
 #endif
@@ -1131,7 +1455,7 @@ static void R_StudioSetupBones( cl_entity_t *e )
 		}
 	}
 
-	if( g_studio.interpolate && e->latched.sequencetime && ( e->latched.sequencetime + 0.2f > g_studio.time ) && ( e->latched.prevsequence < m_pStudioHeader->numseq ))
+	if( !skip_sequence_blend && g_studio.interpolate && e->latched.sequencetime && ( e->latched.sequencetime + 0.2f > g_studio.time ) && ( e->latched.prevsequence < m_pStudioHeader->numseq ))
 	{
 		// blend from last sequence
 		static vec3_t	pos1b[MAXSTUDIOBONES];
@@ -1207,13 +1531,14 @@ static void R_StudioSetupBones( cl_entity_t *e )
 
 #ifdef XASH_OPENXR
 	// Apply procedural finger curling based on OpenXR analog axes (Trigger = Index, Grip = Middle/Ring/Pinky, Touch/Buttons = Thumb)
-	if( (e == tr.viewent || e == &s_offhandEnt) && XR_IsActive() )
+	if( (e == tr.viewent || e == &s_offhandEnt || e == &s_primaryHandEnt) && XR_IsActive() )
 	{
 		R_StudioApplyFingerCurling( e, m_pStudioHeader->numbones, pbones, q );
 	}
 
 	qboolean is_viewent = (e == tr.viewent);
 	qboolean is_offhand_ent = (e == &s_offhandEnt);
+	qboolean is_hand_ent = (is_offhand_ent || e == &s_primaryHandEnt);
 
 	static cvar_t *vr_offhand_render = NULL;
 	if( !vr_offhand_render ) vr_offhand_render = gEngfuncs.pfnGetCvarPointer( "vr_offhand_render" );
@@ -1235,19 +1560,7 @@ static void R_StudioSetupBones( cl_entity_t *e )
 			}
 		}
 
-		s_twohanded_active = XR_IsTwoHandStabilized();
-		if( !s_twohanded_active )
-		{
-			float trigSec = 0.0f, gripSec = 0.0f, thmbSec = 0.0f;
-			static cvar_t *vr_lefthanded = NULL;
-			if( !vr_lefthanded ) vr_lefthanded = gEngfuncs.pfnGetCvarPointer( "vr_lefthanded" );
-			int secHandIdx = (vr_lefthanded && vr_lefthanded->value > 0.0f) ? VR_HAND_RIGHT : VR_HAND_LEFT;
-			XR_GetFingerCurlAxes( secHandIdx, &trigSec, &gripSec, &thmbSec );
-
-			static cvar_t *vr_twohanded = NULL;
-			if( !vr_twohanded ) vr_twohanded = gEngfuncs.pfnGetCvarPointer( "vr_twohanded" );
-			s_twohanded_active = (vr_twohanded && vr_twohanded->value > 0.0f && gripSec > 0.4f);
-		}
+		s_twohanded_active = R_VR_OffHandAttachedToWeapon();
 	}
 #endif
 
@@ -1299,10 +1612,11 @@ static void R_StudioSetupBones( cl_entity_t *e )
 		Matrix3x4_FromOriginQuat( bonematrix, q[i], pos[i] );
 
 #ifdef XASH_OPENXR
-		if( is_offhand_ent )
+		if( is_hand_ent )
 		{
-			// Off-hand standalone presence model (v_hand.mdl):
-			// Concatenate cleanly from root with rotationmatrix (which is already transformed to the 6DoF secondary controller)
+			// Standalone hand presence models (v_hand.mdl):
+			// Concatenate cleanly from root with rotationmatrix (which is already
+			// transformed to the 6DoF controller pose)
 			if( pbones[i].parent == -1 )
 			{
 				Matrix3x4_ConcatTransforms( g_studio.bonestransform[i], g_studio.rotationmatrix, bonematrix );
@@ -1321,13 +1635,29 @@ static void R_StudioSetupBones( cl_entity_t *e )
 		{
 #ifdef XASH_OPENXR
 			// In VR, 1998 flat viewmodels hide spare reload props (like Glock Box02 clip or Speedload Master)
-			// at Z < -15 units. Collapse them to zero transform when not actively reloading.
+			// offscreen at Z < -15 units. Collapse them to zero transform ONLY when not actively reloading
+			// AND their translation is pushed offscreen (pos[i][2] < -15.0f).
+			// Never collapse primary weapon meshes (such as RPG launcher or Tripmine chassis).
 			if( is_viewent && XR_IsActive() && i > 0 && m_pStudioHeader->numseq > 0 )
 			{
+				qboolean has_children = false;
+
+				// A legitimate second skeleton root (e.g. "Hands biped" in
+				// v_rpg.mdl) owns child bones. Flat-screen spare props such as
+				// clips and shell casings are always leaf roots.
+				for( int c = 0; c < m_pStudioHeader->numbones; c++ )
+				{
+					if( pbones[c].parent == i )
+					{
+						has_children = true;
+						break;
+					}
+				}
+
 				int seq_idx = bound( 0, e->curstate.sequence, m_pStudioHeader->numseq - 1 );
 				mstudioseqdesc_t *pseq = (mstudioseqdesc_t *)((byte *)m_pStudioHeader + m_pStudioHeader->seqindex) + seq_idx;
 				qboolean is_reload = ( pseq && Q_stristr( pseq->label, "reload" ) != NULL );
-				if( !is_reload || pos[i][2] < -15.0f )
+				if( !has_children && !is_reload && pos[i][2] < -15.0f )
 				{
 					memset( g_studio.bonestransform[i], 0, sizeof( matrix3x4 ) );
 					memset( g_studio.lighttransform[i], 0, sizeof( matrix3x4 ) );
@@ -2458,7 +2788,14 @@ static void R_StudioDrawPoints( void )
 	// backface culling through TriAPI call
 	//
 	// see https://github.com/FWGS/xash3d-fwgs/issues/2517
-	if( glState.faceCull != GL_NONE )
+	if( RI.currententity == &s_offhandEnt || RI.currententity == &s_primaryHandEnt )
+	{
+		// The standalone hands carry a dark inner liner; render both faces so
+		// the glove/sleeve interior is not culled away.
+		tr.fFlipViewModel = false;
+		GL_Cull( GL_NONE );
+	}
+	else if( glState.faceCull != GL_NONE )
 	{
 		if( R_AllowFlipViewModel( RI.currententity ))
 		{
@@ -2480,7 +2817,11 @@ static void R_StudioDrawPoints( void )
 		short *ptricmds = (short *)((byte *)m_pStudioHeader + pmesh->triindex);
 
 #ifdef XASH_OPENXR
-		if( (RI.currententity == tr.viewent || RI.currententity == &s_offhandEnt) && XR_IsActive() )
+		// vr_hide_arms only applies to the weapon viewmodel: it strips the
+		// baked glove/sleeve so the standalone hand model is used instead.
+		// The standalone hand entities must never be filtered, or they would
+		// hide their own glove/sleeve textures.
+		if( RI.currententity == tr.viewent && XR_IsActive() )
 		{
 			static cvar_t *vr_hide_arms = NULL;
 			if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
@@ -2496,8 +2837,7 @@ static void R_StudioDrawPoints( void )
 				    Q_stristr( texname, "cuff" ) ||
 				    Q_stristr( texname, "arm1" ) ||
 				    Q_stristr( texname, "player_arm" ) ||
-				    Q_stristr( texname, "player_chrome" ) ||
-				    Q_stristr( texname, "shoulders" ) )
+				    Q_stristr( texname, "player_chrome" ) )
 				{
 					continue; // Hide flat sleeve/forearm/shoulders
 				}
@@ -3654,6 +3994,8 @@ static int R_StudioDrawModel( int flags )
 		R_StudioMergeBones( RI.currententity, RI.currentmodel );
 	else R_StudioSetupBones( RI.currententity );
 
+	R_VR_DebugGripBone( RI.currententity, RI.currentmodel );
+
 	R_StudioSaveBones();
 
 	if( flags & STUDIO_EVENTS )
@@ -3700,7 +4042,7 @@ static void R_StudioDrawModelInternal( cl_entity_t *e, int flags )
 {
 #ifdef XASH_OPENXR
 	// In VR, the viewmodel and offhand are 6DoF hand-tracked entities that must use our decoupled studio renderer
-	if( ((e == tr.viewent || e == &s_offhandEnt) && XR_IsActive()) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
+	if( ((e == tr.viewent || e == &s_offhandEnt || e == &s_primaryHandEnt) && XR_IsActive()) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
 #else
 	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || unlikely( r_studio_builtin_renderer.value ))
 #endif
@@ -3809,6 +4151,317 @@ void R_RunViewmodelEvents( void )
 #ifdef XASH_OPENXR
 /*
 ====================
+R_VR_DebugHandPose
+
+Regression telemetry: prints machine-parseable world-space landmark bone
+positions for a standalone hand entity. Landmarks are the wrist, palm,
+middle fingertip and thumb tip, keyed by the Valve bone naming convention.
+Gated behind vr_debug_hand_pose and throttled to about once per second per
+entity so the log stays readable.
+====================
+*/
+static void R_VR_DebugHandPose( cl_entity_t *ent, model_t *model )
+{
+	static cvar_t *vr_debug_hand_pose = NULL;
+	if( !vr_debug_hand_pose ) vr_debug_hand_pose = gEngfuncs.pfnGetCvarPointer( "vr_debug_hand_pose" );
+	if( !vr_debug_hand_pose || vr_debug_hand_pose->value <= 0.0f )
+		return;
+
+	if( !model || model->type != mod_studio )
+		return;
+
+	studiohdr_t *header = (studiohdr_t *)model->cache.data;
+	if( !header )
+		return;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)header + header->boneindex);
+
+	// The left chain is drawn by the left-body entity; everything else uses
+	// the right chain. Handles vr_lefthanded automatically since the body
+	// value already encodes which chain the entity is drawing.
+	const char *prefix = ( ent->curstate.body >= 3 ) ? "L" : "R";
+
+	char name_wrist[64], name_palm[64], name_tip[64], name_thumb[64], name_thumbbase[64];
+	Q_snprintf( name_wrist, sizeof( name_wrist ), "Bip01 %s Hand", prefix );
+	Q_snprintf( name_palm,  sizeof( name_palm ),  "Bip01 %s Palm", prefix );
+	Q_snprintf( name_tip,   sizeof( name_tip ),   "Bip01 %s Finger22", prefix );
+	Q_snprintf( name_thumb, sizeof( name_thumb ), "Bip01 %s Finger01", prefix );
+	Q_snprintf( name_thumbbase, sizeof( name_thumbbase ), "Bip01 %s Finger0", prefix );
+
+	int i_wrist = -1, i_palm = -1, i_tip = -1, i_thumb = -1, i_thumbbase = -1;
+	for( int i = 0; i < header->numbones; i++ )
+	{
+		if( i_wrist < 0 && !Q_strcmp( pbones[i].name, name_wrist )) i_wrist = i;
+		if( i_palm  < 0 && !Q_strcmp( pbones[i].name, name_palm  )) i_palm  = i;
+		if( i_tip   < 0 && !Q_strcmp( pbones[i].name, name_tip   )) i_tip   = i;
+		if( i_thumb < 0 && !Q_strcmp( pbones[i].name, name_thumb )) i_thumb = i;
+		if( i_thumbbase < 0 && !Q_strcmp( pbones[i].name, name_thumbbase )) i_thumbbase = i;
+	}
+
+	if( i_palm < 0 || i_tip < 0 || i_thumb < 0 )
+		return;
+
+	// Throttle to one line per second per entity to keep the log compact.
+	static float s_last[2] = { -10.0f, -10.0f };
+	int slot = ( ent == &s_primaryHandEnt ) ? 0 : 1;
+	if( g_studio.time - s_last[slot] < 1.0f )
+		return;
+	s_last[slot] = g_studio.time;
+
+	const char *entname = ( ent == &s_primaryHandEnt ) ? "primary" : "offhand";
+	matrix3x4 *bt = g_studio.bonestransform;
+
+	// Local frame of the drawn hand, taken from the same rotation matrix used to
+	// build the bones. This makes the orientation assertions pose-invariant: the
+	// hand may face any world direction, but fingers must align with its forward
+	// axis and the thumb with its up axis.
+	vec3_t fwd, up;
+	fwd[0] = g_studio.rotationmatrix[0][0];
+	fwd[1] = g_studio.rotationmatrix[1][0];
+	fwd[2] = g_studio.rotationmatrix[2][0];
+	up[0] = g_studio.rotationmatrix[0][2];
+	up[1] = g_studio.rotationmatrix[1][2];
+	up[2] = g_studio.rotationmatrix[2][2];
+
+	gEngfuncs.Con_Printf(
+		"^5[HAND_POSE] ent=%s body=%d chain=%s palm=(%.3f %.3f %.3f) fingertip=(%.3f %.3f %.3f) thumb=(%.3f %.3f %.3f) thumbbase=(%.3f %.3f %.3f) wrist=(%.3f %.3f %.3f) fwd=(%.3f %.3f %.3f) up=(%.3f %.3f %.3f)\n",
+		entname, (int)ent->curstate.body, prefix,
+		bt[i_palm][0][3],  bt[i_palm][1][3],  bt[i_palm][2][3],
+		bt[i_tip][0][3],   bt[i_tip][1][3],   bt[i_tip][2][3],
+		bt[i_thumb][0][3], bt[i_thumb][1][3], bt[i_thumb][2][3],
+		(i_thumbbase >= 0) ? bt[i_thumbbase][0][3] : 0.0f,
+		(i_thumbbase >= 0) ? bt[i_thumbbase][1][3] : 0.0f,
+		(i_thumbbase >= 0) ? bt[i_thumbbase][2][3] : 0.0f,
+		(i_wrist >= 0) ? bt[i_wrist][0][3] : 0.0f,
+		(i_wrist >= 0) ? bt[i_wrist][1][3] : 0.0f,
+		(i_wrist >= 0) ? bt[i_wrist][2][3] : 0.0f,
+		fwd[0], fwd[1], fwd[2], up[0], up[1], up[2] );
+}
+
+/*
+====================
+R_VR_DebugGripBone
+
+Calibration telemetry: prints the world-space and weapon-local position of
+the real grip anchor inside the active viewmodel. The anchor is the animated
+"grip" bone when present (crossbow) and the original "Bip01 R Hand" bone
+otherwise. The weapon-local position is what seeds grip_offset:
+
+    grip_offset = palm - anchor - global_offset
+
+where palm is the hand model origin (0,0,0). Gated behind vr_grip_probe and
+throttled to one line per second per model.
+====================
+*/
+static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model )
+{
+#ifdef XASH_OPENXR
+	static cvar_t *vr_grip_probe = NULL;
+	if( !vr_grip_probe ) vr_grip_probe = gEngfuncs.pfnGetCvarPointer( "vr_grip_probe" );
+	if( !vr_grip_probe || vr_grip_probe->value <= 0.0f )
+		return;
+
+	if( ent != tr.viewent || !ent->model || !model || model->type != mod_studio )
+		return;
+
+	studiohdr_t *header = (studiohdr_t *)model->cache.data;
+	if( !header )
+		return;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)header + header->boneindex);
+
+	int grip = -1;
+	static const char *fallback_bones[] = { "Bip01 R Hand", "Xbow biped R Hand", "Bone09", "Bip01 L Hand", "grip" };
+	for( size_t b = 0; b < sizeof(fallback_bones) / sizeof(fallback_bones[0]) && grip < 0; b++ )
+	{
+		for( int i = 0; i < header->numbones; i++ )
+		{
+			if( !Q_strcmp( pbones[i].name, fallback_bones[b] ))
+			{
+				grip = i;
+				break;
+			}
+		}
+	}
+	if( grip < 0 )
+		return;
+
+	// Log once per (model, sequence) so every animation state is captured
+	// without flooding the log.
+	static model_t *s_lastModel = NULL;
+	static int s_lastSeq = -1;
+	if( model == s_lastModel && (int)ent->curstate.sequence == s_lastSeq )
+		return;
+	s_lastModel = model;
+	s_lastSeq = (int)ent->curstate.sequence;
+
+	matrix3x4 *bt = g_studio.bonestransform;
+	vec3_t world = { bt[grip][0][3], bt[grip][1][3], bt[grip][2][3] };
+
+	// Convert the world anchor into weapon-local coordinates using the exact
+	// entity matrix that was used to build the bones. Inverting by
+	// reconstructing Euler angles is fragile because the renderer's pitch
+	// convention differs from AngleVectors.
+	vec3_t d = {
+		world[0] - g_studio.rotationmatrix[0][3],
+		world[1] - g_studio.rotationmatrix[1][3],
+		world[2] - g_studio.rotationmatrix[2][3]
+	};
+	vec3_t local;
+	local[0] = g_studio.rotationmatrix[0][0] * d[0] + g_studio.rotationmatrix[1][0] * d[1] + g_studio.rotationmatrix[2][0] * d[2];
+	local[1] = g_studio.rotationmatrix[0][1] * d[0] + g_studio.rotationmatrix[1][1] * d[1] + g_studio.rotationmatrix[2][1] * d[2];
+	local[2] = g_studio.rotationmatrix[0][2] * d[0] + g_studio.rotationmatrix[1][2] * d[1] + g_studio.rotationmatrix[2][2] * d[2];
+
+	// Bone basis in weapon-local space (columns are the bone's local axes).
+	vec3_t bx, by, bz;
+	for( int r = 0; r < 3; r++ )
+	{
+		bx[r] = g_studio.rotationmatrix[0][r] * bt[grip][0][0] + g_studio.rotationmatrix[1][r] * bt[grip][1][0] + g_studio.rotationmatrix[2][r] * bt[grip][2][0];
+		by[r] = g_studio.rotationmatrix[0][r] * bt[grip][0][1] + g_studio.rotationmatrix[1][r] * bt[grip][1][1] + g_studio.rotationmatrix[2][r] * bt[grip][2][1];
+		bz[r] = g_studio.rotationmatrix[0][r] * bt[grip][0][2] + g_studio.rotationmatrix[1][r] * bt[grip][1][2] + g_studio.rotationmatrix[2][r] * bt[grip][2][2];
+	}
+
+	// Sequence label helps post-processing pick the rest/idle pose instead of
+	// a shoot or throw animation.
+	const char *seq_label = "";
+	if( ent->curstate.sequence >= 0 && ent->curstate.sequence < header->numseq )
+	{
+		mstudioseqdesc_t *pseq = (mstudioseqdesc_t *)((byte *)header + header->seqindex) + ent->curstate.sequence;
+		seq_label = pseq->label;
+	}
+
+	// Seat error: distance from the weapon grip anchor to the world hand origin
+	// that XR_GetWeaponPose used. With a correct grip_offset this is near zero
+	// (a sub-unit residual comes from the wrist/palm offset).
+	float seat_err = -1.0f;
+	vec3_t horg, hang;
+	if( XR_GetPrimaryHandTransform( horg, hang ))
+	{
+		float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
+		float turn_yaw = XR_GetPlayerTurnYaw();
+		float ya = DEG2RAD( turn_yaw );
+		vec3_t hand_world = {
+			RI.rvp.vieworigin[0] + ( horg[0] * cosf( ya ) - horg[1] * sinf( ya )) * scale,
+			RI.rvp.vieworigin[1] + ( horg[0] * sinf( ya ) + horg[1] * cosf( ya )) * scale,
+			RI.rvp.vieworigin[2] + horg[2] * scale
+		};
+		seat_err = VectorDistance( world, hand_world );
+	}
+
+	gEngfuncs.Con_Printf( "^5[VR_GRIP_BONE] model=%s bone=%s seq=%d label=%s frame=%.2f world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) seat_err=%.3f bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
+		model->name, pbones[grip].name,
+		(int)ent->curstate.sequence, seq_label, ent->curstate.frame,
+		world[0], world[1], world[2],
+		local[0], local[1], local[2],
+		seat_err,
+		bx[0], bx[1], bx[2], by[0], by[1], by[2], bz[0], bz[1], bz[2] );
+
+	// Extended mode (vr_grip_probe 2): dump every two-hand landmark bone so a
+	// reference model (e.g. the MMOD reanimation pack) can provide the main
+	// grip and the offhand foregrip positions.
+	if( vr_grip_probe->value >= 2.0f )
+	{
+		static const char *landmarks[] = {
+			"grip", "Bip01 R Hand", "Bip01 L Hand",
+			"Xbow biped R Hand", "Xbow biped L Hand",
+			"LeftArm", "RightArm", "LA4", "RA4"
+		};
+
+		for( size_t l = 0; l < sizeof(landmarks) / sizeof(landmarks[0]); l++ )
+		{
+			int idx = -1;
+			for( int i = 0; i < header->numbones; i++ )
+			{
+				if( !Q_strcmp( pbones[i].name, landmarks[l] ))
+				{
+					idx = i;
+					break;
+				}
+			}
+			if( idx < 0 )
+				continue;
+
+			vec3_t bw = { bt[idx][0][3], bt[idx][1][3], bt[idx][2][3] };
+			vec3_t bd = {
+				bw[0] - g_studio.rotationmatrix[0][3],
+				bw[1] - g_studio.rotationmatrix[1][3],
+				bw[2] - g_studio.rotationmatrix[2][3]
+			};
+			vec3_t bl;
+			bl[0] = g_studio.rotationmatrix[0][0] * bd[0] + g_studio.rotationmatrix[1][0] * bd[1] + g_studio.rotationmatrix[2][0] * bd[2];
+			bl[1] = g_studio.rotationmatrix[0][1] * bd[0] + g_studio.rotationmatrix[1][1] * bd[1] + g_studio.rotationmatrix[2][1] * bd[2];
+			bl[2] = g_studio.rotationmatrix[0][2] * bd[0] + g_studio.rotationmatrix[1][2] * bd[1] + g_studio.rotationmatrix[2][2] * bd[2];
+
+			vec3_t mbx, mby, mbz;
+			for( int r = 0; r < 3; r++ )
+			{
+				mbx[r] = g_studio.rotationmatrix[0][r] * bt[idx][0][0] + g_studio.rotationmatrix[1][r] * bt[idx][1][0] + g_studio.rotationmatrix[2][r] * bt[idx][2][0];
+				mby[r] = g_studio.rotationmatrix[0][r] * bt[idx][0][1] + g_studio.rotationmatrix[1][r] * bt[idx][1][1] + g_studio.rotationmatrix[2][r] * bt[idx][2][1];
+				mbz[r] = g_studio.rotationmatrix[0][r] * bt[idx][0][2] + g_studio.rotationmatrix[1][r] * bt[idx][1][2] + g_studio.rotationmatrix[2][r] * bt[idx][2][2];
+			}
+
+			gEngfuncs.Con_Printf( "^5[VR_GRIP_BONES] model=%s bone=%s seq=%d label=%s world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
+				model->name, pbones[idx].name,
+				(int)ent->curstate.sequence, seq_label,
+				bw[0], bw[1], bw[2],
+				bl[0], bl[1], bl[2],
+				mbx[0], mbx[1], mbx[2], mby[0], mby[1], mby[2], mbz[0], mbz[1], mbz[2] );
+		}
+	}
+#else
+	(void)ent;
+	(void)model;
+#endif
+}
+
+/*
+====================
+R_DrawHandEntity
+
+Renders a standalone hand presence entity with the 6DoF controller pose.
+====================
+*/
+static void R_DrawHandEntity( cl_entity_t *ent, model_t *model )
+{
+	if( !ent || !model || model->type != mod_studio )
+		return;
+
+	ent->model = model;
+	ent->curstate.sequence = 0;
+	ent->curstate.frame = 0;
+
+	// Two-hand model: bodygroup 0 draws the right chain, bodygroup 1 the left.
+	// With the bodygroup base arithmetic, body 0 selects the right hand and
+	// body 3 selects the left hand. Each entity draws the chain matching the
+	// controller that drives it, so no mirroring is needed.
+	{
+		qboolean lefthanded = ( vr_lefthanded && vr_lefthanded->value > 0.0f );
+		qboolean primary = ( ent == &s_primaryHandEnt );
+		ent->curstate.body = ( primary != lefthanded ) ? 0 : 3;
+	}
+
+	ent->curstate.rendermode = kRenderNormal;
+
+	cl_entity_t *saved_current = RI.currententity;
+	model_t *saved_model = RI.currentmodel;
+
+	RI.currententity = ent;
+	RI.currentmodel  = ent->model;
+
+	R_StudioSetupTimings();
+	R_StudioDrawModelInternal( ent, STUDIO_RENDER );
+
+	// Emit the landmark telemetry after the draw so the bone transforms are
+	// the exact ones used to render this hand.
+	R_StudioSetupBones( ent );
+	R_VR_DebugHandPose( ent, model );
+
+	RI.currententity = saved_current;
+	RI.currentmodel  = saved_model;
+}
+
+/*
+====================
 R_DrawOffHand
 
 Renders the independent 6DoF off-hand (secondary controller) model when
@@ -3822,41 +4475,97 @@ static void R_DrawOffHand( void )
 	if( !vr_offhand_render || vr_offhand_render->value <= 0.0f )
 		return;
 
-	static model_t *s_handModel = NULL;
-	static qboolean s_triedLoad = false;
-	if( !s_triedLoad )
-	{
-		s_triedLoad = true;
-		s_handModel = gEngfuncs.Mod_ForName( "models/v_hand.mdl", false, true );
-		if( !s_handModel )
-			s_handModel = gEngfuncs.Mod_ForName( "models/v_hands.mdl", false, true );
-		if( !s_handModel )
-			s_handModel = gEngfuncs.Mod_ForName( "models/v_vhand.mdl", false, true );
-	}
-
-	if( !s_handModel || s_handModel->type != mod_studio )
+	model_t *handModel = R_LoadVrHandModel( false );
+	if( !handModel || handModel->type != mod_studio )
 		return;
 
 	vec3_t dummyOrigin, dummyAngles;
-	if( !XR_GetSecondaryHandTransform( dummyOrigin, dummyAngles ) )
+	if( !XR_GetHandPresenceTransform( R_VR_SecondaryHandIndex(), dummyOrigin, dummyAngles ) )
 		return;
 
-	s_offhandEnt.model = s_handModel;
-	s_offhandEnt.curstate.sequence = 0;
-	s_offhandEnt.curstate.frame = 0;
-	s_offhandEnt.curstate.rendermode = kRenderNormal;
+	R_DrawHandEntity( &s_offhandEnt, handModel );
+}
 
-	cl_entity_t *saved_current = RI.currententity;
-	model_t *saved_model = RI.currentmodel;
+/*
+====================
+R_DrawPrimaryHand
 
-	RI.currententity = &s_offhandEnt;
-	RI.currentmodel  = s_offhandEnt.model;
+Renders a standalone primary hand when no weapon viewmodel provides one
+(empty hands, pre-spawn, weapon hidden or not yet streamed in).
+====================
+*/
+static void R_DrawPrimaryHand( void )
+{
+	model_t *handModel = R_LoadVrHandModel( true );
+	if( !handModel || handModel->type != mod_studio )
+		return;
 
-	R_StudioSetupTimings();
-	R_StudioDrawModelInternal( &s_offhandEnt, STUDIO_RENDER );
+	vec3_t dummyOrigin, dummyAngles;
+	if( !XR_GetHandPresenceTransform( R_VR_PrimaryHandIndex(), dummyOrigin, dummyAngles ) )
+		return;
 
-	RI.currententity = saved_current;
-	RI.currentmodel  = saved_model;
+	R_DrawHandEntity( &s_primaryHandEnt, handModel );
+}
+
+/*
+====================
+R_VR_DrawHandsLayer
+
+Draws the persistent 6DoF hand presence layer. Returns true when the layer
+owns hand rendering for this frame, so the legacy viewmodel path does not
+draw the hands a second time.
+====================
+*/
+static qboolean R_VR_DrawHandsLayer( void )
+{
+	static cvar_t *vr_hands_always_visible = NULL;
+	if( !vr_hands_always_visible ) vr_hands_always_visible = gEngfuncs.pfnGetCvarPointer( "vr_hands_always_visible" );
+
+	if( !XR_IsActive() || !vr_hands_always_visible || vr_hands_always_visible->value <= 0.0f )
+		return false;
+
+	static cvar_t *vr_hand_death_visible = NULL;
+	if( !vr_hand_death_visible ) vr_hand_death_visible = gEngfuncs.pfnGetCvarPointer( "vr_hand_death_visible" );
+
+	qboolean dead = ( ENGINE_GET_PARM( PARM_LOCAL_HEALTH ) <= 0 );
+	if( dead && ( !vr_hand_death_visible || vr_hand_death_visible->value <= 0.0f ))
+		return false;
+
+	// Third-person / camera views place the hands in front of the editor
+	// camera instead of the player, so keep the legacy behaviour there.
+	if( FBitSet( RI.rvp.flags, RF_DRAW_CUBEMAP ) || ENGINE_GET_PARM( PARM_THIRDPERSON ) || !CL_IsViewEntityLocalPlayer( ))
+		return false;
+
+	if( !R_VR_WeaponTrueDepth() )
+		pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+
+	// The weapon viewmodel carries the primary hand mesh whenever a studio
+	// viewmodel is actually drawn; otherwise render the standalone empty hand.
+	cl_entity_t *view = tr.viewent;
+	qboolean weapon_drawn = ( !dead && view && view->model && view->model->type == mod_studio && r_drawviewmodel->value != 0.0f );
+
+	// vr_hide_arms >= 2 strips the glove/hand meshes off the weapon viewmodel,
+	// so the viewmodel no longer supplies a hand and the standalone hand must
+	// take over even while a weapon is held.
+	static cvar_t *vr_hide_arms = NULL;
+	if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
+	qboolean weapon_hides_hand = ( vr_hide_arms && vr_hide_arms->value >= 2.0f );
+
+	if( weapon_hides_hand || !weapon_drawn )
+	{
+		if( weapon_drawn && weapon_hides_hand )
+			gEngfuncs.Con_DPrintf( "[VR_HANDS_DBG] Weapon hand hidden by vr_hide_arms, drawing standalone primary hand\n" );
+		R_DrawPrimaryHand();
+	}
+
+	// Two-handed suppression only makes sense while the viewmodel still owns the
+	// supporting hand; once its hands are stripped, draw the off-hand as well.
+	if( !weapon_drawn || weapon_hides_hand || !R_VR_OffHandAttachedToWeapon( ))
+		R_DrawOffHand();
+
+	pglDepthRange( gldepthmin, gldepthmax );
+
+	return true;
 }
 
 /*
@@ -3865,6 +4574,37 @@ R_StudioDrawVRDebugHand
 
 Renders a 6DoF physical controller tracking wireframe, RGB coordinate axes,
 grip offset connection vector, and muzzle alignment ray to calibrate .mdl models.
+====================
+*/
+/*
+====================
+R_VR_DrawDebugCircle
+
+Renders a 3D circle/ring in space given center and two orthogonal basis vectors.
+====================
+*/
+static void R_VR_DrawDebugCircle( const vec3_t center, const vec3_t v1, const vec3_t v2, float radius, int segments )
+{
+	pglBegin( GL_LINE_LOOP );
+	for( int i = 0; i < segments; i++ )
+	{
+		float theta = (float)i * (2.0f * (float)M_PI / (float)segments);
+		float ct = cosf( theta );
+		float st = sinf( theta );
+		pglVertex3f( center[0] + (v1[0] * ct + v2[0] * st) * radius,
+		             center[1] + (v1[1] * ct + v2[1] * st) * radius,
+		             center[2] + (v1[2] * ct + v2[2] * st) * radius );
+	}
+	pglEnd();
+}
+
+/*
+====================
+R_StudioDrawVRDebugHand
+
+Renders 3D coordinate points for primary and secondary hands, computes and displays
+the weapon Center of Mass (COM), draws oriented 3D hitboxes, and continuously reports
+head/hand/weapon coordinates on the HUD.
 ====================
 */
 static void R_StudioDrawVRDebugHand( cl_entity_t *view )
@@ -3877,12 +4617,35 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 	if( !s_vrDebugHandActive )
 		return;
 
+	// Ensure secondary hand tracking is continuously active and updated
+	vec3_t secHandOrigin, secHandAngles;
+	if( XR_GetSecondaryHandTransform( secHandOrigin, secHandAngles ) )
+	{
+		float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
+		float turn_yaw = XR_GetPlayerTurnYaw();
+		float cy = cosf( turn_yaw * (M_PI / 180.0f) );
+		float sy = sinf( turn_yaw * (M_PI / 180.0f) );
+
+		float world_dx = (secHandOrigin[0] * cy - secHandOrigin[1] * sy) * scale;
+		float world_dy = (secHandOrigin[0] * sy + secHandOrigin[1] * cy) * scale;
+		float world_dz = secHandOrigin[2] * scale;
+
+		s_vrDebugOffHandOrigin[0] = RI.rvp.vieworigin[0] + world_dx;
+		s_vrDebugOffHandOrigin[1] = RI.rvp.vieworigin[1] + world_dy;
+		s_vrDebugOffHandOrigin[2] = RI.rvp.vieworigin[2] + world_dz;
+
+		s_vrDebugOffHandAngles[0] = secHandAngles[0];
+		s_vrDebugOffHandAngles[1] = anglemod( secHandAngles[1] + turn_yaw );
+		s_vrDebugOffHandAngles[2] = secHandAngles[2];
+		s_vrDebugOffHandActive = true;
+	}
+
 	pglDisable( GL_TEXTURE_2D );
 	pglDisable( GL_DEPTH_TEST );
 	pglEnable( GL_BLEND );
 	pglBlendFunc( GL_SRC_ALPHA, GL_ONE );
 
-	// 1. Physical Controller 6DoF Pose & Coordinate Axes
+	// 1. Primary Hand 6DoF Pose & Coordinate Axes
 	vec3_t h_fwd, h_rt, h_up;
 	AngleVectors( s_vrDebugRawHandAngles, h_fwd, h_rt, h_up );
 
@@ -3918,8 +4681,25 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 	             s_vrDebugRawHandOrigin[2] + h_up[2] * axis_len );
 	pglEnd();
 
-	// Physical Controller Handle Wireframe Box (approx. Touch / Knuckles palm center)
-	// Extends: forward -3.5 to +1.5, right -1.2 to +1.2, up -4.0 to +1.5 GoldSrc units
+	// Primary Hand: 3D Coordinate Point Gizmo with Orthogonal Gyro Rings
+	pglLineWidth( 2.0f );
+	pglColor4f( 0.0f, 0.9f, 1.0f, 0.85f ); // Cyan gyro rings
+	R_VR_DrawDebugCircle( s_vrDebugRawHandOrigin, h_rt, h_up, 1.5f, 16 );
+	R_VR_DrawDebugCircle( s_vrDebugRawHandOrigin, h_fwd, h_up, 1.5f, 16 );
+	R_VR_DrawDebugCircle( s_vrDebugRawHandOrigin, h_fwd, h_rt, 1.5f, 16 );
+
+	// Coordinate Point Crosshair at Primary Hand Origin
+	pglLineWidth( 2.5f );
+	pglColor4f( 1.0f, 1.0f, 1.0f, 0.95f ); // White center dot cross
+	float pCross = 0.8f;
+	pglBegin( GL_LINES );
+	pglVertex3f( s_vrDebugRawHandOrigin[0] - h_rt[0] * pCross, s_vrDebugRawHandOrigin[1] - h_rt[1] * pCross, s_vrDebugRawHandOrigin[2] - h_rt[2] * pCross );
+	pglVertex3f( s_vrDebugRawHandOrigin[0] + h_rt[0] * pCross, s_vrDebugRawHandOrigin[1] + h_rt[1] * pCross, s_vrDebugRawHandOrigin[2] + h_rt[2] * pCross );
+	pglVertex3f( s_vrDebugRawHandOrigin[0] - h_up[0] * pCross, s_vrDebugRawHandOrigin[1] - h_up[1] * pCross, s_vrDebugRawHandOrigin[2] - h_up[2] * pCross );
+	pglVertex3f( s_vrDebugRawHandOrigin[0] + h_up[0] * pCross, s_vrDebugRawHandOrigin[1] + h_up[1] * pCross, s_vrDebugRawHandOrigin[2] + h_up[2] * pCross );
+	pglEnd();
+
+	// Physical Controller Handle Wireframe Box (Touch Plus palm center)
 	float f_min = -3.5f, f_max = 1.5f;
 	float r_min = -1.2f, r_max = 1.2f;
 	float u_min = -4.0f, u_max = 1.5f;
@@ -3951,9 +4731,62 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 	}
 	pglEnd();
 
-	// 2. Yellow Offset Guide Vector: connects Real Hand Pose -> Weapon Model Origin
+	// Calculate Weapon Center of Mass (COM)
+	vec3_t weapon_com = {0, 0, 0};
+	int num_hitboxes = (m_pStudioHeader ? m_pStudioHeader->numhitboxes : 0);
+	if( num_hitboxes > 0 )
+	{
+		float total_vol = 0.0f;
+		mstudiobbox_t *pbbox = (mstudiobbox_t *)((byte *)m_pStudioHeader + m_pStudioHeader->hitboxindex);
+		for( int i = 0; i < num_hitboxes; i++ )
+		{
+			vec3_t hb_mid, hb_world;
+			hb_mid[0] = (pbbox[i].bbmin[0] + pbbox[i].bbmax[0]) * 0.5f;
+			hb_mid[1] = (pbbox[i].bbmin[1] + pbbox[i].bbmax[1]) * 0.5f;
+			hb_mid[2] = (pbbox[i].bbmin[2] + pbbox[i].bbmax[2]) * 0.5f;
+			Matrix3x4_VectorTransform( g_studio.bonestransform[pbbox[i].bone], hb_mid, hb_world );
+
+			float dx = fabsf( pbbox[i].bbmax[0] - pbbox[i].bbmin[0] );
+			float dy = fabsf( pbbox[i].bbmax[1] - pbbox[i].bbmin[1] );
+			float dz = fabsf( pbbox[i].bbmax[2] - pbbox[i].bbmin[2] );
+			float vol = dx * dy * dz;
+			if( vol <= 0.01f ) vol = 1.0f;
+
+			VectorMA( weapon_com, vol, hb_world, weapon_com );
+			total_vol += vol;
+		}
+		if( total_vol > 0.0f )
+			VectorScale( weapon_com, 1.0f / total_vol, weapon_com );
+		else if( view )
+			VectorCopy( view->origin, weapon_com );
+	}
+	else if( m_pStudioHeader )
+	{
+		vec3_t bb_mid;
+		bb_mid[0] = (m_pStudioHeader->bbmin[0] + m_pStudioHeader->bbmax[0]) * 0.5f;
+		bb_mid[1] = (m_pStudioHeader->bbmin[1] + m_pStudioHeader->bbmax[1]) * 0.5f;
+		bb_mid[2] = (m_pStudioHeader->bbmin[2] + m_pStudioHeader->bbmax[2]) * 0.5f;
+		Matrix3x4_VectorTransform( g_studio.bonestransform[0], bb_mid, weapon_com );
+	}
+	else if( view )
+	{
+		VectorCopy( view->origin, weapon_com );
+	}
+
+	// Cache telemetry snapshot
+	VectorCopy( weapon_com, s_vrDebugWeaponCOM );
+	s_vrDebugNumHitboxes = num_hitboxes;
+	if( view && view->model && view->model->name[0] )
+		Q_strncpy( s_vrDebugWeaponModelName, view->model->name, sizeof( s_vrDebugWeaponModelName ) );
+	if( view && !VectorIsNull( view->attachment[0] ) )
+		VectorCopy( view->attachment[0], s_vrDebugMuzzlePos );
+	else if( view )
+		VectorCopy( view->origin, s_vrDebugMuzzlePos );
+
+	// 2. Weapon Origin, Center of Mass (COM), and Barrel Rays
 	if( view && view->model )
 	{
+		// Yellow Offset Guide Vector: Real Hand Pose -> Weapon Model Origin
 		pglLineWidth( 2.5f );
 		pglColor4f( 1.0f, 0.9f, 0.1f, 0.95f ); // Bright Yellow
 		pglBegin( GL_LINES );
@@ -3985,11 +4818,48 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 		             view->origin[2] + w_fwd[2] * 18.0f );
 		pglEnd();
 
-		// 3. Muzzle Attachment Indicator & Line of Fire (Neon Green)
+		// 3. Weapon Center of Mass (COM) 3D Point Gizmo
+		// Dual concentric gyro rings at COM (Gold)
+		pglLineWidth( 2.2f );
+		pglColor4f( 1.0f, 0.85f, 0.05f, 0.95f ); // Bright Gold
+		R_VR_DrawDebugCircle( weapon_com, w_rt, w_up, 1.4f, 16 );
+		R_VR_DrawDebugCircle( weapon_com, w_fwd, w_up, 1.4f, 16 );
+		R_VR_DrawDebugCircle( weapon_com, w_fwd, w_rt, 1.4f, 16 );
+
+		// 3D Crosshair at COM
+		float com_cross = 1.8f;
+		pglLineWidth( 2.5f );
+		pglColor4f( 1.0f, 0.25f, 0.1f, 0.95f ); // Crimson/Orange cross
+		pglBegin( GL_LINES );
+		pglVertex3f( weapon_com[0] - w_rt[0] * com_cross, weapon_com[1] - w_rt[1] * com_cross, weapon_com[2] - w_rt[2] * com_cross );
+		pglVertex3f( weapon_com[0] + w_rt[0] * com_cross, weapon_com[1] + w_rt[1] * com_cross, weapon_com[2] + w_rt[2] * com_cross );
+		pglVertex3f( weapon_com[0] - w_up[0] * com_cross, weapon_com[1] - w_up[1] * com_cross, weapon_com[2] - w_up[2] * com_cross );
+		pglVertex3f( weapon_com[0] + w_up[0] * com_cross, weapon_com[1] + w_up[1] * com_cross, weapon_com[2] + w_up[2] * com_cross );
+		pglVertex3f( weapon_com[0] - w_fwd[0] * com_cross, weapon_com[1] - w_fwd[1] * com_cross, weapon_com[2] - w_fwd[2] * com_cross );
+		pglVertex3f( weapon_com[0] + w_fwd[0] * com_cross, weapon_com[1] + w_fwd[1] * com_cross, weapon_com[2] + w_fwd[2] * com_cross );
+		pglEnd();
+
+		// Moment-Arm Vector: Hand Tracking Point -> Weapon COM
+		pglLineWidth( 3.0f );
+		pglColor4f( 1.0f, 0.85f, 0.05f, 0.95f ); // Gold line
+		pglBegin( GL_LINES );
+		pglVertex3fv( s_vrDebugRawHandOrigin );
+		pglVertex3fv( weapon_com );
+		pglEnd();
+
+		// 4. Muzzle Attachment Indicator & Line of Fire (Neon Green)
 		if( !VectorIsNull( view->attachment[0] ) )
 		{
 			vec3_t muz;
 			VectorCopy( view->attachment[0], muz );
+
+			// COM -> Muzzle Connection Vector
+			pglLineWidth( 2.0f );
+			pglColor4f( 0.3f, 1.0f, 0.3f, 0.85f ); // Lime Green
+			pglBegin( GL_LINES );
+			pglVertex3fv( weapon_com );
+			pglVertex3fv( muz );
+			pglEnd();
 
 			// 3D Cross at muzzle
 			float cR = 1.5f;
@@ -4014,7 +4884,7 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 		}
 	}
 
-	// 4. Secondary (Off-hand) Controller Gizmo & Two-Hand Connection
+	// 5. Secondary (Off-hand) Controller 3D Coordinate Point & Two-Hand Connection
 	if( s_vrDebugOffHandActive )
 	{
 		vec3_t o_fwd, o_rt, o_up;
@@ -4038,18 +4908,50 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 		             s_vrDebugOffHandOrigin[2] + o_up[2] * 2.5f );
 		pglEnd();
 
+		// Secondary Hand Gyro Rings in Amber
+		pglLineWidth( 2.0f );
+		pglColor4f( 1.0f, 0.6f, 0.1f, 0.85f );
+		R_VR_DrawDebugCircle( s_vrDebugOffHandOrigin, o_rt, o_up, 1.5f, 16 );
+		R_VR_DrawDebugCircle( s_vrDebugOffHandOrigin, o_fwd, o_up, 1.5f, 16 );
+		R_VR_DrawDebugCircle( s_vrDebugOffHandOrigin, o_fwd, o_rt, 1.5f, 16 );
+
 		// Guide line between primary and secondary hand
-		pglLineWidth( 1.2f );
-		pglColor4f( 0.8f, 0.8f, 0.8f, 0.40f );
+		pglLineWidth( 1.5f );
+		pglColor4f( 0.8f, 0.8f, 0.8f, 0.50f );
 		pglBegin( GL_LINES );
 		pglVertex3fv( s_vrDebugRawHandOrigin );
 		pglVertex3fv( s_vrDebugOffHandOrigin );
 		pglEnd();
 	}
 
-	// 5. If vr_debug_hand >= 2, also draw model bone skeleton
-	if( vr_debug_hand->value >= 2.0f && m_pStudioHeader )
+	// 6. Draw 3D Hitbox Wireframe Cubes for all weapon model hitboxes (if vr_debug_hand >= 2)
+	if( vr_debug_hand->value >= 2.0f && m_pStudioHeader && num_hitboxes > 0 )
 	{
+		mstudiobbox_t *pbbox = (mstudiobbox_t *)((byte *)m_pStudioHeader + m_pStudioHeader->hitboxindex);
+		for( int i = 0; i < num_hitboxes; i++ )
+		{
+			vec3_t p[8];
+			for( int j = 0; j < 8; j++ )
+			{
+				vec3_t tmp;
+				tmp[0] = (j & 1) ? pbbox[i].bbmax[0] : pbbox[i].bbmin[0];
+				tmp[1] = (j & 2) ? pbbox[i].bbmax[1] : pbbox[i].bbmin[1];
+				tmp[2] = (j & 4) ? pbbox[i].bbmax[2] : pbbox[i].bbmin[2];
+				Matrix3x4_VectorTransform( g_studio.bonestransform[pbbox[i].bone], tmp, p[j] );
+			}
+
+			int grp = pbbox[i].group % 8;
+			pglLineWidth( 1.5f );
+			pglColor4f( hullcolor[grp][0], hullcolor[grp][1], hullcolor[grp][2], 0.85f );
+			pglBegin( GL_LINES );
+			for( int e = 0; e < 12; e++ )
+			{
+				pglVertex3fv( p[edges[e][0]] );
+				pglVertex3fv( p[edges[e][1]] );
+			}
+			pglEnd();
+		}
+
 		R_StudioDrawBones();
 		R_StudioDrawAttachments();
 	}
@@ -4058,6 +4960,81 @@ static void R_StudioDrawVRDebugHand( cl_entity_t *view )
 	pglEnable( GL_DEPTH_TEST );
 	pglEnable( GL_TEXTURE_2D );
 	pglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+
+	// 7. Continuous Real-Time HUD Telemetry Reporting
+	if( gEngfuncs.Con_NPrintf )
+	{
+		vec3_t head_pos = {0}, head_ang = {0};
+		XR_GetHeadCenterTransform( head_pos, head_ang );
+		vec3_t rhand_vel = {0};
+		XR_GetPrimaryHandVelocity( rhand_vel );
+		float speed_ms = VectorLength( rhand_vel );
+		float hand_dist = (s_vrDebugOffHandActive ? VectorDistance( s_vrDebugRawHandOrigin, s_vrDebugOffHandOrigin ) : 0.0f);
+		float grip_to_com = VectorDistance( s_vrDebugRawHandOrigin, weapon_com );
+		qboolean is_twohanded = XR_IsTwoHandStabilized();
+
+		gEngfuncs.Con_NPrintf( 0, "^2[VR 6DOF TELEMETRY] vr_debug_hand = %.0f (1=Gizmos+COM, 2=+Hitboxes+Skeleton)", vr_debug_hand->value );
+		gEngfuncs.Con_NPrintf( 1, "^3HEAD:   Pos [%.1f, %.1f, %.1f] | Angles [P:%.1f, Y:%.1f, R:%.1f]",
+			head_pos[0], head_pos[1], head_pos[2], head_ang[0], head_ang[1], head_ang[2] );
+		gEngfuncs.Con_NPrintf( 2, "^5R-HAND: Pos [%.1f, %.1f, %.1f] | Angles [P:%.1f, Y:%.1f, R:%.1f] | Spd: %.2f m/s",
+			s_vrDebugRawHandOrigin[0], s_vrDebugRawHandOrigin[1], s_vrDebugRawHandOrigin[2],
+			s_vrDebugRawHandAngles[0], s_vrDebugRawHandAngles[1], s_vrDebugRawHandAngles[2], speed_ms );
+		gEngfuncs.Con_NPrintf( 3, "^6L-HAND: Pos [%.1f, %.1f, %.1f] | Angles [P:%.1f, Y:%.1f, R:%.1f] | 2-Hand: %s (Dist: %.1f)",
+			s_vrDebugOffHandOrigin[0], s_vrDebugOffHandOrigin[1], s_vrDebugOffHandOrigin[2],
+			s_vrDebugOffHandAngles[0], s_vrDebugOffHandAngles[1], s_vrDebugOffHandAngles[2],
+			is_twohanded ? "YES" : "NO", hand_dist );
+		gEngfuncs.Con_NPrintf( 4, "^4WEAPON: %s | COM [%.1f, %.1f, %.1f] | Grip Dist: %.1f",
+			(view && view->model && view->model->name[0]) ? view->model->name : "v_weapon",
+			weapon_com[0], weapon_com[1], weapon_com[2], grip_to_com );
+		gEngfuncs.Con_NPrintf( 5, "^7HITBOX: %d boxes | Muzzle [%.1f, %.1f, %.1f]",
+			num_hitboxes, s_vrDebugMuzzlePos[0], s_vrDebugMuzzlePos[1], s_vrDebugMuzzlePos[2] );
+	}
+}
+
+/*
+====================
+R_VR_Telemetry_f
+
+Console command handler that prints a full instantaneous 6DoF telemetry snapshot.
+====================
+*/
+void R_VR_Telemetry_f( void )
+{
+	vec3_t head_pos = {0}, head_ang = {0};
+	vec3_t rhand_pos = {0}, rhand_ang = {0};
+	vec3_t lhand_pos = {0}, lhand_ang = {0};
+	vec3_t rhand_vel = {0};
+
+	XR_GetHeadCenterTransform( head_pos, head_ang );
+	XR_GetPrimaryHandTransform( rhand_pos, rhand_ang );
+	XR_GetPrimaryHandVelocity( rhand_vel );
+	XR_GetSecondaryHandTransform( lhand_pos, lhand_ang );
+
+	float hand_dist = VectorDistance( rhand_pos, lhand_pos );
+	float grip_to_com = VectorDistance( rhand_pos, s_vrDebugWeaponCOM );
+	float speed_ms = VectorLength( rhand_vel );
+
+	gEngfuncs.Con_Printf( "\n^2==========================================================\n" );
+	gEngfuncs.Con_Printf( "^2  XASH3D VR - REAL-TIME 6DOF TELEMETRY SNAPSHOT\n" );
+	gEngfuncs.Con_Printf( "^2==========================================================\n" );
+	gEngfuncs.Con_Printf( "^3[HEAD / HMD]^7\n" );
+	gEngfuncs.Con_Printf( "  Origin:  [X: %8.2f, Y: %8.2f, Z: %8.2f]\n", head_pos[0], head_pos[1], head_pos[2] );
+	gEngfuncs.Con_Printf( "  Angles:  [Pitch: %6.1f, Yaw: %6.1f, Roll: %6.1f]\n", head_ang[0], head_ang[1], head_ang[2] );
+	gEngfuncs.Con_Printf( "^5[PRIMARY HAND (Dominant)]^7\n" );
+	gEngfuncs.Con_Printf( "  Origin:  [X: %8.2f, Y: %8.2f, Z: %8.2f]\n", rhand_pos[0], rhand_pos[1], rhand_pos[2] );
+	gEngfuncs.Con_Printf( "  Angles:  [Pitch: %6.1f, Yaw: %6.1f, Roll: %6.1f]\n", rhand_ang[0], rhand_ang[1], rhand_ang[2] );
+	gEngfuncs.Con_Printf( "  Speed:   %6.2f m/s\n", speed_ms );
+	gEngfuncs.Con_Printf( "^6[SECONDARY HAND (Off-hand)]^7\n" );
+	gEngfuncs.Con_Printf( "  Origin:  [X: %8.2f, Y: %8.2f, Z: %8.2f]\n", lhand_pos[0], lhand_pos[1], lhand_pos[2] );
+	gEngfuncs.Con_Printf( "  Angles:  [Pitch: %6.1f, Yaw: %6.1f, Roll: %6.1f]\n", lhand_ang[0], lhand_ang[1], lhand_ang[2] );
+	gEngfuncs.Con_Printf( "  Hand Separation Distance: %.2f GoldSrc units\n", hand_dist );
+	gEngfuncs.Con_Printf( "^4[WEAPON & CENTER OF MASS (COM)]^7\n" );
+	gEngfuncs.Con_Printf( "  Active Model: %s\n", s_vrDebugWeaponModelName[0] ? s_vrDebugWeaponModelName : "(none)" );
+	gEngfuncs.Con_Printf( "  COM Pos: [X: %8.2f, Y: %8.2f, Z: %8.2f]\n", s_vrDebugWeaponCOM[0], s_vrDebugWeaponCOM[1], s_vrDebugWeaponCOM[2] );
+	gEngfuncs.Con_Printf( "  Muzzle:  [X: %8.2f, Y: %8.2f, Z: %8.2f]\n", s_vrDebugMuzzlePos[0], s_vrDebugMuzzlePos[1], s_vrDebugMuzzlePos[2] );
+	gEngfuncs.Con_Printf( "  Grip -> COM Distance: %.2f GoldSrc units\n", grip_to_com );
+	gEngfuncs.Con_Printf( "  Hitboxes Registered:  %d\n", s_vrDebugNumHitboxes );
+	gEngfuncs.Con_Printf( "^2==========================================================\n\n" );
 }
 #endif
 
@@ -4069,6 +5046,7 @@ R_DrawViewModel
 void R_DrawViewModel( void )
 {
 	cl_entity_t	*view = tr.viewent;
+	qboolean	hands_drawn = false;
 
 	R_GatherPlayerLight( view );
 
@@ -4080,6 +5058,12 @@ void R_DrawViewModel( void )
 			(view && view->model) ? view->model->name : "NULL",
 			(int)ENGINE_GET_PARM( PARM_LOCAL_HEALTH ) );
 	}
+
+#ifdef XASH_OPENXR
+	// Persistent 6DoF hand presence runs before any viewmodel gating so hands
+	// stay visible with r_drawviewmodel 0, empty hands or a fading weapon.
+	hands_drawn = R_VR_DrawHandsLayer();
+#endif
 
 	if( r_drawviewmodel->value == 0 )
 		return;
@@ -4102,9 +5086,10 @@ void R_DrawViewModel( void )
 #ifdef XASH_OPENXR
 		static cvar_t *vr_offhand_render = NULL;
 		if( !vr_offhand_render ) vr_offhand_render = gEngfuncs.pfnGetCvarPointer( "vr_offhand_render" );
-		if( XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f )
+		if( !hands_drawn && XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f )
 		{
-			pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+			if( !R_VR_WeaponTrueDepth() )
+				pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
 			R_DrawOffHand();
 			pglDepthRange( gldepthmin, gldepthmax );
 		}
@@ -4112,8 +5097,11 @@ void R_DrawViewModel( void )
 		return;
 	}
 
-	// adjust the depth range to prevent view model from poking into walls
-	pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+	// Flat-screen GoldSrc keeps the viewmodel in front of walls by compressing
+	// its depth range. In VR the weapon is a world-space object, so keep the
+	// real depth range and let world geometry occlude it.
+	if( !R_VR_WeaponTrueDepth() )
+		pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
 	RI.currentmodel = RI.currententity->model;
 
 	switch( RI.currententity->model->type )
@@ -4132,9 +5120,10 @@ void R_DrawViewModel( void )
 	if( !vr_offhand_render ) vr_offhand_render = gEngfuncs.pfnGetCvarPointer( "vr_offhand_render" );
 
 	// Render independent 6DoF off-hand (secondary controller) ONLY when:
-	// 1) vr_offhand_render is explicitly enabled (> 0)
-	// 2) Player is not currently gripping the weapon two-handed
-	if( XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f && !s_twohanded_active )
+	// 1) the persistent hand layer did not already draw it
+	// 2) vr_offhand_render is explicitly enabled (> 0)
+	// 3) Player is not currently gripping the weapon two-handed
+	if( !hands_drawn && XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f && !s_twohanded_active )
 	{
 		R_DrawOffHand();
 	}

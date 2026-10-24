@@ -24,12 +24,16 @@ extern EXPORT convar_t *vr_walkdirection;
 extern EXPORT convar_t *vr_lasersight;
 extern EXPORT convar_t *vr_headtorch;
 extern EXPORT convar_t *vr_lefthanded;
+extern EXPORT convar_t *vr_lefthanded_mirror_grip;
 extern EXPORT convar_t *vr_weapon_pitchadjust;
 extern EXPORT convar_t *vr_weapon_yawadjust;
 extern EXPORT convar_t *vr_weapon_rolladjust;
 extern EXPORT convar_t *vr_weapon_offset_forward;
 extern EXPORT convar_t *vr_weapon_offset_right;
 extern EXPORT convar_t *vr_weapon_offset_up;
+extern EXPORT convar_t *vr_hand_offset_forward;
+extern EXPORT convar_t *vr_hand_offset_right;
+extern EXPORT convar_t *vr_hand_offset_up;
 extern EXPORT convar_t *vr_height_adjust;
 extern EXPORT convar_t *vr_hide_arms;
 
@@ -55,21 +59,45 @@ extern EXPORT convar_t *vr_audio_hrtf;
 extern EXPORT convar_t *vr_finger_curling;
 extern EXPORT convar_t *vr_finger_curl_scale;
 extern EXPORT convar_t *vr_offhand_render;
+extern EXPORT convar_t *vr_hands_always_visible;
+extern EXPORT convar_t *vr_primary_hand_model;
+extern EXPORT convar_t *vr_hand_death_visible;
 extern EXPORT convar_t *vr_test_finger_curl;
 extern EXPORT convar_t *vr_proximity_scope;
 extern EXPORT convar_t *vr_gesture_use;
 extern EXPORT convar_t *vr_melee_swing;
+extern EXPORT convar_t *vr_offhand_grab;
+extern EXPORT convar_t *vr_debug_grab;
+extern EXPORT convar_t *vr_scope_mode;
+extern EXPORT convar_t *vr_scope_zoom;
+extern EXPORT convar_t *vr_scope_radius;
+extern EXPORT convar_t *vr_scope_reticle;
+extern EXPORT convar_t *vr_debug_ladder;
 extern EXPORT convar_t *vr_debug_impacts;
 extern EXPORT convar_t *vr_debug_hand;
+extern EXPORT convar_t *vr_debug_hand_pose;
+extern EXPORT convar_t *vr_grip_probe;
+extern EXPORT convar_t *vr_foregrip;
 extern EXPORT convar_t *vr_calibration_stick;
 extern EXPORT convar_t *vr_weapon_idle_mode;
 extern EXPORT convar_t *vr_weapon_anchor_root;
 extern EXPORT convar_t *vr_weapon_skip_draw;
-extern EXPORT convar_t *vr_button_b_action;
+extern EXPORT convar_t *vr_weapon_no_deploy;
+extern EXPORT convar_t *vr_melee_suppress_attack_anim;
+extern EXPORT convar_t *vr_weapon_true_depth;
+extern EXPORT convar_t *vr_weapon_pullback;
+extern EXPORT convar_t *vr_debug_reload;
 extern EXPORT convar_t *vr_test_btn_reload;
 extern EXPORT convar_t *vr_test_btn_altfire;
 extern EXPORT convar_t *vr_test_btn_jump;
-extern EXPORT convar_t *vr_test_btn_use;
+extern EXPORT convar_t *vr_test_btn_reload_left;
+extern EXPORT convar_t *vr_test_btn_jump_left;
+extern EXPORT convar_t *vr_test_btn_menu;
+extern EXPORT convar_t *vr_test_stick_x;
+extern EXPORT convar_t *vr_test_stick_y;
+extern EXPORT convar_t *vr_test_move_probe;
+extern EXPORT convar_t *vr_test_hand_angle_probe;
+extern EXPORT convar_t *vr_test_offhand_grip;
 extern EXPORT convar_t *vr_physical_crouch;
 extern EXPORT convar_t *vr_menu_tab;
 
@@ -98,6 +126,8 @@ EXPORT void XR_EnsureCurrent( void );
 EXPORT void* XR_GetGraphicsBinding( void );
 EXPORT qboolean XR_CreateSession( void );
 EXPORT qboolean XR_IsActive( void );
+EXPORT qboolean XR_IsSessionRunning( void );
+EXPORT qboolean XR_IsInitialized( void );
 EXPORT void XR_Shutdown( void );
 EXPORT void XR_PollEvents( void );
 EXPORT void XR_SyncInputs( void );
@@ -123,6 +153,8 @@ static inline void XR_EnsureCurrent( void ) {}
 static inline void* XR_GetGraphicsBinding( void ) { return NULL; }
 static inline qboolean XR_CreateSession( void ) { return false; }
 static inline qboolean XR_IsActive( void ) { return false; }
+static inline qboolean XR_IsSessionRunning( void ) { return false; }
+static inline qboolean XR_IsInitialized( void ) { return false; }
 static inline void XR_Shutdown( void ) {}
 static inline void XR_PollEvents( void ) {}
 static inline void XR_SyncInputs( void ) {}

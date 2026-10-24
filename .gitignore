@@ -376,6 +376,10 @@ GEMINI.md
 .desloppify/
 graphify-out/
 utils/mdldec/mdldec
+utils/mdldec/*.o
+utils/mdldec/*.a
+mcp-tools/goldsrc-mdl-compiler/build/
+mcp-tools/goldsrc-mdl-compiler/pxstudiomdl
 .cursor*
 .windsurf*
 .aider*

@@ -19,6 +19,15 @@ fi
 if [ -z "$JAVA_HOME" ]; then
     if [ -d "/opt/android-studio/jbr" ]; then
         export JAVA_HOME="/opt/android-studio/jbr"
+    else
+        for jdk_candidate in "$HOME"/.gradle/jdks/*; do
+            if [ -x "$jdk_candidate/bin/java" ]; then
+                export JAVA_HOME="$jdk_candidate"
+                break
+            fi
+        done
+    fi
+    if [ -n "$JAVA_HOME" ]; then
         export PATH="$JAVA_HOME/bin:$PATH"
     fi
 fi

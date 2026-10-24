@@ -20,13 +20,24 @@ log_err()   { echo -e "\033[1;31m[FAIL]\033[0m $*" >&2; }
 
 mkdir -p "$OUTPUT_DIR"
 
-MONADO_MANIFEST="${MONADO_DIR}/build/openxr_monado-dev.json"
-MONADO_SERVICE="${MONADO_DIR}/build/src/xrt/targets/service/monado-service"
+# Prefer the minimal simulated-only build when present, then fall back to build.
+if [ -z "${MONADO_BUILD_DIR:-}" ]; then
+    if [ -x "${MONADO_DIR}/build-sim/src/xrt/targets/service/monado-service" ]; then
+        MONADO_BUILD_DIR="${MONADO_DIR}/build-sim"
+    else
+        MONADO_BUILD_DIR="${MONADO_DIR}/build"
+    fi
+fi
+
+MONADO_MANIFEST="${MONADO_BUILD_DIR}/openxr_monado-dev.json"
+MONADO_SERVICE="${MONADO_BUILD_DIR}/src/xrt/targets/service/monado-service"
 
 if [ ! -f "$MONADO_MANIFEST" ] || [ ! -x "$MONADO_SERVICE" ]; then
-    log_err "Monado runtime missing at ${MONADO_DIR}/build."
+    log_err "Monado runtime missing at ${MONADO_BUILD_DIR}."
     exit 1
 fi
+
+log_info "Using Monado build: ${MONADO_BUILD_DIR}"
 
 export XRT_NO_STDIN=true
 export __NV_PRIME_RENDER_OFFLOAD=1
@@ -37,13 +48,13 @@ export SDL_VIDEODRIVER=x11
 export LD_LIBRARY_PATH=".:${LD_LIBRARY_PATH:-}"
 
 SERVICE_STARTED=false
-if ! pgrep -fa "monado-service" >/dev/null 2>&1; then
-    log_info "Starting Monado background service daemon..."
-    "$MONADO_SERVICE" > "${OUTPUT_DIR}/monado_service.log" 2>&1 &
-    SERVICE_PID=$!
-    SERVICE_STARTED=true
-    sleep 1
-fi
+log_info "Starting Monado background service daemon..."
+pkill -9 -x "monado-service" 2>/dev/null || true
+sleep 0.5
+"$MONADO_SERVICE" > "${OUTPUT_DIR}/monado_service.log" 2>&1 &
+SERVICE_PID=$!
+SERVICE_STARTED=true
+sleep 1
 
 cleanup() {
     if [ "$SERVICE_STARTED" = true ] && [ -n "${SERVICE_PID:-}" ]; then
@@ -71,6 +82,38 @@ record_result() {
 }
 
 cd "${REPO_DIR}/out"
+
+# ==============================================================================
+# Phase 0: Offline Static Asset Gates (no OpenXR runtime required)
+# ==============================================================================
+log_title "PHASE 0: Offline Hand Asset Integrity & Deploy Freshness"
+
+# Gate 0.1: Two-hand model structure + rendered orientation
+HAND_ASSET_LOG="${OUTPUT_DIR}/hand_asset_check.log"
+if "${REPO_DIR}/scripts/check_hand_asset.sh" > "$HAND_ASSET_LOG" 2>&1; then
+    record_result "0.1 Standalone Two-Hand Asset Structure & Rendered Orientation (fingers +X, palms inward, thumbs up)" "PASS"
+else
+    log_err "See ${HAND_ASSET_LOG} for the failing checks."
+    record_result "0.1 Standalone Two-Hand Asset Structure & Rendered Orientation (fingers +X, palms inward, thumbs up)" "FAIL"
+fi
+
+# Gate 0.2: Deploy freshness -- the runtime copies must match the source asset
+SRC_HAND="${REPO_DIR}/assets/valve_vr/models/v_hand.mdl"
+DEPLOY_OK=true
+for deployed in "${REPO_DIR}/out/valve_vr/models/v_hand.mdl" "${REPO_DIR}/out/valve/models/v_hand.mdl"; do
+    if [ ! -f "$deployed" ]; then
+        log_err "Missing deployed hand model: ${deployed}"
+        DEPLOY_OK=false
+    elif ! cmp -s "$SRC_HAND" "$deployed"; then
+        log_err "Stale deployed hand model: ${deployed} differs from ${SRC_HAND}"
+        DEPLOY_OK=false
+    fi
+done
+if [ "$DEPLOY_OK" = true ]; then
+    record_result "0.2 Standalone Hand Asset Deploy Freshness (out/ matches assets/)" "PASS"
+else
+    record_result "0.2 Standalone Hand Asset Deploy Freshness (out/ matches assets/)" "FAIL"
+fi
 
 # Copy regression script to engine out directory so +exec finds it immediately
 cp -f "${REPO_DIR}/scripts/regression_master.cfg" "${REPO_DIR}/out/regression_master.cfg"
@@ -110,7 +153,10 @@ else
 fi
 
 # Check 2: VR CVars Registered and Accessible
-if grep -q "vr_smoothturn" "$MASTER_LOG" && grep -q "vr_lasersight" "$MASTER_LOG" && grep -q "vr_headtorch" "$MASTER_LOG" && grep -q "vr_audio_hrtf" "$MASTER_LOG"; then
+if grep -q "vr_smoothturn" "$MASTER_LOG" && grep -q "vr_lasersight" "$MASTER_LOG" && \
+   grep -q "vr_headtorch" "$MASTER_LOG" && grep -q "vr_audio_hrtf" "$MASTER_LOG" && \
+   grep -q "vr_hand_offset_forward" "$MASTER_LOG" && grep -q "vr_finger_curling" "$MASTER_LOG" && \
+   grep -q "vr_debug_hand_pose" "$MASTER_LOG"; then
     record_result "1.2 VR Configuration CVars Registration & Defaults" "PASS"
 else
     record_result "1.2 VR Configuration CVars Registration & Defaults" "FAIL"
@@ -184,6 +230,25 @@ if [ -f "${OUTPUT_DIR}/regr_14_finger_curling.png" ] && grep -q "VR_HANDS_DBG" "
     record_result "1.12 Dynamic Articulated Skeletal 3D Hands & Finger Curling (Issue #16)" "PASS"
 else
     record_result "1.12 Dynamic Articulated Skeletal 3D Hands & Finger Curling (Issue #16)" "FAIL"
+fi
+
+# Check 15: Runtime hand pose telemetry (orientation + bodygroup selection)
+HAND_POSE_LOG="${OUTPUT_DIR}/hand_pose_check.log"
+if python3 "${REPO_DIR}/scripts/check_hand_pose_log.py" "$MASTER_LOG" > "$HAND_POSE_LOG" 2>&1; then
+    record_result "1.15 Runtime Hand Pose Telemetry: Fingers +X, Palms Inward, Thumbs Up (+Z) [HAND_POSE]" "PASS"
+else
+    log_err "See ${HAND_POSE_LOG} for the failing assertions."
+    record_result "1.15 Runtime Hand Pose Telemetry: Fingers +X, Palms Inward, Thumbs Up (+Z) [HAND_POSE]" "FAIL"
+fi
+
+# Check 16: Two-hand bodygroup chain selection & handedness swap
+if grep -q "ent=primary body=0 chain=R" "$MASTER_LOG" && \
+   grep -q "ent=offhand body=3 chain=L" "$MASTER_LOG" && \
+   grep -q "ent=primary body=3 chain=L" "$MASTER_LOG" && \
+   grep -q "ent=offhand body=0 chain=R" "$MASTER_LOG"; then
+    record_result "1.16 Two-Hand Bodygroup Chain Selection & vr_lefthanded Swap (body 0/3)" "PASS"
+else
+    record_result "1.16 Two-Hand Bodygroup Chain Selection & vr_lefthanded Swap (body 0/3)" "FAIL"
 fi
 
 # ==============================================================================

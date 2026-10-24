@@ -34,12 +34,16 @@ EXPORT convar_t *vr_walkdirection = NULL;
 EXPORT convar_t *vr_lasersight = NULL;
 EXPORT convar_t *vr_headtorch = NULL;
 EXPORT convar_t *vr_lefthanded = NULL;
+EXPORT convar_t *vr_lefthanded_mirror_grip = NULL;
 EXPORT convar_t *vr_weapon_pitchadjust = NULL;
 EXPORT convar_t *vr_weapon_yawadjust = NULL;
 EXPORT convar_t *vr_weapon_rolladjust = NULL;
 EXPORT convar_t *vr_weapon_offset_forward = NULL;
 EXPORT convar_t *vr_weapon_offset_right = NULL;
 EXPORT convar_t *vr_weapon_offset_up = NULL;
+EXPORT convar_t *vr_hand_offset_forward = NULL;
+EXPORT convar_t *vr_hand_offset_right = NULL;
+EXPORT convar_t *vr_hand_offset_up = NULL;
 EXPORT convar_t *vr_height_adjust = NULL;
 EXPORT convar_t *vr_hide_arms = NULL;
 EXPORT convar_t *vr_twohanded = NULL;
@@ -63,21 +67,45 @@ EXPORT convar_t *vr_audio_hrtf = NULL;
 EXPORT convar_t *vr_finger_curling = NULL;
 EXPORT convar_t *vr_finger_curl_scale = NULL;
 EXPORT convar_t *vr_offhand_render = NULL;
+EXPORT convar_t *vr_hands_always_visible = NULL;
+EXPORT convar_t *vr_primary_hand_model = NULL;
+EXPORT convar_t *vr_hand_death_visible = NULL;
 EXPORT convar_t *vr_test_finger_curl = NULL;
 EXPORT convar_t *vr_proximity_scope = NULL;
 EXPORT convar_t *vr_gesture_use = NULL;
 EXPORT convar_t *vr_melee_swing = NULL;
+EXPORT convar_t *vr_offhand_grab = NULL;
+EXPORT convar_t *vr_debug_grab = NULL;
+EXPORT convar_t *vr_scope_mode = NULL;
+EXPORT convar_t *vr_scope_zoom = NULL;
+EXPORT convar_t *vr_scope_radius = NULL;
+EXPORT convar_t *vr_scope_reticle = NULL;
+EXPORT convar_t *vr_debug_ladder = NULL;
 EXPORT convar_t *vr_debug_impacts = NULL;
 EXPORT convar_t *vr_debug_hand = NULL;
+EXPORT convar_t *vr_debug_hand_pose = NULL;
+EXPORT convar_t *vr_grip_probe = NULL;
+EXPORT convar_t *vr_foregrip = NULL;
 EXPORT convar_t *vr_calibration_stick = NULL;
 EXPORT convar_t *vr_weapon_idle_mode = NULL;
 EXPORT convar_t *vr_weapon_anchor_root = NULL;
 EXPORT convar_t *vr_weapon_skip_draw = NULL;
-EXPORT convar_t *vr_button_b_action = NULL;
+EXPORT convar_t *vr_weapon_no_deploy = NULL;
+EXPORT convar_t *vr_melee_suppress_attack_anim = NULL;
+EXPORT convar_t *vr_weapon_true_depth = NULL;
+EXPORT convar_t *vr_weapon_pullback = NULL;
+EXPORT convar_t *vr_debug_reload = NULL;
 EXPORT convar_t *vr_test_btn_reload = NULL;
 EXPORT convar_t *vr_test_btn_altfire = NULL;
 EXPORT convar_t *vr_test_btn_jump = NULL;
-EXPORT convar_t *vr_test_btn_use = NULL;
+EXPORT convar_t *vr_test_btn_reload_left = NULL;
+EXPORT convar_t *vr_test_btn_jump_left = NULL;
+EXPORT convar_t *vr_test_btn_menu = NULL;
+EXPORT convar_t *vr_test_stick_x = NULL;
+EXPORT convar_t *vr_test_stick_y = NULL;
+EXPORT convar_t *vr_test_move_probe = NULL;
+EXPORT convar_t *vr_test_hand_angle_probe = NULL;
+EXPORT convar_t *vr_test_offhand_grip = NULL;
 EXPORT convar_t *vr_physical_crouch = NULL;
 EXPORT convar_t *vr_menu_tab = NULL;
 
@@ -242,18 +270,22 @@ void XR_RegisterCVars( void )
     vr_walkdirection = Cvar_Get("vr_walkdirection", "0", FCVAR_ARCHIVE, "0 = HMD direction, 1 = Controller orientation");
     vr_lasersight = Cvar_Get("vr_lasersight", "1", FCVAR_ARCHIVE, "Enable 3D weapon laser sight");
     vr_headtorch = Cvar_Get("vr_headtorch", "1", FCVAR_ARCHIVE, "Head-mounted flashlight following view direction (HL2:VR style)");
-    vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon");
+    vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon (jump/reload move to X/Y)");
+    vr_lefthanded_mirror_grip = Cvar_Get("vr_lefthanded_mirror_grip", "1", FCVAR_ARCHIVE, "1 = Mirror the lateral weapon grip offset when left-handed");
     vr_weapon_pitchadjust = Cvar_Get("vr_weapon_pitchadjust", "0", FCVAR_ARCHIVE, "Weapon barrel pitch adjust degrees");
     vr_weapon_yawadjust = Cvar_Get("vr_weapon_yawadjust", "0", FCVAR_ARCHIVE, "Weapon barrel yaw adjust degrees");
     vr_weapon_rolladjust = Cvar_Get("vr_weapon_rolladjust", "0", FCVAR_ARCHIVE, "Weapon barrel roll adjust degrees");
     vr_weapon_offset_forward = Cvar_Get("vr_weapon_offset_forward", "-10.0", FCVAR_ARCHIVE, "Weapon grip forward offset (GoldSrc units)");
     vr_weapon_offset_right = Cvar_Get("vr_weapon_offset_right", "0", FCVAR_ARCHIVE, "Weapon grip right offset (GoldSrc units)");
     vr_weapon_offset_up = Cvar_Get("vr_weapon_offset_up", "0", FCVAR_ARCHIVE, "Weapon grip up offset (GoldSrc units)");
+    vr_hand_offset_forward = Cvar_Get("vr_hand_offset_forward", "0", FCVAR_ARCHIVE, "Standalone hand forward offset from the tracked aim pose (GoldSrc units)");
+    vr_hand_offset_right = Cvar_Get("vr_hand_offset_right", "0", FCVAR_ARCHIVE, "Standalone hand right offset from the tracked aim pose (GoldSrc units)");
+    vr_hand_offset_up = Cvar_Get("vr_hand_offset_up", "0", FCVAR_ARCHIVE, "Standalone hand up offset from the tracked aim pose (GoldSrc units)");
     vr_height_adjust = Cvar_Get("vr_height_adjust", "0", FCVAR_ARCHIVE, "Player height adjust units");
-    vr_hide_arms = Cvar_Get("vr_hide_arms", "1", FCVAR_ARCHIVE, "Hide flat-screen HEV arm/glove meshes on viewmodel in VR");
+    vr_hide_arms = Cvar_Get("vr_hide_arms", "2", FCVAR_ARCHIVE, "Hide viewmodel arm/glove meshes in VR (1: flat sleeve only, 2: sleeve + glove, so the standalone hand replaces it)");
     vr_twohanded = Cvar_Get("vr_twohanded", "0", FCVAR_ARCHIVE, "Enable two-handed weapon grip stabilization");
-    vr_menu_distance = Cvar_Get("vr_menu_distance", "1.5", FCVAR_ARCHIVE, "Distance in meters of floating 2D menu quad");
-    vr_menu_scale = Cvar_Get("vr_menu_scale", "1.4", FCVAR_ARCHIVE, "Width in meters of floating 2D menu quad");
+    vr_menu_distance = Cvar_Get("vr_menu_distance", "1.15", FCVAR_ARCHIVE, "Distance in meters of floating 2D menu quad");
+    vr_menu_scale = Cvar_Get("vr_menu_scale", "1.15", FCVAR_ARCHIVE, "Width in meters of floating 2D menu quad");
     vr_worldscale = Cvar_Get("vr_worldscale", "40.0", FCVAR_ARCHIVE, "VR World Scale (units per meter)");
     vr_haptics_enabled = Cvar_Get("vr_haptics_enabled", "1", FCVAR_ARCHIVE, "Enable OpenXR haptic vibration feedback");
     vr_haptics_intensity = Cvar_Get("vr_haptics_intensity", "1.0", FCVAR_ARCHIVE, "VR haptic vibration feedback intensity multiplier");
@@ -261,10 +293,20 @@ void XR_RegisterCVars( void )
     vr_audio_hrtf = Cvar_Get("vr_audio_hrtf", "1", FCVAR_ARCHIVE, "Enable 3D binaural HRTF spatial audio & pinna shadowing in VR");
     vr_finger_curling = Cvar_Get("vr_finger_curling", "1", FCVAR_ARCHIVE, "Enable procedural finger curling driven by controller analog axes");
     vr_finger_curl_scale = Cvar_Get("vr_finger_curl_scale", "1.0", FCVAR_ARCHIVE, "Multiplier for procedural finger curling angle");
-    vr_offhand_render = Cvar_Get("vr_offhand_render", "0", FCVAR_ARCHIVE, "Enable 6DoF secondary off-hand rendering and hand presence");
-    vr_proximity_scope = Cvar_Get("vr_proximity_scope", "1", FCVAR_ARCHIVE, "Natural optical scope zoom on Crossbow/Magnum when weapon is brought close to headset");
+    vr_offhand_render = Cvar_Get("vr_offhand_render", "1", FCVAR_ARCHIVE, "Enable 6DoF secondary off-hand rendering and hand presence");
+    vr_hands_always_visible = Cvar_Get("vr_hands_always_visible", "1", FCVAR_ARCHIVE, "Keep 6DoF hands rendered at all times, even without a weapon or while the viewmodel is hidden");
+    vr_primary_hand_model = Cvar_Get("vr_primary_hand_model", "", FCVAR_ARCHIVE, "Optional standalone model for the empty primary hand (defaults to models/v_hand.mdl)");
+    vr_hand_death_visible = Cvar_Get("vr_hand_death_visible", "0", FCVAR_ARCHIVE, "Keep 6DoF hands visible while the player is dead");
+    vr_proximity_scope = Cvar_Get("vr_proximity_scope", "0", FCVAR_ARCHIVE, "Automatic proximity scope request on Crossbow/Magnum (reserved for the Sprint B PiP scope)");
     vr_gesture_use = Cvar_Get("vr_gesture_use", "1", FCVAR_ARCHIVE, "Enable touch-to-use gesture when extending free hand towards buttons and objects");
     vr_melee_swing = Cvar_Get("vr_melee_swing", "1", FCVAR_ARCHIVE, "Enable physical swing motion to trigger melee attacks with the Crowbar");
+    vr_offhand_grab = Cvar_Get("vr_offhand_grab", "1", FCVAR_ARCHIVE, "Enable picking up items and weapons with the off-hand grip");
+    vr_debug_grab = Cvar_Get("vr_debug_grab", "0", 0, "Log off-hand grab trace results for regression testing");
+    vr_scope_mode = Cvar_Get("vr_scope_mode", "1", FCVAR_ARCHIVE, "VR scope rendering: 0 = off, 1 = picture-in-picture");
+    vr_scope_zoom = Cvar_Get("vr_scope_zoom", "4.0", FCVAR_ARCHIVE, "Picture-in-picture scope magnification factor");
+    vr_scope_radius = Cvar_Get("vr_scope_radius", "0.42", FCVAR_ARCHIVE, "Scope lens radius as a fraction of the shorter eye dimension");
+    vr_scope_reticle = Cvar_Get("vr_scope_reticle", "1", FCVAR_ARCHIVE, "Draw the scope reticle and lens ring");
+    vr_debug_ladder = Cvar_Get("vr_debug_ladder", "0", 0, "Log ladder detection and client prediction VR state for regression testing");
     vr_test_finger_curl = Cvar_Get("vr_test_finger_curl", "0", 0, "Simulate finger curling axes for headless regression testing");
     vr_test_hands = Cvar_Get("vr_test_hands", "0", 0, "Simulate 6DoF hand pose when physical controllers unavailable");
     vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
@@ -277,16 +319,30 @@ void XR_RegisterCVars( void )
     vr_test_head_drop = Cvar_Get("vr_test_head_drop", "0", 0, "Simulated vertical head drop displacement in meters (for physical crouch testing)");
     vr_test_headgesture = Cvar_Get("vr_test_headgesture", "0", 0, "Simulate head flashlight gesture (1 = right hand, 2 = left hand)");
     vr_debug_impacts = Cvar_Get("vr_debug_impacts", "1", FCVAR_ARCHIVE, "Enable 3D visual markers at bullet impact locations for VR sight alignment");
-    vr_debug_hand = Cvar_Get("vr_debug_hand", "0", FCVAR_ARCHIVE, "Enable 6DOF physical hand wireframe, axes and weapon alignment gizmos (1=axes+box, 2=full skeleton)");
+    vr_debug_hand = Cvar_Get("vr_debug_hand", "0", FCVAR_ARCHIVE, "Enable 6DoF hand coordinate gizmos, weapon Center of Mass (COM), hitboxes and real-time HUD telemetry (1=gizmos+COM, 2=+hitboxes+skeleton)");
+    vr_debug_hand_pose = Cvar_Get("vr_debug_hand_pose", "0", 0, "Print machine-parseable [HAND_POSE] landmark bone positions for the standalone hands (regression test telemetry)");
+    vr_grip_probe = Cvar_Get("vr_grip_probe", "0", 0, "Print machine-parseable [VR_GRIP_BONE] grip anchor positions for the active viewmodel (calibration telemetry)");
+    vr_foregrip = Cvar_Get("vr_foregrip", "1", FCVAR_ARCHIVE, "1 = Snap the off-hand palm to the weapon foregrip socket while two-handed");
     vr_calibration_stick = Cvar_Get("vr_calibration_stick", "0", 0, "Enable thumbstick real-time 6DOF weapon calibration (Team Beef style: L/R=axis, U/D=adjust)");
     vr_weapon_idle_mode = Cvar_Get("vr_weapon_idle_mode", "0", FCVAR_ARCHIVE, "0 = Steady VR hand (freeze idle/fidget animations), 1 = Flat screen idle animations");
     vr_weapon_anchor_root = Cvar_Get("vr_weapon_anchor_root", "1", FCVAR_ARCHIVE, "1 = Lock viewmodel root bone to controller grip (prevents weapon drift during fire/reload)");
     vr_weapon_skip_draw = Cvar_Get("vr_weapon_skip_draw", "1", FCVAR_ARCHIVE, "1 = Instant ready pose on weapon switch (skip flat draw-from-floor animation)");
-    vr_button_b_action = Cvar_Get("vr_button_b_action", "0", FCVAR_ARCHIVE, "Right B button action: 0 = Alt-Fire (+attack2, HL2:VR default), 1 = Flashlight (impulse 100)");
-    vr_test_btn_reload = Cvar_Get("vr_test_btn_reload", "0", 0, "Simulate reload button press for regression testing");
-    vr_test_btn_altfire = Cvar_Get("vr_test_btn_altfire", "0", 0, "Simulate alt-fire button press for regression testing");
-    vr_test_btn_jump = Cvar_Get("vr_test_btn_jump", "0", 0, "Simulate jump button press for regression testing");
-    vr_test_btn_use = Cvar_Get("vr_test_btn_use", "0", 0, "Simulate use button press for regression testing");
+    vr_weapon_no_deploy = Cvar_Get("vr_weapon_no_deploy", "1", FCVAR_ARCHIVE, "1 = Replace the weapon equip/draw sequence with the idle pose (no deploy animation)");
+    vr_melee_suppress_attack_anim = Cvar_Get("vr_melee_suppress_attack_anim", "1", FCVAR_ARCHIVE, "1 = Freeze flat-screen melee attack swing animations (Crowbar) in favor of the physical VR swing");
+    vr_weapon_true_depth = Cvar_Get("vr_weapon_true_depth", "1", FCVAR_ARCHIVE, "1 = Draw the viewmodel and hands with real world depth so walls occlude them");
+    vr_weapon_pullback = Cvar_Get("vr_weapon_pullback", "1", FCVAR_ARCHIVE, "1 = Pull the weapon toward the player when it would intersect world geometry");
+    vr_debug_reload = Cvar_Get("vr_debug_reload", "0", 0, "Log weapon reload start/completion for regression testing");
+    vr_test_btn_reload = Cvar_Get("vr_test_btn_reload", "0", 0, "Simulate reload (Right B) press for regression testing");
+    vr_test_btn_altfire = Cvar_Get("vr_test_btn_altfire", "0", 0, "Simulate main-hand grip+trigger alt-fire combo for regression testing");
+    vr_test_btn_jump = Cvar_Get("vr_test_btn_jump", "0", 0, "Simulate jump (Right A) press for regression testing");
+    vr_test_btn_reload_left = Cvar_Get("vr_test_btn_reload_left", "0", 0, "Simulate left-handed reload (Left Y) press for regression testing");
+    vr_test_btn_jump_left = Cvar_Get("vr_test_btn_jump_left", "0", 0, "Simulate left-handed jump (Left X) press for regression testing");
+    vr_test_btn_menu = Cvar_Get("vr_test_btn_menu", "0", 0, "Simulate the controller menu button for regression testing");
+    vr_test_stick_x = Cvar_Get("vr_test_stick_x", "0", 0, "Simulate locomotion thumbstick X axis (-1..1) for regression testing");
+    vr_test_stick_y = Cvar_Get("vr_test_stick_y", "0", 0, "Simulate locomotion thumbstick Y axis (-1..1) for regression testing");
+    vr_test_move_probe = Cvar_Get("vr_test_move_probe", "0", 0, "Log computed locomotion direction for regression testing");
+    vr_test_hand_angle_probe = Cvar_Get("vr_test_hand_angle_probe", "0", 0, "Log raw hand presence angles for regression testing");
+    vr_test_offhand_grip = Cvar_Get("vr_test_offhand_grip", "0", 0, "Simulate a full off-hand grip squeeze for grab regression testing");
     vr_physical_crouch = Cvar_Get("vr_physical_crouch", "1", FCVAR_ARCHIVE, "Enable physical roomscale ducking (crouch when squatting)");
     vr_menu_tab = Cvar_Get("vr_menu_tab", "0", 0, "Active tab in VR menu (0=Locomotion, 1=Weapons, 2=Immersion, 3=VR Debug)");
 
@@ -626,6 +682,16 @@ qboolean XR_CreateSession( void )
 qboolean XR_IsActive( void )
 {
     return g_xrSessionRunning && g_xrSwapchainsReady;
+}
+
+qboolean XR_IsSessionRunning( void )
+{
+    return g_xrSessionRunning;
+}
+
+qboolean XR_IsInitialized( void )
+{
+    return g_xrInstance != XR_NULL_HANDLE;
 }
 
 void XR_Shutdown( void )
