@@ -79,6 +79,15 @@ if [ -f "${PROFILES}" ]; then
     cp -f "${PROFILES}" "${OUT_VALVE}/models/vr_weapons.json"
 fi
 
+# 6. Install the compiled VR viewmodels as local overrides. Remove the symlink
+#    first: a plain `cp` over a symlink would write into the Steam install.
+shopt -s nullglob
+for mdl in "${REPO_DIR}/assets/valve_vr/models"/*.mdl; do
+    base="$(basename "${mdl}")"
+    rm -f "${OUT_VALVE}/models/${base}"
+    cp -f "${mdl}" "${OUT_VALVE}/models/${base}"
+done
+
 echo "out/valve ready (real dir, read-only symlinks to ${STEAM_VALVE})"
 echo "  top-level symlinks: $(find "${OUT_VALVE}" -maxdepth 1 -type l | wc -l)"
 echo "  model symlinks:     $(find "${OUT_VALVE}/models" -maxdepth 1 -type l | wc -l)"

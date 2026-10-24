@@ -24,7 +24,6 @@ mkdir -p "${OUT_DIR}/models"
 # 1. Copy gameinfo and configs
 cp "${ASSETS_DIR}/gameinfo.txt" "${OUT_DIR}/"
 cp "${ASSETS_DIR}/CREDITS.md" "${OUT_DIR}/" 2>/dev/null || true
-cp "${ASSETS_DIR}/MMOD_AUDIT.md" "${OUT_DIR}/" 2>/dev/null || true
 cp "${ASSETS_DIR}/models/vr_weapons.json" "${OUT_DIR}/models/"
 
 # 2. Copy any compiled .mdl models if present

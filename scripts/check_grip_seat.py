@@ -15,7 +15,7 @@ import re
 import sys
 
 LINE_RE = re.compile(
-    r"\[VR_GRIP_BONE\] model=(\S+) bone=(\S+) seq=(\d+) label=(\S*)"
+    r"\[VR_GRIP_BONE\] model=(\S+) bone=(.+?) seq=(\d+) label=(\S*)"
     r".*?seat_err=([-\d.]+)"
 )
 

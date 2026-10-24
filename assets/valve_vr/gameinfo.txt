@@ -1,5 +1,5 @@
 // Gameinfo for Half-Life VR Content Overlay
-game "Half-Life 1 VR"
+game "Vibe-Life VR"
 gamedir "valve_vr"
 fallback_dir "valve"
 type "singleplayer_only"

@@ -4334,26 +4334,35 @@ static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model )
 	// that XR_GetWeaponPose used. With a correct grip_offset this is near zero
 	// (a sub-unit residual comes from the wrist/palm offset).
 	float seat_err = -1.0f;
+	vec3_t hand_world = { 0.0f, 0.0f, 0.0f };
 	vec3_t horg, hang;
 	if( XR_GetPrimaryHandTransform( horg, hang ))
 	{
 		float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
 		float turn_yaw = XR_GetPlayerTurnYaw();
 		float ya = DEG2RAD( turn_yaw );
-		vec3_t hand_world = {
-			RI.rvp.vieworigin[0] + ( horg[0] * cosf( ya ) - horg[1] * sinf( ya )) * scale,
-			RI.rvp.vieworigin[1] + ( horg[0] * sinf( ya ) + horg[1] * cosf( ya )) * scale,
-			RI.rvp.vieworigin[2] + horg[2] * scale
-		};
+		hand_world[0] = RI.rvp.vieworigin[0] + ( horg[0] * cosf( ya ) - horg[1] * sinf( ya )) * scale;
+		hand_world[1] = RI.rvp.vieworigin[1] + ( horg[0] * sinf( ya ) + horg[1] * cosf( ya )) * scale;
+		hand_world[2] = RI.rvp.vieworigin[2] + horg[2] * scale;
 		seat_err = VectorDistance( world, hand_world );
 	}
 
-	gEngfuncs.Con_Printf( "^5[VR_GRIP_BONE] model=%s bone=%s seq=%d label=%s frame=%.2f world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) seat_err=%.3f bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
+	// Signed error in the same weapon-local basis used by grip_offset. This lets
+	// the calibration script solve the next offset directly instead of guessing
+	// from the scalar seat_err.
+	vec3_t err_world = { world[0] - hand_world[0], world[1] - hand_world[1], world[2] - hand_world[2] };
+	vec3_t err_local;
+	err_local[0] = g_studio.rotationmatrix[0][0] * err_world[0] + g_studio.rotationmatrix[1][0] * err_world[1] + g_studio.rotationmatrix[2][0] * err_world[2];
+	err_local[1] = g_studio.rotationmatrix[0][1] * err_world[0] + g_studio.rotationmatrix[1][1] * err_world[1] + g_studio.rotationmatrix[2][1] * err_world[2];
+	err_local[2] = g_studio.rotationmatrix[0][2] * err_world[0] + g_studio.rotationmatrix[1][2] * err_world[1] + g_studio.rotationmatrix[2][2] * err_world[2];
+
+	gEngfuncs.Con_Printf( "^5[VR_GRIP_BONE] model=%s bone=%s seq=%d label=%s frame=%.2f world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) seat_err=%.3f err=(%.3f %.3f %.3f) bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
 		model->name, pbones[grip].name,
 		(int)ent->curstate.sequence, seq_label, ent->curstate.frame,
 		world[0], world[1], world[2],
 		local[0], local[1], local[2],
 		seat_err,
+		err_local[0], err_local[1], err_local[2],
 		bx[0], bx[1], bx[2], by[0], by[1], by[2], bz[0], bz[1], bz[2] );
 
 	// Extended mode (vr_grip_probe 2): dump every two-hand landmark bone so a

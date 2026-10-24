@@ -273,7 +273,7 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
 
 * **Forro interno:** a malha Rimrook é uma casca single-sided; o interior da luva/manga aparecia através da abertura do punho. Em [`scripts/add_hand_inner_liner.py`](../../scripts/add_hand_inner_liner.py), cada triângulo de `glove_texture.bmp`/`gordon_sleeve.bmp` é duplicado com o material preto `glove_inner.bmp`, deslocado 0,08 unidade para dentro ao longo da normal, com winding e normal invertidos. As entidades de mão agora renderizam two-sided (`GL_Cull(GL_NONE)` em `R_StudioDrawPoints`), então o forro é visível de dentro. O MDL resultante tem 3 texturas e 1.996 tris por mão.
 * **Referência de controle no Blender:** [`scripts/blender_controller_reference.py`](../../scripts/blender_controller_reference.py) importa o SMD da mão direita (parser manual, sem depender do addon ValveSource, que quebra no Blender 5.2), escala para metros (`0.025`), cria um **proxy** de controle Quest (handle, anel de tracking e botões) e salva `controller_reference.blend` + PNG + `grip_reference.json`. O proxy é uma referência de forma, não um modelo licenciado; serve para ajustar o punho/arma sem adivinhar. Para um modelo real, basta trocar os objetos do proxy mantendo o grip na origem.
-* **MMOD:** auditoria em [`assets/valve_vr/MMOD_AUDIT.md`](../../assets/valve_vr/MMOD_AUDIT.md); permissão com crédito, sem assets embutidos por enquanto.
+* **MMOD:** os 15 viewmodels de `valve_addon` estão embutidos em [`assets/valve_vr/models/`](../../assets/valve_vr/models/); créditos, permissão, escopo e auditoria 360° por arma estão em [`assets/valve_vr/CREDITS.md`](../../assets/valve_vr/CREDITS.md).
 
 ---
 

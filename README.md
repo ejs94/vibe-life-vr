@@ -1,4 +1,9 @@
-# 🥽 Xash3D VR (Half-Life VR) — Native OpenXR Port
+# 🥽 VIBE-LIFE VR
+
+**A Half-Life VR project powered by Xash3D FWGS**
+
+> *Built on vibes. Powered by Lambda.*  
+> *Bringing Half-Life into VR, one questionable commit at a time.*
 
 [![OpenXR Standard](https://img.shields.io/badge/OpenXR-1.0%2F1.1%20Compliant-blue.svg)](https://www.khronos.org/openxr/)
 [![Platforms](https://img.shields.io/badge/Platforms-Meta%20Quest%20Standalone%20%7C%20Linux%20PCVR-brightgreen.svg)]()
@@ -6,7 +11,7 @@
 [![Engine](https://img.shields.io/badge/Engine-Xash3D%20FWGS%20v0.21-purple.svg)](https://github.com/FWGS/xash3d-fwgs)
 [![AI-Assisted](https://img.shields.io/badge/Engineering-AI--Assisted%20%28Pair%20Programming%29-indigo.svg)]()
 
-> **Xash3D VR** é a porta de Realidade Virtual para o motor **Xash3D FWGS**, trazendo a experiência completa do clássico **Half-Life** (e mods GoldSrc) para headsets VR utilizando o padrão Khronos **OpenXR puro**.
+> **Vibe-Life VR** é a porta de Realidade Virtual para o motor **Xash3D FWGS**, trazendo a experiência completa do clássico **Half-Life** (e mods GoldSrc) para headsets VR utilizando o padrão Khronos **OpenXR puro**.
 >
 > Projetado com arquitetura C99 moderna e desacoplada, o projeto roda **nativamente no Meta Quest Standalone** (Horizon OS / Android arm64-v8a) e em **Desktop Linux PCVR** (Monado, WiVRn, SteamVR) sem depender de bibliotecas legadas ou proprietárias de fabricantes (zero VrApi, zero dependências fechadas).
 
@@ -71,6 +76,8 @@ Para a especificação técnica completa e histórico de resolução, consulte a
 * **Ferramental de Diagnóstico e Saúde:**
   * Monitoramento de bateria em tempo real com voltagem de precisão em mV/V ([`scripts/quest_battery.sh`](scripts/quest_battery.sh)).
   * Pipeline de testes automatizados com extração de buffer e análise de pixels ([`scripts/test_quest_auto.sh`](scripts/test_quest_auto.sh)).
+* **Viewmodels Reanimados 360°:**
+  * Os 15 viewmodels do pacote MMOD Reanimated (`valve_addon`) são empacotados como overlay VR, com auditoria de malha, calibração de grip/muzzle e créditos completos em [`assets/valve_vr/CREDITS.md`](assets/valve_vr/CREDITS.md).
 
 ---
 

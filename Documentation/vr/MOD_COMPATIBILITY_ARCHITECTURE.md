@@ -1,4 +1,4 @@
-# 🧩 Xash3D VR — Mod Compatibility Architecture & Mod Manager Specification
+# 🧩 Vibe-Life VR — Mod Compatibility Architecture & Mod Manager Specification
 
 > **Permanent Architectural Reference Document for OpenCode & Future Agents**
 > **Last Updated:** October 2026

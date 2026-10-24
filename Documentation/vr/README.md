@@ -1,6 +1,6 @@
-# 🥽 Xash3D VR — Technical Architecture & Port Guide
+# 🥽 Vibe-Life VR — Technical Architecture & Port Guide
 
-> **Official Virtual Reality Port for Xash3D FWGS**  
+> **A Half-Life VR project powered by Xash3D FWGS**  
 > **Standard:** Canonical Khronos OpenXR 1.0 / 1.1 (Pure C99)  
 > **Rendering:** Native Stereo `ref_gl_vr` (GLES 2.0/3.0 & Desktop OpenGL)  
 > **Platforms:** Meta Quest Standalone (Quest 1/2/Pro/3/3S / Horizon OS) & Desktop PCVR (Linux Monado / WiVRn / SteamVR)
@@ -21,7 +21,7 @@ The project is deeply inspired by the pioneering work of **Team Beef** (*Dr. Bee
 ## 2. Technical Architecture Overview
 
 ```
-xash3d-fwgs-vr/
+vibe-life-vr/
 ├── engine/platform/openxr/         ← Pure C99 OpenXR platform subsystem
 │   ├── xr_core.c / .h              ← Lifecycle, instance, sessions, reference spaces, CVars
 │   ├── xr_graphics.c               ← Multi-platform graphics bindings (Linux GLX & Android EGL)
@@ -258,9 +258,9 @@ blender --background --python scripts/blender_controller_reference.py -- \
 
 The controller in that scene is a **shape proxy**, not a licensed Quest model.
 Replace the proxy objects with a real controller mesh while keeping the grip
-origin at `(0,0,0)` to calibrate the hand/weapon visually. Asset credits and the
-MMOD reference audit live in `assets/valve_vr/CREDITS.md` and
-`assets/valve_vr/MMOD_AUDIT.md`.
+origin at `(0,0,0)` to calibrate the hand/weapon visually. Asset credits,
+permissions and the MMOD per-weapon audit live in
+`assets/valve_vr/CREDITS.md`.
 
 ## 6. Documentação Relacionada
 

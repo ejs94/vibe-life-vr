@@ -1,11 +1,24 @@
 # 📌 Ponto de Parada da Sessão (Session Checkpoint)
 
-**Data do Checkpoint:** 18 de Outubro de 2026  
-**Repositório:** `xash3d-fwgs-vr`  
+**Data do Checkpoint:** 24 de Outubro de 2026  
+**Projeto:** Vibe-Life VR  
+**Repositório:** `vibe-life-vr`  
 **Branch:** `feature/openxr-vr`  
 **Dispositivo Físico:** Meta Quest 3S (`3487C10GBP00JJ`) — Standalone APK instalável via ADB.  
-**APK de Referência:** [`out/xash3d-vr-quest.apk`](out/xash3d-vr-quest.apk) (recompilar após mudanças de foregrip/grip_rot)  
+**APK de Referência:** [`out/xash3d-vr-quest.apk`](out/xash3d-vr-quest.apk) (recompilar após mudanças de assets/grip)  
 **Caderno de Engenharia:** [Documentation/vr/ENGINEERING_NOTEBOOK.md](Documentation/vr/ENGINEERING_NOTEBOOK.md)
+
+---
+
+## 🎨 Rebranding e MMOD (24/10/2026)
+
+- Projeto renomeado para **Vibe-Life VR**: README, documentação, `gameinfo.txt` e o rótulo do app Android foram atualizados.
+- Os 15 viewmodels do **Half-Life MMOD — Reanimated Pack** (`valve_addon`) foram integrados em `assets/valve_vr/models/`.
+- `MMOD_AUDIT.md` foi removido; créditos, permissão, SHA-256 do arquivo, escopo e auditoria 360° por arma agora vivem em [`assets/valve_vr/CREDITS.md`](assets/valve_vr/CREDITS.md).
+- Grip offsets foram recalibrados para os novos MDLs: `seat_err ≤ 0.001` em 14 armas. O foregrip da Crossbow foi reancorado no osso `grip` (origem validada em `(508.250, 315.853, -176.452)`).
+- O probe `[VR_GRIP_BONE]` agora emite o vetor `err=(x y z)` em espaço local da arma, permitindo calibrar sem adivinhação.
+- `scripts/setup_out_gamedir.sh` e `scripts/deploy_quest_assets.sh` agora instalam todos os viewmodels com proteção contra symlinks e verificação sha256.
+- Validação: **43/43** testes Monado e **18/18** testes de regressão aprovados.
 
 ---
 
@@ -38,7 +51,7 @@
 13. **Bateria Master de Regressão (14/14 Gates 100% PASS):**
     - `scripts/run_regression_battery.sh` cobrindo OpenXR, FBOs, render estéreo, balística, lasers, áudio HRTF, APK arm64-v8a e layout do Horizon OS.
 14. **Reorganização Estrutural do Repositório:**
-    - Repositório principal mantido isolado e limpo na raiz (`xash3d-fwgs-vr`).
+    - Repositório principal mantido isolado e limpo na raiz (`vibe-life-vr`).
     - Ferramentas e referências agrupadas em subpastas categorizadas (`mcp-tools`, `other-vr-ports`, `xash3d-upstream`, `xash3d-vr-ports`, `openxr-tooling`).
 15. **Integração das Ferramentas MCP ao Fluxo de Desenvolvimento (`mcp-tools`):**
     - Configurado `opencode.json` conectando os servidores MCP `repowise` (blast radius e dependência de símbolos), `graphify` (grafo de conhecimento AST da arquitetura) e `blender` (pipeline de assets).

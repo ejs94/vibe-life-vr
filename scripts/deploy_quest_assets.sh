@@ -50,20 +50,34 @@ fi
 REMOTE_DIR="${BASEDIR}/${GAMEDIR}/models"
 log_info "Deploying VR assets to ${REMOTE_DIR} ..."
 adb shell "mkdir -p '${REMOTE_DIR}'"
-adb push "$HAND_MDL" "${REMOTE_DIR}/v_hand.mdl" >/dev/null
-log_ok "Pushed v_hand.mdl"
+
+shopt -s nullglob
+MODELS=( "${REPO_DIR}/assets/valve_vr/models"/*.mdl )
+
+if [ ${#MODELS[@]} -eq 0 ]; then
+    log_err "No .mdl files in assets/valve_vr/models/"
+    exit 1
+fi
+
+for mdl in "${MODELS[@]}"; do
+    base="$(basename "${mdl}")"
+    adb push "${mdl}" "${REMOTE_DIR}/${base}" >/dev/null
+    log_ok "Pushed ${base}"
+done
 
 if [ -f "$PROFILES" ]; then
     adb push "$PROFILES" "${REMOTE_DIR}/vr_weapons.json" >/dev/null
     log_ok "Pushed vr_weapons.json"
 fi
 
-# Verify the deployed model matches the source byte for byte.
-LOCAL_SHA="$(sha256sum "$HAND_MDL" | awk '{print $1}')"
-REMOTE_SHA="$(adb shell "sha256sum '${REMOTE_DIR}/v_hand.mdl'" | awk '{print $1}')"
-if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
-    log_ok "Deployed v_hand.mdl matches the repository asset (sha256 ${LOCAL_SHA:0:12}...)"
-else
-    log_err "Deployed v_hand.mdl does not match the repository asset."
-    exit 1
-fi
+# Verify every model matches the repository byte for byte.
+for mdl in "${MODELS[@]}"; do
+    base="$(basename "${mdl}")"
+    LOCAL_SHA="$(sha256sum "${mdl}" | awk '{print $1}')"
+    REMOTE_SHA="$(adb shell "sha256sum '${REMOTE_DIR}/${base}'" | awk '{print $1}')"
+    if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+        log_err "Deployed ${base} does not match the repository asset."
+        exit 1
+    fi
+done
+log_ok "All ${#MODELS[@]} viewmodels match the repository (sha256 verified)"

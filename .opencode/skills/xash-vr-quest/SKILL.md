@@ -5,7 +5,7 @@ description: Build, deploy, launch, and verify the Xash3D VR port on a connected
 
 # Xash3D VR on Quest (hardware-in-the-loop)
 
-Run every command below from the repository root (`xash3d-fwgs-vr/`).
+Run every command below from the repository root (`vibe-life-vr/`).
 
 Device I/O (screenshot, UI taps, VR launch, video, off-head mount) lives in the
 generic `quest` skill: `.opencode/skills/quest/SKILL.md` and

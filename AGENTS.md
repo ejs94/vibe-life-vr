@@ -1,5 +1,9 @@
 # Agent Instructions & Project Rules
 
+Vibe-Life VR is a Half-Life VR project powered by Xash3D FWGS. The project
+combines the native Xash3D FWGS engine, the `ref_gl_vr` OpenXR renderer, the
+Half-Life SDK game code, and the Quest/PCVR packaging in this repository.
+
 ## 1. Universal Language Rules
 
 - Code comments and docstrings MUST always be written in English.
@@ -40,7 +44,8 @@ Prefix any shell command that mutates `$PATH` (for example an inline
 - `engine/client/` and `engine/server/` - engine/game integration, prediction,
   and authoritative ballistics.
 - `assets/valve_vr/` - VR overlay assets: `models/v_hand.mdl`,
-  `models/vr_weapons.json`, `CREDITS.md`, and `MMOD_AUDIT.md`.
+  `models/vr_weapons.json`, and `CREDITS.md` (the single source for asset
+  provenance, permissions and the MMOD audit).
 - `android/` - Horizon OS launcher, Gradle packaging, and the standalone APK.
 - `scripts/` - build, deploy, HIL, regression, and hand/asset pipelines.
 - `Documentation/vr/` - architecture, roadmap, mod compatibility, upstream sync,
@@ -113,8 +118,10 @@ python3 scripts/check_hand_asset.py
 
 - Bundle only assets whose license permits modification and redistribution.
 - The glove is black by design; do not "fix" it to a skin tone.
-- The MMOD reanimation pack is a reference/audit asset only. It is not bundled
-  and must not be shipped.
+- The MMOD reanimation pack is bundled under `assets/valve_vr/models/` with
+  attribution and the author's permission. Keep its credits, source URL,
+  archive checksum and per-weapon audit current in `CREDITS.md`; do not add
+  the Blue Shift or Gearbox variants without a separate approval.
 - `v_hand.mdl` is the standalone two-hand model. Rebuild and validate it with
   the scripts in `scripts/` (for example `build_twohand_mdl.py`,
   `check_hand_asset.py`) instead of hand-editing binary assets.
@@ -145,7 +152,7 @@ python3 scripts/check_hand_asset.py
 - Prefer small, testable helpers over growing the already-large input and
   renderer functions.
 - Do not add a new cvar or weapon field without documenting it in
-  `Documentation/vr/` and, when relevant, `assets/valve_vr/MMOD_AUDIT.md`.
+  `Documentation/vr/` and, when relevant, `assets/valve_vr/CREDITS.md`.
 - `3rdparty/mainui` is a submodule. Commit its changes separately and update
   the parent pointer; do not mix submodule changes into an unrelated commit.
 
