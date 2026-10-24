@@ -22,7 +22,7 @@
 | **06** | **Server-Side Ballistics, Momentum Physics & Haptics** | 🟢 **Completed** | Physical muzzle ballistics via `pev->vuser1` across all arsenal weapons (`GetGunPosition`), RPG rocket spawn alignment, physical grenade/snark toss momentum via 6DoF velocity (`pev->vuser3`), tripmine 6DoF alignment (`vuser2`), bypass of flat autoaim deflection, and 50% tighter spread under two-handed hold (`vuser4`). |
 | **07** | **Immersive Hand Presence & 3D Spatial Audio** | 🟢 **Completed** | 3D HRTF spatial audio & 6DoF listener tracking, dynamic procedural finger curling (trigger, grip, capacitive thumb), standalone hand entity presence (`s_offhandEnt`, `v_hand.mdl`), and full bone rig compatibility (`Bip01 Finger0..4` and `Bone27..45`). |
 | **08** | **Mod Suite & Declarative Calibration Manifests** | 🟢 **Completed** | Declarative Weapon Calibration Manifest (`vr_weapons.json` Silver Tier runtime C parser in `xr_profile.c`), per-weapon grip offsets, barrel pitch adjustments, two-handed gating, live `vr_reload_weapon_profiles` hot-reload, and 24/24 automated Monado assertions PASS. |
-| **09** | **Visual Polish, Full Body Motion (VRIK) & Immersion** | 🟡 **Active** | Physical Quest 3 on-device validation, procedural Full-Body Inverse Kinematics (VRIK) experimentation (torso, arms, legs, and spine tracking), weapon collision, holsters, and immersion polish. |
+| **09** | **Visual Polish, Full Body Motion (VRIK) & Immersion** | 🟡 **Active** | Physical Quest 3 on-device validation, 3D Hand Tracking Points & Weapon Center of Mass (COM) Lever Gizmos (`vr_debug_hand`), 3D wireframe hitboxes, real-time HUD telemetry (`Con_NPrintf`), procedural Full-Body Inverse Kinematics (VRIK) experimentation (torso, arms, legs, and spine tracking), weapon collision, holsters, and immersion polish. |
 
 ---
 
@@ -196,3 +196,63 @@
   3. *Meta Quest Optical Hand Tracking:* Integration with OpenXR `XR_EXT_hand_tracking` to drive all 26 finger joint poses optically without physical controllers.
 * **Status:** 🟡 **Active** (Phase 07 priority).
 
+### Issue #22: Viewmodel Mesh Disappearance on RPG and Laser Tripmine
+* **Symptoms:** Equipping the Laser Tripmine (`weapon_tripmine`) displays two floating hands with active finger curling, but the tripmine device itself is completely invisible. The RPG launcher (`weapon_rpg`) is also entirely invisible in 6DoF viewmodel rendering.
+* **Root Cause:** In `ref/gl_vr/gl_studio.c` (`R_StudioSetupBones`), reload prop suppression collapsed any root bone (`pbones[i].parent == -1`) where `i > 0` whenever the active sequence was not "reload". In `v_tripmine.mdl` and `v_rpg.mdl`, the weapon chassis meshes are attached to separate root bones (`i > 0`), causing them to be erroneously zeroed out during idle sequences.
+* **Status:** 🟢 **Resolved** (Fixed in `ref/gl_vr/gl_studio.c` line 1328: replaced `!is_reload || pos[i][2] < -15.0f` with `!is_reload && pos[i][2] < -15.0f` to prevent collapsing weapon base bodies).
+
+### Issue #23: Ladder Climbing Freeze with VR Analog Thumbstick Locomotion
+* **Symptoms:** The player cannot ascend ladders in VR and becomes stuck on the ladder rungs when pushing the thumbstick forward.
+* **Root Cause:** In `3rdparty/hlsdk-portable/pm_shared/pm_shared.c` (`PM_LadderMove`), ladder climb velocity evaluation only checked digital button bits `IN_FORWARD` and `IN_BACK`. In VR, continuous thumbstick locomotion sets `cmd.forwardmove` directly (e.g. `+320.0f`), leaving `buttons & IN_FORWARD` unset. With `forward == 0 && right == 0`, `PM_LadderMove` called `VectorClear(pmove->velocity)`, pinning the player in place.
+* **Status:** 🟢 **Resolved** (Fixed in `pm_shared.c`: continuous VR thumbstick inputs `pmove->cmd.forwardmove` and `sidemove` added to ladder velocity with speed clamping).
+
+### Issue #24: Projectile & Energy Beam Misalignment on Tau Cannon, Gluon Gun, Hornet Gun & RPG
+* **Symptoms:** Certain weapons (Tau Cannon, Gluon Gun, Hornet Gun / Hivehand) are severely misaligned ("vesgas") with the 3D laser sight. Projectiles or beams emerge from the center of the player's eye rather than the physical 6DoF weapon muzzle.
+* **Root Cause:** Weapon logic in `dlls/gauss.cpp`, `dlls/egon.cpp`, `dlls/hornetgun.cpp`, and `dlls/rpg.cpp` called `UTIL_MakeVectors(m_pPlayer->pev->v_angle)` (head gaze angles) rather than `m_pPlayer->pev->vuser2` (6DoF weapon barrel aim vector) and added legacy 1998 flat-screen offsets (`gpGlobals->v_right * 8.0f + gpGlobals->v_up * -12.0f`).
+* **Status:** 🟢 **Resolved** (Fixed in `gauss.cpp`, `egon.cpp`, `hornetgun.cpp`, and `rpg.cpp`: full 6DoF muzzle transform `pev->vuser1` / `GetGunPosition()` and aim vector `pev->vuser2` utilized, legacy 2D screen offsets stripped).
+
+### Issue #25: Inverted Weapon Roll Axis in 6DoF Controller Mapping
+* **Symptoms:** Rotating the physical hand around the longitudinal axis (roll) causes the virtual weapon to roll in the opposite direction.
+* **Root Cause:** In `XR_QuatToEuler` (`engine/platform/openxr/xr_swapchain.c`), the conversion formula from OpenXR quaternion to GoldSrc Euler angles produces an opposite sign for roll relative to the GoldSrc viewmodel coordinate frame.
+* **Status:** 🟢 **Resolved** (Fixed in `engine/platform/openxr/xr_swapchain.c`: negated roll in `XR_QuatToEuler` via `out_angles[2] = -roll * (180.0f / M_PI)`).
+
+### Issue #26: Physical Melee Swing Trigger Threshold and Unit Scale Discrepancy
+* **Symptoms:** The crowbar is displaced from the physical controller, and swinging the arm rapidly fails to trigger melee attacks.
+* **Root Cause:** In `XR_ProcessPhysicalMeleeSwing` (`engine/platform/openxr/xr_input.c`), velocity threshold checks `speed > 48.0f` expecting GoldSrc units, but `XR_GetPrimaryHandVelocity` returns raw OpenXR metric velocity in m/s (typically 1.0–2.5 m/s), meaning the threshold is never satisfied. Additionally, `v_crowbar.mdl` has an exaggerated pitch/grip offset in `vr_weapons.json`.
+* **Status:** 🟢 **Resolved** (Fixed in `xr_input.c`: metric velocity multiplied by `worldScale` for proper GoldSrc speed thresholding; crowbar grip offset in `vr_weapons.json` calibrated).
+
+### Issue #27: Analog Locomotion Yaw Flip & Controller Tracking Occlusion Drift
+* **Symptoms:** During smooth locomotion, the player occasionally loses movement orientation and moves in the exact opposite direction of thumbstick deflection.
+* **Root Cause:** In `XR_ProcessLocomotionAndTurn` (`engine/platform/openxr/xr_input.c`), `deltaYaw` derivation experiences 180° gimbal wrapping when the controller pitch reaches vertical angles. Furthermore, brief tracking losses on the Quest fallback to unrotated eye angles, producing abrupt direction inversions.
+* **Status:** 🟢 **Resolved** (Fixed in `xr_input.c`: clamped controller pitch within $[-89^\circ, 89^\circ]$ to prevent sign inversion in `cos(pitch)`, and used secondary hand orientation for controller-directed locomotion).
+
+### Issue #28: Floating 2D Menu Quad Ergonomic Distance and Recenter Desynchronization
+* **Symptoms:** The floating menu quad is positioned too far away in the Quest 3 FOV, and executing recenter does not reposition the menu quad in front of the user's current gaze.
+* **Root Cause:** `vr_menu_distance` defaults to 1.5m–2.2m. The `vr_recenter` command (`R_VR_Recenter_f`) resets engine head origin calibration but fails to call `XR_ResetMenuAnchor()`, leaving the OpenXR quad reference space unchanged.
+* **Status:** 🟢 **Resolved** (Fixed in `xr_core.c`, `xr_swapchain.c`, `xr_input.c`, and `ref/gl_vr/gl_rmain.c`: default distance set to 1.15m and scale to 1.15m; `R_VR_Recenter_f` explicitly calls `XR_ResetMenuAnchor()`).
+
+### Issue #29: Crossbow Telescopic Scope Engagement & Optical Zoom Control
+* **Symptoms:** No clear input or gesture exists to engage the telescopic sniper scope on the Crossbow in VR.
+* **Root Cause:** Button B in HL2:VR mode continually asserts `IN_ATTACK2`, causing scope FOV bouncing in `dlls/crossbow.cpp`. The proximity scope detector (`XR_ProcessProximityScope`) requires strict 15cm eye distance and two-handed stabilization, which is difficult to achieve reliably on the Quest 3 without tactile feedback.
+* **Status:** 🟢 **Resolved** (Fixed in `xr_input.c`: leading-edge single-tap debounce for toggle weapons on Button B, and enlarged proximity scope trigger distance to 24cm).
+
+### Issue #30: Offhand Standalone Entity Disconnect and Viewmodel Mesh Separation
+* **Symptoms:** Floating hands do not render independently; the secondary hand remains permanently tethered to the viewmodel mesh.
+* **Root Cause:** `R_DrawOffHand` in `ref/gl_vr/gl_studio.c` only attempts to load `models/v_hand.mdl` once at startup; if missing from the mod folder, it silently disables offhand rendering. Furthermore, legacy GoldSrc weapon models with dual hands baked into a single mesh lack programmatic vertex suppression when not in two-handed grip mode.
+* **Status:** 🟢 **Resolved** (Fixed in `xr_core.c`, `ref/gl_vr/gl_studio.c`, and `android/app/build.gradle.kts`: `vr_offhand_render 1` enabled by default, retry loading mechanism implemented, assets packaged directly in APK).
+
+### Issue #31: Weapon Grip Center Decentering on Meta Quest Touch Plus Controllers
+* **Symptoms:** Weapons and the crowbar appear decentered relative to the physical Touch Plus grip and ringless tracking origin.
+* **Root Cause:** Weapon profiles in `assets/valve_vr/models/vr_weapons.json` were calibrated for generic OpenXR controllers and require precision tuning for the Quest 3 Touch Plus grip geometry.
+* **Status:** 🟢 **Resolved** (Fixed in `assets/valve_vr/models/vr_weapons.json`: calibrated crowbar grip offset `[0.0, 0.5, -0.5]` and pitch adjust `-2.0`, packaged into APK and host distribution).
+
+### Feature Milestone: 3D Hand Tracking Points, Weapon Center of Mass (COM) Lever Gizmos & Real-Time Telemetry
+* **Objective:** Enable continuous in-game and in-headset visual inspection of 6DoF hand tracking origins, physical weapon Center of Mass (COM) moment arms, anatomical collision hitboxes, and real-time spatial coordinate streams.
+* **Implementation:**
+  - **3D Hand Tracking Points:** Rendered 3-axis orthogonal orbital gyro rings ($r=1.5\text{u}$), central crosshairs, and RGB coordinate axes for Primary Hand (Cyan) and Secondary Hand (Amber) with inter-hand distance guide vector in [`ref/gl_vr/gl_studio.c`](../../ref/gl_vr/gl_studio.c).
+  - **Weapon Center of Mass (COM) Engine:** Implemented volumetric weighted centroid integration of all model hitboxes transformed by bone matrices ($\mathbf{COM} = \frac{\sum V_i \mathbf{w}_i}{\sum V_i}$) with Gold orbital rings, crimson gravity reticle, yellow grip-to-COM moment-arm lever vector, and lime-green COM-to-muzzle vector.
+  - **Hitbox Visualization (`vr_debug_hand 2`):** 3D wireframe bounding boxes of all `mstudiobbox_t` colored by body group (`hullcolor[group % 8]`).
+  - **Real-Time HUD Telemetry:** Lines 0–5 of `Con_NPrintf` streaming continuous Head, Dominant Hand, Offhand, Weapon COM coordinates/angles, and hitbox counts.
+  - **Console Snapshot Command (`vr_telemetry`):** Registered in `gl_opengl.c` and declared in `gl_local.h` for instant console dumps.
+  - **In-Headset VR Menu (`CMenuVR` Tab 4):** Checkbox `6DoF Hand & Weapon COM Gizmos` and button `Dump 6DoF Telemetry Snapshot`.
+* **Status:** 🟢 **Resolved / Implemented** (Verified in 24/24 Monado tests and Quest APK build).

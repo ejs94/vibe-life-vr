@@ -16,12 +16,23 @@
 
 > [!NOTE]
 > **Transparência e Inovação Técnica:**  
-> Este projeto é ativamente desenvolvido e mantido com assistência de **Inteligência Artificial de Fronteira** (Pair Programming com modelos avançados do Google DeepMind / Antigravity).
+> Este projeto é ativamente desenvolvido e mantido com assistência de **Inteligência Artificial de Fronteira** (Pair Programming com agentes **OpenCode**, skills locais para o Meta Quest e servidores MCP de análise de código).
 
 A assistência de IA é empregada continuamente ao longo de todo o ciclo de engenharia do projeto, destacando-se em:
 * **Diagnóstico de Drivers Gráficos Móveis:** Identificação cirúrgica de comportamentos não documentados de hardware na arquitetura Qualcomm Adreno TBDR (Snapdragon XR2 Gen 2 no Quest 3), como fast-clears de GMEM tile memory e a virtualização de tabelas de texturas no GL4ES que desvinculavam FBOs da swapchain do OpenXR gerando telas pretas.
 * **Matemática Espacial 3D e Ótica VR:** Dedução e implementação dos vetores de projeção assimétrica por olho (`xrLocateViews`), cálculo trigonométrico do frustum de culling 6DoF sem descarte indevido de nós do mundo, e conversão de quaternions de rastreamento para ângulos de Euler do GoldSrc.
 * **Automação e Portões de Qualidade (Quality Gates):** Desenvolvimento de scripts de telemetria em tempo real ([`test_quest_auto.sh`](scripts/test_quest_auto.sh) e [`quest_battery.sh`](scripts/quest_battery.sh)) com leitura direta de buffers de swapchain (`glReadPixels` em PPM/PNG), screencaps do compositor do Meta Horizon OS e validação matemática de canais de cor.
+
+### 🤖 Fluxo de Desenvolvimento com OpenCode
+
+O repositório inclui a configuração do OpenCode em [`opencode.json`](opencode.json) e em `.opencode/`. Execute `opencode` a partir da raiz do repositório para carregar:
+
+* **Agentes:** `@reviewer` (revisão somente leitura) e `@quest-tester` (hardware-in-the-loop no Quest).
+* **Comandos:** `/build-quest`, `/deploy-quest`, `/quest-test`, `/monado-test`, `/regression` e `/grip-check`.
+* **Skills:** `.opencode/skills/quest` (I/O genérico do headset) e `.opencode/skills/xash-vr-quest` (loop HIL do projeto).
+* **MCP:** `repowise` (impacto de símbolos), `graphify` (grafo AST) e `blender` (pipeline de assets).
+
+O guia operacional completo, comandos de build/teste e invariantes de pose estão em [`AGENTS.md`](AGENTS.md).
 
 ---
 

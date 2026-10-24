@@ -1,6 +1,6 @@
 # 🧩 Xash3D VR — Mod Compatibility Architecture & Mod Manager Specification
 
-> **Permanent Architectural Reference Document for Antigravity & Future Agents**
+> **Permanent Architectural Reference Document for OpenCode & Future Agents**
 > **Last Updated:** October 2026
 > **Scope:** Defines the 3-Tier Mod Compatibility System, Mod Manager UX (Quest & PCVR), Storage Cleanup Protocols, and GitHub Catalog Integration.
 
@@ -43,8 +43,8 @@ To solve this without sacrificing mod access, Xash3D VR employs **Progressive En
   - Game DLLs (`client.so` and `server.so`) are completely untouched.
   - The engine redirects input through the standard `usercmd_t` structure.
   - **Aiming:** 6DoF hand aim driven by OpenXR primary hand pose.
-  - **Controls:** Official **Half-Life 2: VR Mod layout** (Right A = Reload, Right B = Alt-Fire, Left X = Jump, Left Y = Use, Stick Clicks = Crouch/Sprint).
-  - **Reload:** Classic button reload (pressing Right A plays the authored sequence in 3D).
+  - **Controls:** VR layout (Right A = Jump, Right B = Reload, primary grip + trigger = Alt-Fire, off-hand trigger = Use near objects, Stick Clicks = Crouch/Sprint).
+  - **Reload:** Classic button reload (pressing Right B plays the authored sequence in 3D).
   - **Viewmodel:** 2D flat-screen artifacts (viewmodel camera bobbing, screen punchangle) are suppressed by the engine renderer (`ref_gl_vr`).
   - **Interactions:** Touch-to-use gesture and temple flashlight gesture work universally.
 

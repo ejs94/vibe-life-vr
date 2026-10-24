@@ -30,7 +30,7 @@ Ao analisar commits do upstream (`FWGS/xash3d-fwgs`), classificamos as mudanças
 
 ## 3. Ferramenta Automatizada: `upstream_sync_audit.sh`
 
-Para tornar essa rotina simples e reprodutível, foi criado o utilitário [`scripts/upstream_sync_audit.sh`](file:///home/ejs94/Documentos/Repos/xash3d-fwgs-vr/scripts/upstream_sync_audit.sh).
+Para tornar essa rotina simples e reprodutível, foi criado o utilitário [`scripts/upstream_sync_audit.sh`](../../scripts/upstream_sync_audit.sh).
 
 ### 3.1. Verificar Status de Sincronização
 Exibe quantos commits o upstream avançou e a distância da base do fork:
