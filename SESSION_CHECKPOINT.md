@@ -19,6 +19,9 @@
 - O probe `[VR_GRIP_BONE]` agora emite o vetor `err=(x y z)` em espaço local da arma, permitindo calibrar sem adivinhação.
 - `scripts/setup_out_gamedir.sh` e `scripts/deploy_quest_assets.sh` agora instalam todos os viewmodels com proteção contra symlinks e verificação sha256.
 - Validação: **43/43** testes Monado e **18/18** testes de regressão aprovados.
+- APK reconstruído e instalado no Quest 3S; HIL básico passou (`out/evidence/quest_20261024_032018`).
+- HIL de assets carregou `models/v_shotgun.mdl` no Quest e gerou eye buffer válido (`out/evidence/mmod_quest`).
+- Repositório local renomeado para `vibe-life-vr` e GitHub renomeado para `ejs94/vibe-life-vr`.
 
 ---
 
