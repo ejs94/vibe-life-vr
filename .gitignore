@@ -310,6 +310,8 @@ _Pvt_Extensions
 
 # QtCreator
 build-*
+# OpenCode command file whose name starts with "build-"
+!.opencode/commands/build-quest.md
 
 # Android
 *.apk
