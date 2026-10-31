@@ -16,7 +16,10 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HLSDK_DIR="${REPO_DIR}/3rdparty/hlsdk-portable"
 HLSDK_BUILD="${HLSDK_DIR}/build-vibe-linux64"
 OUT_VALVE="${REPO_DIR}/out/valve"
-EVIDENCE_DIR="${REPO_DIR}/out/evidence/manual_reload_$(date +%Y%m%d_%H%M%S)"
+QA_SCRIPT="${SCRIPT_DIR}/qa_evidence.py"
+EVIDENCE_DIR="$(python3 "${QA_SCRIPT}" new --gate A7 --command "./scripts/test_manual_reload.sh" --device monado)"
+QA_STATUS="FAIL"
+QA_EXIT=1
 MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
 MONADO_BUILD_DIR="${MONADO_DIR}/build-sim"
 
@@ -79,6 +82,12 @@ sleep 2
 cleanup() {
     kill -TERM "${MONADO_PID}" 2>/dev/null || true
     pkill -9 -x monado-service 2>/dev/null || true
+    python3 "${QA_SCRIPT}" finish \
+        --run "$EVIDENCE_DIR" \
+        --exit-code "$QA_EXIT" \
+        --status "$QA_STATUS" \
+        --device monado \
+        --note "Glock staged manual reload" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -107,5 +116,7 @@ grep -q '\[VR_RELOAD\] manual complete' "${LOG}" || {
 }
 
 log_ok "Glock manual reload stages passed (engine exit ${RUN_RC})"
+QA_STATUS="PASS"
+QA_EXIT=0
 grep '\[VR_RELOAD\] manual' "${LOG}" | tail -8
 echo "Evidence: ${EVIDENCE_DIR}"

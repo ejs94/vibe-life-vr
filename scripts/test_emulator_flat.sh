@@ -13,7 +13,7 @@ MAIN_ACTIVITY="${PACKAGE_NAME}/su.xash.engine.MainActivity"
 GAME_ACTIVITY="${PACKAGE_NAME}/su.xash.engine.XashActivity"
 DEFAULT_APK="out/xash3d-flat.apk"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-OUTPUT_DIR="out/evidence/emulator_${TIMESTAMP}"
+OUTPUT_DIR="out/qa/E1/runs/emulator_${TIMESTAMP}"
 AVD_NAME="Medium_Phone_API_37.0"
 if [ $# -ge 1 ] && [[ "$1" == *.apk || -f "$1" ]]; then
     TARGET_APK="$1"

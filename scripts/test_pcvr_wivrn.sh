@@ -14,7 +14,7 @@ set -euo pipefail
 REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_DIR="${REPO_DIR}/out/evidence/pcvr_$(date +%Y%m%d_%H%M%S)"
+OUTPUT_DIR="${REPO_DIR}/out/qa/P1/runs/$(date +%Y%m%d_%H%M%S)"
 TIMEOUT_SECS=10
 TARGET_MAP="${1:-crossfire}"
 

@@ -10,7 +10,7 @@ software rasterizer from render_mdl_360.py.
 Usage:
     python3 scripts/render_viewmodel_idle.py \
         --qc out/mmod_import/decompiled/v_crossbow/v_crossbow.qc \
-        --out out/evidence/viewmodel_asset_audit --name v_crossbow_idle
+        --out out/qa/A4/latest --name v_crossbow_idle
 """
 
 from __future__ import annotations

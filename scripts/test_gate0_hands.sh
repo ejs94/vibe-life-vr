@@ -14,7 +14,8 @@ else
     MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
 fi
 
-OUTPUT_DIR="${REPO_DIR}/out/evidence/${OUTPUT_SUBDIR:-gate0_hands}/monado_$(date +%Y%m%d_%H%M%S)"
+QA_SCRIPT="${SCRIPT_DIR}/qa_evidence.py"
+OUTPUT_DIR="$(python3 "${QA_SCRIPT}" new --gate A4 --command "./scripts/test_gate0_hands.sh" --device monado)"
 TIMEOUT_SECS="${TIMEOUT_SECS:-150}"
 
 if [ -z "${MONADO_BUILD_DIR:-}" ]; then
@@ -86,5 +87,19 @@ for prefix in crossbow glock mp5; do
     done
 done
 
+STATUS="PASS"
+QA_EXIT=0
+if [ "$RUN_EXIT" -ne 0 ] || ! compgen -G "${OUTPUT_DIR}/*.png" >/dev/null; then
+    STATUS="FAIL"
+    QA_EXIT=1
+fi
+python3 "${QA_SCRIPT}" finish \
+    --run "$OUTPUT_DIR" \
+    --exit-code "$QA_EXIT" \
+    --status "$STATUS" \
+    --device monado \
+    --note "Gate 0 fixed-camera visual comparison"
+
 echo "[INFO] Evidence: ${OUTPUT_DIR}"
 echo "[INFO] Logs: ${TEST_LOG}"
+exit "$QA_EXIT"

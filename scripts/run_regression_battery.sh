@@ -10,7 +10,8 @@ if [ -d "${REPO_DIR}/../openxr-tooling/monado" ]; then
 else
     MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
 fi
-OUTPUT_DIR="${REPO_DIR}/out/evidence/regression_$(date +%Y%m%d_%H%M%S)"
+QA_SCRIPT="${SCRIPT_DIR}/qa_evidence.py"
+OUTPUT_DIR="$(python3 "${QA_SCRIPT}" new --gate R1 --command "./scripts/run_regression_battery.sh" --device monado)"
 
 log_title() { echo -e "\n\033[1;35m==========================================================\033[0m\n\033[1;35m  $*\033[0m\n\033[1;35m==========================================================\033[0m"; }
 log_info()  { echo -e "\033[1;34m[INFO]\033[0m $*"; }
@@ -318,9 +319,19 @@ echo "Failed Tests:        ${FAILED_TESTS}"
 echo "Evidence Directory:  ${OUTPUT_DIR}"
 
 if [ "$FAILED_TESTS" -eq 0 ]; then
+    QA_STATUS="PASS"
+    QA_EXIT=0
     log_ok "ALL ${TOTAL_TESTS} REGRESSION TESTS PASSED! All implementations confirmed working."
-    exit 0
 else
+    QA_STATUS="FAIL"
+    QA_EXIT=1
     log_err "SOME REGRESSION TESTS FAILED (${FAILED_TESTS}/${TOTAL_TESTS}). Check logs in ${OUTPUT_DIR}."
-    exit 1
 fi
+
+python3 "${QA_SCRIPT}" finish \
+    --run "$OUTPUT_DIR" \
+    --exit-code "$QA_EXIT" \
+    --status "$QA_STATUS" \
+    --device monado \
+    --note "Regression battery: ${PASSED_TESTS}/${TOTAL_TESTS} passed"
+exit "$QA_EXIT"

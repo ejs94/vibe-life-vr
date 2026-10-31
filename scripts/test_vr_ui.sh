@@ -27,7 +27,7 @@ else
 fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-OUTPUT_DIR="${REPO_DIR}/out/evidence/vr_ui_${TIMESTAMP}"
+OUTPUT_DIR="${REPO_DIR}/out/qa/U1/runs/${TIMESTAMP}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-25}"
 TARGET_ARG="${1:-suite}"
 
@@ -185,7 +185,7 @@ assert_ui 10 "Clean Engine UI Lifecycle & Zero Memory Segmentation Faults" \
 
 # 7. Generate Self-Contained HTML Evidence Gallery
 HTML_REPORT="${OUTPUT_DIR}/evidence_gallery.html"
-LATEST_HTML="${REPO_DIR}/out/evidence/latest_vr_ui_gallery.html"
+LATEST_HTML="${REPO_DIR}/out/qa/U1/latest_vr_ui_gallery.html"
 
 cat << 'EOF' > "$HTML_REPORT"
 <!DOCTYPE html>

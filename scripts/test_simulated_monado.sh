@@ -33,11 +33,21 @@ else
     MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
 fi
 
-OUTPUT_DIR="${REPO_DIR}/out/evidence/monado_unittest_$(date +%Y%m%d_%H%M%S)"
 TIMEOUT_SECS="${TIMEOUT_SECS:-90}"
 TARGET_ARG="${1:-suite}"
 shift || true
 EXTRA_ARGS="${*:-}"
+
+if [ "$TARGET_ARG" = "suite" ] || [ "$TARGET_ARG" = "--unit-tests" ]; then
+    RUN_CMD="./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +exec monado_unit_tests.cfg ${EXTRA_ARGS}"
+    RUN_MODE="Full VR Subsystems Unit Test Suite"
+else
+    RUN_CMD="./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +map ${TARGET_ARG} ${EXTRA_ARGS}"
+    RUN_MODE="Custom Map Simulation: ${TARGET_ARG}"
+fi
+
+QA_SCRIPT="${SCRIPT_DIR}/qa_evidence.py"
+OUTPUT_DIR="$(python3 "${QA_SCRIPT}" new --gate M1 --command "${RUN_CMD}" --device monado)"
 
 log_title() { echo -e "\n\033[1;35m==========================================================\033[0m\n\033[1;35m  $*\033[0m\n\033[1;35m==========================================================\033[0m"; }
 log_info()  { echo -e "\033[1;34m[INFO]\033[0m $*"; }
@@ -111,14 +121,6 @@ cp -f "${REPO_DIR}/scripts/monado_unit_tests.cfg" "${REPO_DIR}/out/valve/monado_
 
 TEST_LOG="${OUTPUT_DIR}/monado_unittest_engine.log"
 
-if [ "$TARGET_ARG" = "suite" ] || [ "$TARGET_ARG" = "--unit-tests" ]; then
-    RUN_CMD="./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +exec monado_unit_tests.cfg ${EXTRA_ARGS}"
-    RUN_MODE="Full VR Subsystems Unit Test Suite"
-else
-    RUN_CMD="./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 +map ${TARGET_ARG} ${EXTRA_ARGS}"
-    RUN_MODE="Custom Map Simulation: ${TARGET_ARG}"
-fi
-
 log_title "PHASE 1: Executing ${RUN_MODE} (${TIMEOUT_SECS}s Timeout)"
 log_info "Command: ${RUN_CMD}"
 
@@ -148,7 +150,7 @@ for ppm in unit_*.ppm regr_*.ppm vr_*.ppm; do
         convert "${OUTPUT_DIR}/$ppm" "${OUTPUT_DIR}/${png_name}" 2>/dev/null || true
         log_info "Captured test artifact: ${png_name}"
         CAPTURED_IMAGES=$((CAPTURED_IMAGES + 1))
-        rm -f "$ppm"
+        rm -f "$ppm" "${OUTPUT_DIR}/$ppm"
     fi
 done
 
@@ -332,9 +334,19 @@ echo "Evidence Directory: ${OUTPUT_DIR}"
 echo "=========================================================="
 
 if [ "$FAILED_TESTS" -eq 0 ]; then
+    QA_STATUS="PASS"
+    QA_EXIT=0
     log_ok "ALL ${TOTAL_TESTS}/${TOTAL_TESTS} MONADO VR UNIT TESTS PASSED (100% GREEN)!"
-    exit 0
 else
+    QA_STATUS="FAIL"
+    QA_EXIT=1
     log_err "${FAILED_TESTS} UNIT TEST(S) FAILED. Review log at: ${TEST_LOG}"
-    exit 1
 fi
+
+python3 "${QA_SCRIPT}" finish \
+    --run "$OUTPUT_DIR" \
+    --exit-code "$QA_EXIT" \
+    --status "$QA_STATUS" \
+    --device monado \
+    --note "Monado unit suite: ${PASSED_TESTS}/${TOTAL_TESTS} passed"
+exit "$QA_EXIT"

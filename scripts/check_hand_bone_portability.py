@@ -3,7 +3,7 @@
 
 Scans viewmodel MDLs in valve, gearbox and bshift, reads the bone table, and
 reports which hand/finger slots the semantic resolver can identify. No runtime
-and no file writes outside out/evidence.
+and no file writes outside out/qa/A3/latest.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import struct
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-OUT = REPO / "out/evidence/gate2/hand_bone_portability.json"
+OUT = REPO / "out/qa/A3/latest/gate2/hand_bone_portability.json"
 
 # Slot order mirrors ref/gl_vr/gl_studio.c.
 SLOTS = [

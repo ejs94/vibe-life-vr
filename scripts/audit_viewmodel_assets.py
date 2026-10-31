@@ -15,7 +15,7 @@ that tells you which weapon is worth opening in Blender.
 Usage:
     python3 scripts/audit_viewmodel_assets.py \
         --decompiled-dir out/mmod_import/decompiled \
-        --out out/evidence/viewmodel_asset_audit
+        --out out/qa/A1/latest
 """
 
 from __future__ import annotations

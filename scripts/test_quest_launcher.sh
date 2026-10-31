@@ -22,7 +22,7 @@ PACKAGE_NAME="su.xash.engine.vr.test"
 MAIN_ACTIVITY="${PACKAGE_NAME}/su.xash.engine.MainActivity"
 DEFAULT_APK="${REPO_DIR}/out/xash3d-vr-quest.apk"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-OUTPUT_DIR="${REPO_DIR}/out/evidence/quest_launcher_${TIMESTAMP}"
+OUTPUT_DIR="${REPO_DIR}/out/qa/Q1/runs/launcher_${TIMESTAMP}"
 if [ -n "${AVD_NAME:-}" ]; then
     AVD_NAME="$AVD_NAME"
 elif "$HOME/Android/Sdk/emulator/emulator" -list-avds 2>/dev/null | grep -q "^Quest_Spatial_Panel$"; then

@@ -16,7 +16,8 @@ set -euo pipefail
 REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_DIR="${REPO_DIR}/out/evidence/quest_$(date +%Y%m%d_%H%M%S)"
+QA_SCRIPT="${SCRIPT_DIR}/qa_evidence.py"
+OUTPUT_DIR="$(python3 "${QA_SCRIPT}" new --gate Q1 --command "./scripts/test_quest_auto.sh ${1:-35} ${2:-crossfire}" --device quest)"
 TIMEOUT_SECS="${1:-35}"
 TARGET_MAP="${2:-crossfire}"
 PACKAGE_NAME="su.xash.engine.vr.test"
@@ -192,9 +193,11 @@ if [ -f "${SCRIPT_DIR}/quest_battery.sh" ]; then
 fi
 
 if [ "$TEST_PASSED" = true ]; then
+    python3 "${QA_SCRIPT}" finish --run "$OUTPUT_DIR" --exit-code 0 --status PASS --device quest
     log_ok "QUEST STANDALONE VR TEST PASSED: Evidence captured in ${OUTPUT_DIR}"
     exit 0
 else
+    python3 "${QA_SCRIPT}" finish --run "$OUTPUT_DIR" --exit-code 1 --status FAIL --device quest
     log_err "QUEST STANDALONE VR TEST FAILED: Check logs in ${OUTPUT_DIR}"
     exit 1
 fi
