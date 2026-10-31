@@ -2,7 +2,8 @@
 
 **Last updated:** 2026-10-31
 **Branch:** `feature/openxr-vr`
-**Baseline tag:** `pre-cleanup-2026-10-31`
+**Baseline tag:** `baseline-clean-2026-10-31`
+**Previous checkpoint:** `pre-cleanup-2026-10-31`
 **Evidence root:** `out/qa/`
 
 ## Current state
