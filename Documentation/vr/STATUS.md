@@ -6,6 +6,40 @@
 **Previous checkpoint:** `pre-cleanup-2026-10-31`
 **Evidence root:** `out/qa/`
 
+## Progress
+
+`[x]` done, `[ ]` pending. Run `python3 scripts/progress_report.py` for the
+current counts and gate freshness.
+
+### Baseline
+
+- [x] Freeze current work in logical commits
+- [x] Tag `pre-cleanup-2026-10-31`
+- [x] Consolidate canonical documentation
+- [x] Retire `out/evidence` and standardize `out/qa`
+- [x] Add the `GATES.md` registry and the `@gate-runner` agent
+- [x] Remove obsolete scripts, cfgs and caches
+- [x] Tag `baseline-clean-2026-10-31`
+
+### Validation
+
+- [x] `D1` documentation gate
+- [x] `M1` Monado 44/44
+- [x] `R1` regression 19/19
+- [x] `A7` Glock manual reload
+- [ ] `Q1` Quest hardware-in-the-loop (maintainer decision)
+
+### Current task: Glock hole repair
+
+- [ ] `A1` boundary-loop report for the Glock
+- [ ] Classify intentional versus accidental holes
+- [ ] Implement the radial liner repair
+- [ ] Pass `A2` MDL roundtrip
+- [ ] Pass `A4` visual comparison with maintainer approval
+- [ ] Pass `M1` and `R1` after the repair
+- [ ] Repeat the pilot on the crossbow
+- [ ] Batch the remaining 13 viewmodels
+
 ## Current state
 
 | Item | Result |

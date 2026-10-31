@@ -85,6 +85,7 @@ Read it before running or reviewing a gate. The common local gates are:
 ./scripts/test_simulated_monado.sh      # M1: 44-assertion Monado suite
 ./scripts/run_regression_battery.sh     # R1: 19-assertion regression battery
 python3 scripts/check_docs.py           # D1: docs, links and path rules
+python3 scripts/progress_report.py      # current gate and task completion marker
 python3 scripts/verify_grip_pose_math.py
 python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl
 python3 scripts/check_viewmodel_names.py          # overlay names vs HLSDK requests
@@ -204,7 +205,7 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
   `@gate-runner` is read-only and must read `Documentation/vr/GATES.md` before
   running a gate.
 - Commands: `.opencode/commands/` (`/build-quest`, `/deploy-quest`,
-  `/quest-test`, `/monado-test`, `/regression`, `/grip-check`).
+  `/quest-test`, `/monado-test`, `/regression`, `/grip-check`, `/progress`).
 - Skills: `.opencode/skills/quest` (generic Quest I/O) and
   `.opencode/skills/xash-vr-quest` (project HIL loop).
 - MCP servers: `repowise` for symbol impact, `graphify` for the AST graph, and
