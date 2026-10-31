@@ -99,6 +99,38 @@ Visual evidence is a labeled comparison sheet from a fixed camera. A green
 automated gate does not prove appearance. The maintainer approves or rejects
 the sheet before an asset is deployed.
 
+## Weapon visual review (non-blocking)
+
+This is a human review aid, not a gate. It does not decide PASS/FAIL and does
+not block automation.
+
+```sh
+./scripts/compare_weapon_review.sh
+```
+
+The wrapper captures the original and patched Glock, then writes labelled
+comparison artifacts to `out/qa/V1/compare_glock/`:
+
+- `turntable_compare.gif` — 36 azimuth frames at 15° elevation.
+- `elevation_compare.gif` — front three-quarter from below to above.
+- `reload_compare.gif` — staged reload at azimuth 0.
+- `contact_sheet_compare.png` — three key views.
+
+For a single model:
+
+```sh
+./scripts/capture_weapon_review.sh \
+    out/viewmodel_work/glock_repair/v_9mmhandgun.mdl glock_repair
+```
+
+The capture uses the engine world-space review camera
+(`vr_test_camera 5`) and hides the baked hands. The orbit controls are
+`vr_test_camera_azimuth` and `vr_test_camera_elevation`. The script captures
+idle, fire and reload at three azimuths and writes GIFs to the review run.
+
+The model is copied temporarily to `out/valve/models` and
+`out/valve_vr/models` and restored on exit. Nothing is deployed.
+
 ## Manual reload
 
 ```sh

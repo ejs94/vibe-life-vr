@@ -64,6 +64,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
+| `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/compare_glock` | monado | human |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
 maintainer approval. Green automated checks do not prove appearance.
@@ -82,3 +83,6 @@ maintainer approval. Green automated checks do not prove appearance.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.
+- `V1` is a non-blocking human review artifact. It produces labelled turntable
+  and animation GIFs; it never gates automation and is not counted as a pass
+  or fail.

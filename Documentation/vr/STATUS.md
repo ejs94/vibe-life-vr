@@ -33,7 +33,7 @@ current counts and gate freshness.
 
 - [x] `A1` boundary-loop report for the Glock
 - [x] Classify intentional versus accidental holes
-- [ ] Implement the radial liner repair
+- [x] Implement the radial liner repair
 - [ ] Pass `A2` MDL roundtrip
 - [ ] Pass `A4` visual comparison with maintainer approval
 - [ ] Pass `M1` and `R1` after the repair
@@ -49,8 +49,9 @@ current counts and gate freshness.
 | Documentation gate (`D1`) | See `out/qa/D1/latest` |
 | Asset audit (`A1`) | PASS (audit); Glock baseline verdict FAIL |
 | Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
+| Visual review (`V1`) | Available: `out/qa/V1/compare_glock/` (non-blocking) |
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Asset repair epic | A1 baseline complete; Glock repair not started |
+| Asset repair epic | A1 baseline complete; Glock repair implemented, A2/A4 pending |
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could
@@ -66,19 +67,24 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
    remaining weapons and the interaction contract still need gates.
 3. **A1 classification review is pending.** The audit resolved all loops, but
    the two accidental defects and the medium-confidence intentional sleeves
-   still need maintainer approval before mesh surgery.
-4. **Quest pass is pending.** No Quest result is implied by the Monado or
+   still need maintainer approval before deployment.
+4. **A2 roundtrip toolchain caveat.** The patched Glock and the pristine MMOD
+   Glock both drift by about `1e-6` on the attachment float
+   (`4.249999` vs `4.250001`). This is compiler drift, not a repair regression;
+   A2 needs a documented tolerance or a toolchain fix before it can be a clean
+   binary gate.
+5. **Quest pass is pending.** No Quest result is implied by the Monado or
    regression results.
 
 ## Next steps
 
-1. Implement the radial liner for the two confirmed Glock defects:
-   `body_tear_1` (front-top tear; stitch, do not cap) and
-   `clip_loop_1_open_side` (magazine shell open side).
-2. Preserve bones, UVs, weights, bodygroups, attachments, hitboxes and
-   sequences; add no bones and do not bridge across bodygroups.
-3. Validate the repaired Glock with `A2` roundtrip, `A1` re-audit, `A4`
-   visual comparison and `M1`/`R1` before touching the next weapon.
+1. Review `out/qa/V1/compare_glock/` and
+   `out/viewmodel_work/glock_repair/repair_sheet.png`; the repair closes the
+   clip side and dissolves the front-top feather.
+2. Resolve the `A2` attachment-float tolerance, then re-run the patched audit
+   and the in-engine visual review.
+3. Approve the Glock before touching the crossbow. `A4` human approval remains
+   the final visual gate.
 
 ## Evidence
 

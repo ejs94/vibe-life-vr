@@ -205,7 +205,8 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
   `@gate-runner` is read-only and must read `Documentation/vr/GATES.md` before
   running a gate.
 - Commands: `.opencode/commands/` (`/build-quest`, `/deploy-quest`,
-  `/quest-test`, `/monado-test`, `/regression`, `/grip-check`, `/progress`).
+  `/quest-test`, `/monado-test`, `/regression`, `/grip-check`, `/progress`,
+  `/review-weapon`).
 - Skills: `.opencode/skills/quest` (generic Quest I/O) and
   `.opencode/skills/xash-vr-quest` (project HIL loop).
 - MCP servers: `repowise` for symbol impact, `graphify` for the AST graph, and
