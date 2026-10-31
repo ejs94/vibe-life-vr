@@ -39,7 +39,7 @@ permissions, clears logcat, launches the map, records logcat for 25 s, pulls
 `/sdcard/xash/vr_eye0.ppm` if the engine produced it, and exits 0 only when all
 OpenXR checks pass.
 
-Evidence: `out/evidence/quest_<YYYYmmdd_HHMMSS>/`
+Evidence: `out/qa/Q1/latest/`
 
 - `logcat_quest.log` - full device log for the run.
 - `vr_eye0.ppm` / `vr_eye0.png` - the engine's left-eye swapchain. This is the
@@ -113,8 +113,8 @@ headset capture.
 5. Capture and stop:
 
    ```sh
-   .opencode/skills/quest/scripts/quest screenshot out/evidence/hil_view.jpg --width 1024
-   .opencode/skills/quest/scripts/quest pull /sdcard/xash/hil_eye0.ppm out/evidence/hil_eye0.ppm
+   .opencode/skills/quest/scripts/quest screenshot out/qa/Q1/latest/hil_view.jpg --width 1024
+   .opencode/skills/quest/scripts/quest pull /sdcard/xash/hil_eye0.ppm out/qa/Q1/latest/hil_eye0.ppm
    .opencode/skills/quest/scripts/quest stop su.xash.engine.vr.test
    ```
 

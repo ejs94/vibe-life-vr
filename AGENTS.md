@@ -19,7 +19,8 @@ Half-Life SDK game code, and the Quest/PCVR packaging in this repository.
   location.
 - Markdown links must use relative syntax without `file://`, for example
   `[xr_input.c](engine/platform/openxr/xr_input.c)` from the repository root or
-  `[xr_input.c](../../engine/platform/openxr/xr_input.c)` from nested docs.
+  `[xr_input.c](../../engine/platform/openxr/xr_input.c)` from a nested document.
+  The second form is an example, not a link from this file.
 - Terminal commands must use relative paths, for example
   `adb install -r out/xash3d-vr-quest.apk`.
 - Device paths such as `/sdcard/xash` are remote Android paths, not host paths;
@@ -48,8 +49,9 @@ Prefix any shell command that mutates `$PATH` (for example an inline
   provenance, permissions and the MMOD audit).
 - `android/` - Horizon OS launcher, Gradle packaging, and the standalone APK.
 - `scripts/` - build, deploy, HIL, regression, and hand/asset pipelines.
-- `Documentation/vr/` - architecture, roadmap, mod compatibility, upstream sync,
-  and the engineering notebook.
+- `Documentation/vr/` - canonical documentation: `STATUS.md`, `ROADMAP.md`,
+  `GATES.md`, `TESTING.md`, `ASSETS.md`, `UPSTREAM.md`, `DECISIONS.md`, and
+  `reference/`. Upstream documentation outside `Documentation/vr/` is read-only.
 
 ## 5. Build
 
@@ -76,25 +78,31 @@ false negative in HIL work; rebuild after engine, renderer, or
 
 ## 6. Tests and Evidence
 
-Run the relevant gates before claiming success:
+The single gate registry is [`Documentation/vr/GATES.md`](Documentation/vr/GATES.md).
+Read it before running or reviewing a gate. The common local gates are:
 
 ```sh
-./scripts/test_simulated_monado.sh      # Monado OpenXR unit suite
-./scripts/run_regression_battery.sh     # 18-gate regression battery
+./scripts/test_simulated_monado.sh      # M1: 44-assertion Monado suite
+./scripts/run_regression_battery.sh     # R1: 19-assertion regression battery
+python3 scripts/check_docs.py           # D1: docs, links and path rules
 python3 scripts/verify_grip_pose_math.py
-python3 scripts/check_hand_asset.py
+python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl
 python3 scripts/check_viewmodel_names.py          # overlay names vs HLSDK requests
-python3 scripts/audit_viewmodel_assets.py         # static texture/UV/normal audit
+python3 scripts/audit_viewmodel_assets.py \
+    --decompiled-dir out/mmod_import/decompiled \
+    --out out/qa/A1/latest
 scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
-python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe log
 ./scripts/test_manual_reload.sh          # Glock staged reload vertical slice
-./scripts/test_quest_auto.sh 25 crossfire
+./scripts/test_quest_auto.sh 25 crossfire  # Q1 only when the maintainer requests it
 ```
 
-- Evidence is written under `out/evidence/`. Do not commit `out/`, `build/`,
-  `android/app/.cxx/`, `graphify-out/`, or generated native libraries.
-- `test_simulated_monado.sh` auto-detects `build-sim` and honors
-  `MONADO_BUILD_DIR`.
+- Evidence is written under `out/qa/<gate-id>/`. `out/qa/INDEX.md` lists the
+  newest result per gate and `out/qa/<gate-id>/latest` points at the newest run.
+  Do not cite the retired `out/evidence` root.
+- Do not commit `out/`, `build/`, `android/app/.cxx/`, `graphify-out/`, or
+  generated native libraries.
+- `test_simulated_monado.sh` auto-detects `build-sim`, honors
+  `MONADO_BUILD_DIR`, and defaults to a 90-second engine timeout.
 - `check_grip_seat.py` and `check_grip_pose.py` take an engine log containing
   `[VR_GRIP_BONE]` and `[VR_GRIP]` lines.
 - A Quest pass requires a non-black `vr_eye0.png` (or `quest screenshot`), the
@@ -139,6 +147,11 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
 - `v_hand.mdl` is the standalone two-hand model. Rebuild and validate it with
   the scripts in `scripts/` (for example `build_twohand_mdl.py`,
   `check_hand_asset.py`) instead of hand-editing binary assets.
+- Holed viewmodels are repaired with a radial liner: duplicate the boundary
+  loop, offset it inward along the normal, and bridge it. Do not cap intentional
+  openings (barrel, magwell, ejection port), and do not move the outer
+  silhouette. Preserve bones, UVs, weights, sequences, events, bodygroups and
+  attachments.
 - Deploy the overlay models (`assets/valve_vr/models/*.mdl`, including
   `v_hand.mdl`) and `vr_weapons.json` to `/sdcard/xash/valve/models/` for HIL.
   The engine launches the base `valve` gamedir even though the APK also bundles
@@ -159,9 +172,9 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
   `quest.side.vr`; it steals focus and breaks VR window placement.
 - `quest mount on|off` needs `QUEST_MQST_PIN` on Android user 0. Always run
   `quest mount off` after off-head work.
-- The current validation phase is the Monado simulator; do not generate or
-  install APKs, and record Quest checks as pending unless the user asks for
-  them.
+- Quest validation is the maintainer's decision for each stage, not a global
+  rule. Monado is the default local gate. Record a Quest gate as `pending`
+  unless the maintainer asks for it, and never infer a Quest pass from Monado.
 
 ## 10. Code Style
 
@@ -187,7 +200,9 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
 ## 12. OpenCode Workflow
 
 - Configuration: `opencode.json` (MCP servers, references, permissions).
-- Agents: `.opencode/agents/` (`@reviewer`, `@quest-tester`).
+- Agents: `.opencode/agents/` (`@reviewer`, `@quest-tester`, `@gate-runner`).
+  `@gate-runner` is read-only and must read `Documentation/vr/GATES.md` before
+  running a gate.
 - Commands: `.opencode/commands/` (`/build-quest`, `/deploy-quest`,
   `/quest-test`, `/monado-test`, `/regression`, `/grip-check`).
 - Skills: `.opencode/skills/quest` (generic Quest I/O) and
@@ -196,7 +211,18 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
   `blender` for the hand/asset pipeline. The clangd MCP server is not installed;
   do not add it until `../mcp-tools/clangd-mcp-server/dist/index.js` exists.
 - Prefer the project skills and commands over ad-hoc command sequences. Use the
-  `reviewer` subagent for read-only review and `quest-tester` for HIL work.
+  `reviewer` subagent for read-only review, `quest-tester` for HIL work, and
+  `gate-runner` for a single gate from `GATES.md`.
+
+## 12.1 Gate Workflow
+
+- One implementer per stage; validators are read-only.
+- Run only the command in the gate row. Do not add an ad-hoc proxy check and
+  call it the gate.
+- A gate result is `PASS`, `FAIL` or `INCONCLUSIVE`. A visual or risky gate is
+  also `ADVANCE`, `REWORK` or `BLOCK` by the maintainer.
+- If the same stage fails twice, stop and report instead of thrashing.
+- Do not mark a gate passed from an older run. Check the manifest commit.
 
 ## 13. Hard Rules From Experience
 
@@ -225,9 +251,11 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
 
 ## 14. Session Economy
 
-- Start from `SESSION_CHECKPOINT.md`; do not re-read the whole repository. Use
-  repowise and graphify queries instead.
+- Start from `Documentation/vr/STATUS.md`; do not re-read the whole repository.
+  Use repowise and graphify queries instead.
 - One stage per session; end with a short handoff (done, pending, files touched).
 - Stop and report after the same stage fails twice.
 - Prefer headless Blender scripts with numeric checks over interactive
   screenshot loops.
+- Keep evidence in `out/qa`; do not revive `out/evidence` or add a second
+  evidence root.

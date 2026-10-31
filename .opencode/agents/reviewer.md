@@ -41,9 +41,10 @@ Focus on:
   right-hand bone.
 - The authoritative firing line must not change. `vuser2` is hand + aim
   calibration only.
-- Asset licensing: do not approve bundling assets whose license forbids
-  modification or redistribution. The MMOD pack is bundled with attribution;
-  verify every change against `assets/valve_vr/CREDITS.md`.
+- Asset credits: licensing is not a release blocker for this non-commercial
+  community mod, but every third-party asset needs its source URL and author
+  credit in `assets/valve_vr/CREDITS.md`. The MMOD pack is bundled with
+  attribution; verify every change against that file.
 - Tests: new behavior needs a gate in `scripts/test_simulated_monado.sh`,
   `scripts/run_regression_battery.sh`, or the Quest HIL loop.
 

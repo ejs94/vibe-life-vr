@@ -5,7 +5,7 @@ agent: build
 
 Run the Monado OpenXR unit suite from the repository root.
 
-If `$ARGUMENTS` is empty, run the full 43-gate suite:
+If `$ARGUMENTS` is empty, run the full 44-assertion suite:
 
 ```sh
 ./scripts/test_simulated_monado.sh

@@ -7,8 +7,9 @@ Run the grip and hand asset checks from the repository root.
 
 1. `python3 scripts/verify_grip_pose_math.py` - right-handed pose math must stay
    within `1e-4` of the pre-refactor formulas.
-2. `python3 scripts/check_hand_asset.py` - validates the standalone two-hand
-   model, bone naming, and rendered orientation.
+2. `python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl`
+   - validates the standalone two-hand model, bone naming, and rendered
+   orientation.
 3. If `$ARGUMENTS` contains a log path, run
    `python3 scripts/check_grip_seat.py <log>` and
    `python3 scripts/check_grip_pose.py <log>` to verify the probe lines.

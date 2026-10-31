@@ -56,7 +56,7 @@ This is the app's raw swapchain image, not the compositor's view. Use it when
 you need exact pixels or the render resolution. Pull it with:
 
 ```sh
-.opencode/skills/quest/scripts/quest pull /sdcard/xash/vr_eye0.ppm out/evidence/
+.opencode/skills/quest/scripts/quest pull /sdcard/xash/vr_eye0.ppm out/qa/Q1/latest/
 ```
 
 `vr_eye0.ppm` is a binary PPM; `ffmpeg` or Pillow converts it to PNG.

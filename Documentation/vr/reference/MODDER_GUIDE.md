@@ -134,8 +134,8 @@ vr_dumpeye mymod_weapon_test.ppm
 
 ## 📦 7. Reference Implementation Assets
 
-A complete reference pack is available in the repository under [`assets/valve_vr/`](../../assets/valve_vr/):
-* [`gameinfo.txt`](../../assets/valve_vr/gameinfo.txt) — Game overlay declaration.
-* [`models/vr_weapons.json`](../../assets/valve_vr/models/vr_weapons.json) — Complete manifest for all 16 Half-Life weapons.
-* [`templates/weapon_template.qc`](../../assets/valve_vr/templates/weapon_template.qc) — Reusable QC script with attachment points.
-* [`templates/VR_RIG_GUIDE.md`](../../assets/valve_vr/templates/VR_RIG_GUIDE.md) — 3D modeling and rigging guide.
+A complete reference pack is available in the repository under [`assets/valve_vr/`](../../../assets/valve_vr/):
+* [`gameinfo.txt`](../../../assets/valve_vr/gameinfo.txt) — Game overlay declaration.
+* [`models/vr_weapons.json`](../../../assets/valve_vr/models/vr_weapons.json) — Complete manifest for all 16 Half-Life weapons.
+* [`templates/weapon_template.qc`](../../../assets/valve_vr/templates/weapon_template.qc) — Reusable QC script with attachment points.
+* [`templates/VR_RIG_GUIDE.md`](../../../assets/valve_vr/templates/VR_RIG_GUIDE.md) — 3D modeling and rigging guide.
