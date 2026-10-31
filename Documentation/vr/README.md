@@ -117,7 +117,7 @@ flowchart TD
     - Physical melee swing (`vr_melee_swing 1`): rapid crowbar swing attacks enemies; the flat-screen attack animation is suppressed (`vr_melee_suppress_attack_anim 1`).
     - Ladders: stick forward climbs, stick back descends and jump boosts over the top. A short attach probe handles thin ladder panels (`vr_debug_ladder 1` logs the VR/prediction state).
     - Pause menu: the controller menu button opens the 2D menu as a room-anchored quad that faces the player at any heading; closing it resumes the game. The pointer laser is drawn into the menu canvas from the hand to the cursor.
-    - True-depth weapon rendering (`vr_weapon_true_depth 1`) and wall pull-back (`vr_weapon_pullback 1`).
+    - True-depth weapon rendering (`vr_weapon_true_depth 1`).
 - **Left-Handed Mode (`vr_lefthanded 1`):** Swaps the weapon hand, triggers, grips and locomotion/turn sticks. Jump/reload keep their commands but move from Right A/B to Left X/Y (Left A/B on Index). The lateral weapon grip offset is mirrored (`vr_lefthanded_mirror_grip 1`); the hand model already contains both anatomical chains, so no asset mirroring is needed.
 
 ---
@@ -154,7 +154,6 @@ All VR CVars are archived (`FCVAR_ARCHIVE`) and registered early in `Host_Init()
 | `vr_offhand_grab` | `1` | `0`, `1` | Pick up items/weapons with the off-hand grip when not two-handing |
 | `vr_debug_grab` | `0` | `0`, `1` | Log off-hand grab requests and server pick results |
 | `vr_weapon_true_depth` | `1` | `0`, `1` | Draw the viewmodel and hands with real depth so world geometry occludes them |
-| `vr_weapon_pullback` | `1` | `0`, `1` | Pull the weapon toward the player when it would intersect a wall |
 | `vr_weapon_offset_forward`| `-10.0` | float | Weapon grip forward offset in GoldSrc units |
 | `vr_calibration_stick` | `0` | `0`, `1` | Real-time 6DoF weapon offset & angle calibration via thumbstick (Team Beef: L/R=axis, U/D=adjust) |
 | **Immersion, Audio & Presence** | | | |

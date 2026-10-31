@@ -246,6 +246,12 @@
 * **Root Cause:** Weapon profiles in `assets/valve_vr/models/vr_weapons.json` were calibrated for generic OpenXR controllers and require precision tuning for the Quest 3 Touch Plus grip geometry.
 * **Status:** 🟢 **Resolved** (Fixed in `assets/valve_vr/models/vr_weapons.json`: calibrated crowbar grip offset `[0.0, 0.5, -0.5]` and pitch adjust `-2.0`, packaged into APK and host distribution).
 
+### Issue #32: Pause Menu Not Visible on Quest 3 (Backlog — Post-Weapons Epic)
+* **Symptoms:** Pressing the menu button on the Quest 3 does not present a visible pause menu; the game may pause but the quad/menu is not visible in the headset.
+* **Status:** ⚪ **Planned / Backlog** — intentionally deferred until the weapon and viewmodel pipeline is complete.
+* **Planned Epic:** Rework the pause/menu presentation for Quest 3 end-to-end: quad-layer visibility and composition, focus/key-destination handling, anchor/recenter behavior, laser-pointer interaction, layout and readability, and on-device validation.
+* **Constraint:** Do not spend implementation time on this item during the current weapon/model tasks. Keep the menu work isolated in its own epic so it does not destabilize the viewmodel/grip pipeline.
+
 ### Feature Milestone: 3D Hand Tracking Points, Weapon Center of Mass (COM) Lever Gizmos & Real-Time Telemetry
 * **Objective:** Enable continuous in-game and in-headset visual inspection of 6DoF hand tracking origins, physical weapon Center of Mass (COM) moment arms, anatomical collision hitboxes, and real-time spatial coordinate streams.
 * **Implementation:**

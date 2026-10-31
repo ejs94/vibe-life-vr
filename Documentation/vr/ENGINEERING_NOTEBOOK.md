@@ -237,7 +237,7 @@ Nossos testes recentes evidenciaram dois detalhes cruciais que foram investigado
 * **Novo layout de controles:** A = pulo, B = recarregar, gatilho principal = atirar, **grip principal + gatilho = alt-fire**, gatilho da offhand = usar quando a mão estiver estendida perto de um objeto, grip da offhand = duas mãos (reservado para pegar itens), X/Y livres. A lanterna fica apenas no gesto de tocar a têmpora. O antigo botão B de alt-fire e o `vr_button_b_action` foram removidos.
 * **Modo canhoto:** `vr_lefthanded 1` troca a mão primária, os gatilhos/grips e os sticks, mas mantém os comandos. Pulo/recarga migram de Right A/B para Left X/Y (Left A/B no Index) através de ações separadas (`jump_left`, `reload_left`), sem mudar `IN_JUMP`/`IN_RELOAD`. O offset lateral do grip é espelhado (`vr_lefthanded_mirror_grip 1`), pois o eixo direito local da mão esquerda aponta para o lado oposto. Não há espelhamento de asset: o modelo de mãos já contém as duas cadeias anatômicas e a arma é a mesma.
 * **Animação flat do crowbar suprimida:** com `vr_melee_suppress_attack_anim 1`, sequências `attack*` do crowbar são substituídas pela pose `idle` em `R_StudioSetupBones`; o dano continua server-side e o movimento físico da mão é a animação.
-* **Armas com profundidade real:** `vr_weapon_true_depth 1` remove o *depth range* comprimido do viewmodel/hands em VR, permitindo que paredes ocluam a arma. `vr_weapon_pullback 1` faz um trace da câmera até o grip e aproxima a arma quando ela entraria na parede.
+* **Armas com profundidade real:** `vr_weapon_true_depth 1` remove o *depth range* comprimido do viewmodel/hands em VR, permitindo que paredes ocluam a arma. O pull-back de parede foi removido; Box3D/IK ficam para uma etapa futura.
 * **Crossbow:** a regra de `vr_hide_arms` não esconde mais texturas com `shoulders`; no crossbow, `shoulders.bmp` são as lâminas do arco (40 triângulos), que haviam sumido.
 * **Reload:** o bit `IN_RELOAD` é consumido pelo HLSDK; foi adicionado um probe `[VR_RELOAD] IN_RELOAD reached server` no servidor (cvar `vr_debug_reload`) e logs `[VR_RELOAD] start/complete` no `DefaultReload` do HLSDK-portable para validar o caminho completo.
 * **Grab de itens/armas (off-hand):** com `vr_offhand_grab 1`, o grip da offhand (fora do volume de duas mãos) calcula a posição da mão no mundo e envia `vr_grab x y z` ao servidor. O comando `vr_grab` do HLSDK-portable valida a distância/LOS, procura o item/arma mais próximo num raio de 30 unidades (`UTIL_FindEntityInSphere`) e chama `Touch()` no jogador, reutilizando o pickup nativo (`CItem::ItemTouch` / `CBasePlayerItem::DefaultTouch`). O cliente só envia o pedido; a autoridade continua no servidor.
@@ -324,7 +324,7 @@ orientação da mão ("mão deitada numa mesa"). A estratégia é em três camad
 | Seleção de cadeia R/L por controlador | 1.16 | saída correta |
 | Handedness (`vr_lefthanded`) | 1.16 | saída correta |
 | Finger curling procedural | 1.12 | execução |
-| Registro de CVars (incl. `vr_hand_offset_*`) | 1.2 | execução |
+| Registro de CVars (incl. `vr_finger_curling`) | 1.2 | execução |
 | Demais 12 features VR | 1.1, 1.3–1.11, 1.13, 1.14 | misto |
 
 **Critério de suficiência adotado:** toda feature de mão tem gate de *saída

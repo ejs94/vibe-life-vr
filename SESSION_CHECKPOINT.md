@@ -10,6 +10,33 @@
 
 ---
 
+## 🧪 Test bed `testbed_scale` (25/10/2026)
+
+- **Mapa gerado:** `scripts/build_testbed_map.py` compila `testbed_scale` com VHLT. O BSP fica no overlay local `out/valve_vr/maps/testbed_scale.bsp`; `out/valve/maps` é symlink da instalação Steam e não deve receber mapas gerados.
+- **Conteúdo:** sala aberta de 45 m, grid de 1 m, postes de distância em 1/2/5/10/20 m, barras de altura em 1/2/3 m, nove luzes explícitas e spawn atrás do primeiro poste.
+- **VIS:** intencionalmente pulado; o grid denso estoura `MAX_PORTALS_ON_LEAF`. O engine avisa `has no visibility`; isso é esperado e o mapa não serve para medir performance.
+- **Evidência:** `scripts/gate_testbed_hands.cfg` roda pelo runner Monado e gera baked, offhand livre e unarmed blocky em `out/evidence/gate_testbed/`.
+- **Câmera fixa:** `vr_test_camera_target 2` agora cai para a transformação world da entidade da mão quando o controle secundário simulado não expõe grip pose.
+- **Política de mão:** baked é autoritativa; offhand blocky fica livre no controller; blocky nunca vai no foregrip; apoio só existe como mão baked.
+- **Mão blocky:** o gerador agora usa punho curto, palma mais fina/menor e conectores metacarpais; a silhueta ficou menos slab, mas continua blocky por definição. O poste da régua foi deslocado para fora do corredor central.
+- **Testes após a mudança:** asset 28/28, Monado 44/44 e regression 19/19.
+- **Evidência:** `out/evidence/gate_testbed/monado_20261025_031404/` (folha `testbed_hands_sheet.png`).
+- **Pendências visuais:** a captura fixa da offhand ainda não isola a mão com clareza; na captura eye com `vr_hide_arms 2` a crossbow ainda mostra uma manga baked de apoio, então esse estado é debug e precisa de auditoria antes de virar evidence final. O compositor do Monado continua preto; eye dumps não são prova de headset.
+
+---
+
+## 🎯 Grip Runtime + Pipeline de Assets (24/10/2026)
+
+- **Pose de grip real:** `aim/pose` continua sendo a linha de tiro, mas a mão standalone e o viewmodel agora usam `grip/pose` (`XR_GetPrimaryGripTransform` / `XR_GetSecondaryGripTransform`). O teste headless mantém o override `vr_test_hands`.
+- **Ancoragem do osso da arma:** `vr_weapon_anchor_root` deixou de ser um cvar morto. Depois de `R_StudioSetupBones`, o osso de empunhadura é travado na palma, com offsets residuais em `vr_weapon_anchor_forward/right/up`.
+- **Offhand:** o aperto normal do controle (`grip > 0.4`) não conta mais como duas mãos. O snap para o foregrip só ocorre quando a arma realmente define um socket (crossbow/RPG) ou quando o estabilizador espacial engaja.
+- **Validação:** **43/43** testes Monado e **19/19** testes de regressão (novo gate 0.3 de paridade de nomes).
+- **MP5:** o HLSDK pede `models/v_9mmAR.mdl`; o overlay agora entrega esse nome exato. A cópia de proveniência `v_9mmar.mdl` foi movida para `assets/valve_vr/models/source/` e não é deployada.
+- **Round-trip do compilador:** `scripts/check_mdl_roundtrip.sh` prova que `mdldec -> pxstudiomdl` preserva ossos, sequências, eventos, bodygroups e attachments. Crossbow passou; o MDL recompilado também passou 43/43 no Monado.
+- **Diagnóstico de assets:** `scripts/audit_viewmodel_assets.py` gera a tabela de materiais/texturas/UVs/normais/abertos em `out/evidence/viewmodel_asset_audit/`.
+- **MCPs:** a config da home (`opencode.json`) carrega blender/repowise/graphify mesmo iniciando em `/home/ejs94`. Sessões antigas presas em `xash3d-fwgs-vr` falham porque o diretório foi renomeado para `vibe-life-vr`.
+- **Backlog pós-armas:** o menu de pause ainda não aparece no Quest 3. Fica registrado como épico separado (Issue #32 no roadmap) para depois da conclusão das armas/modelos; não bloqueia o piloto da crossbow.
+
 ## 🎨 Rebranding e MMOD (24/10/2026)
 
 - Projeto renomeado para **Vibe-Life VR**: README, documentação, `gameinfo.txt` e o rótulo do app Android foram atualizados.

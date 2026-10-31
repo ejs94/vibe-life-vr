@@ -83,6 +83,9 @@ Run the relevant gates before claiming success:
 ./scripts/run_regression_battery.sh     # 18-gate regression battery
 python3 scripts/verify_grip_pose_math.py
 python3 scripts/check_hand_asset.py
+python3 scripts/check_viewmodel_names.py          # overlay names vs HLSDK requests
+python3 scripts/audit_viewmodel_assets.py         # static texture/UV/normal audit
+scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe log
 ./scripts/test_manual_reload.sh          # Glock staged reload vertical slice
 ./scripts/test_quest_auto.sh 25 crossfire
@@ -109,6 +112,8 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
   identical.
 - The crossbow `grip` bone is the front/foregrip. The main grip comes from the
   right-hand bone; keep both sockets distinct.
+- The anchor uses the viewmodel grip bone aligned to the palm (grip pose);
+  `grip_offset` is only a fallback for models without a grip bone/attachment.
 - Do not change the authoritative firing line. `vuser2` is hand + aim
   calibration only.
 - Screenshot and visual tests must stay valid when proximity pull-back or wall
@@ -118,12 +123,19 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
 
 ## 8. Assets and Licensing
 
-- Bundle only assets whose license permits modification and redistribution.
-- The glove is black by design; do not "fix" it to a skin tone.
-- The MMOD reanimation pack is bundled under `assets/valve_vr/models/` with
-  attribution and the author's permission. Keep its credits, source URL,
-  archive checksum and per-weapon audit current in `CREDITS.md`; do not add
-  the Blue Shift or Gearbox variants without a separate approval.
+- Licensing is not a blocker: this is a non-commercial community mod. Do not
+  spend time verifying licenses. For every third-party asset, keep the download
+  source URL and author credit in `assets/valve_vr/CREDITS.md`; the maintainer
+  will confirm with each author before release. Do not ship a weapon or model
+  that is 100% one modder's work without credit; assets derived from or lightly
+  modified from Valve content only need a "based on" credit.
+- The goal is a glove that works (follows the grip pose, closes naturally on the
+  weapon grip, looks acceptable). Color and style do not matter; any glove
+  asset may be used or replaced.
+- The MMOD reanimation pack is bundled under `assets/valve_vr/models/`; keep its
+  author credit, download source URL, archive checksum and per-weapon audit
+  current in `CREDITS.md`. Blue Shift or Gearbox variants follow the same credit
+  rules; add them to the audit when adopted.
 - `v_hand.mdl` is the standalone two-hand model. Rebuild and validate it with
   the scripts in `scripts/` (for example `build_twohand_mdl.py`,
   `check_hand_asset.py`) instead of hand-editing binary assets.
@@ -147,6 +159,9 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
   `quest.side.vr`; it steals focus and breaks VR window placement.
 - `quest mount on|off` needs `QUEST_MQST_PIN` on Android user 0. Always run
   `quest mount off` after off-head work.
+- The current validation phase is the Monado simulator; do not generate or
+  install APKs, and record Quest checks as pending unless the user asks for
+  them.
 
 ## 10. Code Style
 
@@ -182,3 +197,37 @@ python3 scripts/calibrate_weapon_grips.py <engine.log>  # preview from a probe l
   do not add it until `../mcp-tools/clangd-mcp-server/dist/index.js` exists.
 - Prefer the project skills and commands over ad-hoc command sequences. Use the
   `reviewer` subagent for read-only review and `quest-tester` for HIL work.
+
+## 13. Hard Rules From Experience
+
+- Hands: never generate a detailed hand from primitives; the blocky unarmed
+  presence hand is the explicit exception. Never reshape a glove by displacing
+  vertices. Baked weapon hands are authoritative.
+- Animation ownership: the hand assigned to an animation is authoritative; do
+  not reshape or replace it per animation. A fallback VR hand copies the baked
+  animation and inherits its texture, and baked animation is blended with 6DoF
+  input instead of copying flat-screen root motion.
+- Visual approval: do not deploy an asset without a labeled comparison sheet
+  (fixed test camera) approved by the maintainer. Green gates (Monado suite,
+  palm_dist) do not prove appearance.
+- Reference point: the palm (grip pose), not the wrist bone and not the aim pose.
+  The deprecated `vr_hand_offset_*` and `vr_weapon_anchor_{forward,right,up}`
+  no-ops were removed; `vr_weapon_anchor_root` remains the active anchor switch.
+  Do not reintroduce compensations.
+- Bones: do not add bones to viewmodels; append attachments at the end of the table.
+- `vr_hide_arms 2` filters only the viewmodel entity, not the standalone hands.
+- Blender: start each script from an empty scene, use named collections (`hand`,
+  `weapon`, `debug`), verify scale and position numerically after any import, and
+  save new versions instead of overwriting. Loose SMD/OBJ imports are not valid
+  for judging fit; use engine captures.
+- Overlay trap: update both `out/valve/models` and `out/valve_vr/models`, and
+  confirm in the log which file was loaded.
+
+## 14. Session Economy
+
+- Start from `SESSION_CHECKPOINT.md`; do not re-read the whole repository. Use
+  repowise and graphify queries instead.
+- One stage per session; end with a short handoff (done, pending, files touched).
+- Stop and report after the same stage fails twice.
+- Prefer headless Blender scripts with numeric checks over interactive
+  screenshot loops.
