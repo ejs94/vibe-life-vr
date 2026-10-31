@@ -332,11 +332,13 @@ void XR_RegisterCVars( void )
     vr_test_head_roll = Cvar_Get("vr_test_head_roll", "0", 0, "Simulated head roll degrees");
     vr_test_head_drop = Cvar_Get("vr_test_head_drop", "0", 0, "Simulated vertical head drop displacement in meters (for physical crouch testing)");
     vr_test_headgesture = Cvar_Get("vr_test_headgesture", "0", 0, "Simulate head flashlight gesture (1 = right hand, 2 = left hand)");
-    vr_test_camera = Cvar_Get("vr_test_camera", "0", 0, "Fixed comparison camera: 0=off, 1=right lateral, 2=top, 3=front, 4=left lateral");
+    vr_test_camera = Cvar_Get("vr_test_camera", "0", 0, "Fixed comparison camera: 0=off, 1=right lateral, 2=top, 3=front, 4=left lateral, 5=orbit");
     vr_test_camera_distance = Cvar_Get("vr_test_camera_distance", "60", 0, "Fixed comparison camera orbit distance in world units");
     vr_test_camera_fov = Cvar_Get("vr_test_camera_fov", "60", 0, "Fixed comparison camera vertical field of view in degrees");
     vr_test_camera_aim = Cvar_Get("vr_test_camera_aim", "0", 0, "Fixed comparison camera aim offset forward from the grip in world units");
     vr_test_camera_target = Cvar_Get("vr_test_camera_target", "0", 0, "Fixed comparison camera target: 0=viewmodel grip, 1=primary palm");
+    Cvar_Get("vr_test_camera_azimuth", "0", 0, "Fixed comparison camera orbit azimuth in degrees for vr_test_camera 5");
+    Cvar_Get("vr_test_camera_elevation", "0", 0, "Fixed comparison camera orbit elevation in degrees for vr_test_camera 5");
     vr_baked_hand_curling = Cvar_Get("vr_baked_hand_curling", "1", 0, "Curling on the baked viewmodel hand: 0=off, 1=current, 2=index finger only");
     vr_thumb_curl_axis = Cvar_Get("vr_thumb_curl_axis", "1", 0, "Standalone thumb curl axis: 0=legacy local Y, 1=thumb-specific local Z toward palm");
     vr_hand_grip_lock = Cvar_Get("vr_hand_grip_lock", "1", 0, "0=off, 1=snap standalone hand position to the viewmodel grip bone, 2=also copy its orientation");

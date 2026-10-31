@@ -438,6 +438,8 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 		static cvar_t *vr_test_camera_distance = NULL;
 		static cvar_t *vr_test_camera_aim = NULL;
 		static cvar_t *vr_test_camera_target = NULL;
+		static cvar_t *vr_test_camera_azimuth = NULL;
+		static cvar_t *vr_test_camera_elevation = NULL;
 
 		if( !vr_test_camera )
 			vr_test_camera = gEngfuncs.pfnGetCvarPointer( "vr_test_camera" );
@@ -447,6 +449,10 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 			vr_test_camera_aim = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_aim" );
 		if( !vr_test_camera_target )
 			vr_test_camera_target = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_target" );
+		if( !vr_test_camera_azimuth )
+			vr_test_camera_azimuth = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_azimuth" );
+		if( !vr_test_camera_elevation )
+			vr_test_camera_elevation = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_elevation" );
 
 		if( vr_test_camera && vr_test_camera->value > 0.0f && tr.viewent )
 		{
@@ -522,6 +528,19 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 			case 2: VectorMA( target,  dist, up,    outOrigin ); break; // top
 			case 3: VectorMA( target,  dist, fwd,   outOrigin ); break; // front
 			case 4: VectorMA( target, -dist, right, outOrigin ); break; // left lateral
+			case 5:
+			{
+				// World-space turntable orbit for visual review. Azimuth 0 is
+				// +X and positive elevation looks from above.
+				float azimuth = DEG2RAD( vr_test_camera_azimuth ? vr_test_camera_azimuth->value : 0.0f );
+				float elevation = DEG2RAD( vr_test_camera_elevation ? vr_test_camera_elevation->value : 0.0f );
+				vec3_t orbit;
+				orbit[0] = cosf( elevation ) * cosf( azimuth );
+				orbit[1] = cosf( elevation ) * sinf( azimuth );
+				orbit[2] = sinf( elevation );
+				VectorMA( target, dist, orbit, outOrigin );
+				break;
+			}
 			default: VectorMA( target, dist, right, outOrigin ); break;
 			}
 
