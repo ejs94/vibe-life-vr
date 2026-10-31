@@ -35,10 +35,17 @@ static XrAction g_actionMove = XR_NULL_HANDLE;
 static XrAction g_actionTurn = XR_NULL_HANDLE;
 static XrAction g_actionAimPoseLeft = XR_NULL_HANDLE;
 static XrAction g_actionAimPoseRight = XR_NULL_HANDLE;
+static XrAction g_actionGripPoseLeft = XR_NULL_HANDLE;
+static XrAction g_actionGripPoseRight = XR_NULL_HANDLE;
 static XrAction g_actionHapticLeft = XR_NULL_HANDLE;
 static XrAction g_actionHapticRight = XR_NULL_HANDLE;
 
 static float s_playerTurnYaw = 0.0f;
+
+// When set, hand transforms skip the per-weapon pitch/yaw/roll calibration.
+// Hand presence, grip anchoring and the simulated test poses must never inherit
+// the weapon visual adjustment.
+static qboolean s_rawHandPose = false;
 
 float XR_GetPlayerTurnYaw( void )
 {
@@ -48,6 +55,8 @@ float XR_GetPlayerTurnYaw( void )
 
 static XrSpace g_leftHandSpace = XR_NULL_HANDLE;
 static XrSpace g_rightHandSpace = XR_NULL_HANDLE;
+static XrSpace g_leftGripSpace = XR_NULL_HANDLE;
+static XrSpace g_rightGripSpace = XR_NULL_HANDLE;
 
 static XrPath StringToPath( const char *str )
 {
@@ -95,6 +104,8 @@ static void XR_CreateAllActions( void )
     g_actionTurn        = CreateAction("turn", "Turn (Snap/Smooth)", XR_ACTION_TYPE_VECTOR2F_INPUT);
     g_actionAimPoseLeft = CreateAction("aim_left", "Left Aim Pose", XR_ACTION_TYPE_POSE_INPUT);
     g_actionAimPoseRight= CreateAction("aim_right", "Right Aim Pose", XR_ACTION_TYPE_POSE_INPUT);
+    g_actionGripPoseLeft = CreateAction("grip_pose_left", "Left Grip Pose", XR_ACTION_TYPE_POSE_INPUT);
+    g_actionGripPoseRight= CreateAction("grip_pose_right", "Right Grip Pose", XR_ACTION_TYPE_POSE_INPUT);
     g_actionHapticLeft  = CreateAction("haptic_left", "Left Hand Haptics", XR_ACTION_TYPE_VIBRATION_OUTPUT);
     g_actionHapticRight = CreateAction("haptic_right", "Right Hand Haptics", XR_ACTION_TYPE_VIBRATION_OUTPUT);
 }
@@ -120,6 +131,8 @@ static void XR_SuggestAllBindings( void )
         { g_actionTurn,         StringToPath("/user/hand/right/input/thumbstick") },       // Turning (Snap/Smooth)
         { g_actionAimPoseLeft,  StringToPath("/user/hand/left/input/aim/pose") },
         { g_actionAimPoseRight, StringToPath("/user/hand/right/input/aim/pose") },
+        { g_actionGripPoseLeft, StringToPath("/user/hand/left/input/grip/pose") },
+        { g_actionGripPoseRight,StringToPath("/user/hand/right/input/grip/pose") },
         { g_actionHapticLeft,   StringToPath("/user/hand/left/output/haptic") },
         { g_actionHapticRight,  StringToPath("/user/hand/right/output/haptic") },
     };
@@ -168,6 +181,8 @@ static void XR_SuggestAllBindings( void )
         { g_actionTurn,         StringToPath("/user/hand/right/input/thumbstick") },
         { g_actionAimPoseLeft,  StringToPath("/user/hand/left/input/aim/pose") },
         { g_actionAimPoseRight, StringToPath("/user/hand/right/input/aim/pose") },
+        { g_actionGripPoseLeft, StringToPath("/user/hand/left/input/grip/pose") },
+        { g_actionGripPoseRight,StringToPath("/user/hand/right/input/grip/pose") },
         { g_actionHapticLeft,   StringToPath("/user/hand/left/output/haptic") },
         { g_actionHapticRight,  StringToPath("/user/hand/right/output/haptic") },
     };
@@ -204,6 +219,12 @@ static qboolean XR_AttachActionSetsAndSpaces( void )
 
     spaceInfo.action = g_actionAimPoseRight;
     xrCreateActionSpace(g_xrSession, &spaceInfo, &g_rightHandSpace);
+
+    spaceInfo.action = g_actionGripPoseLeft;
+    xrCreateActionSpace(g_xrSession, &spaceInfo, &g_leftGripSpace);
+
+    spaceInfo.action = g_actionGripPoseRight;
+    xrCreateActionSpace(g_xrSession, &spaceInfo, &g_rightGripSpace);
 
     return true;
 }
@@ -257,6 +278,16 @@ void XR_ShutdownInput( void )
         xrDestroySpace(g_rightHandSpace);
         g_rightHandSpace = XR_NULL_HANDLE;
     }
+    if (g_leftGripSpace != XR_NULL_HANDLE)
+    {
+        xrDestroySpace(g_leftGripSpace);
+        g_leftGripSpace = XR_NULL_HANDLE;
+    }
+    if (g_rightGripSpace != XR_NULL_HANDLE)
+    {
+        xrDestroySpace(g_rightGripSpace);
+        g_rightGripSpace = XR_NULL_HANDLE;
+    }
     if (g_actionSet != XR_NULL_HANDLE)
     {
         xrDestroyActionSet(g_actionSet);
@@ -280,6 +311,8 @@ void XR_ShutdownInput( void )
     g_actionTurn = XR_NULL_HANDLE;
     g_actionAimPoseLeft = XR_NULL_HANDLE;
     g_actionAimPoseRight = XR_NULL_HANDLE;
+    g_actionGripPoseLeft = XR_NULL_HANDLE;
+    g_actionGripPoseRight = XR_NULL_HANDLE;
     g_actionHapticLeft = XR_NULL_HANDLE;
     g_actionHapticRight = XR_NULL_HANDLE;
 }
@@ -433,20 +466,18 @@ static void XR_SyncThumbsticksAndCurls( void )
         g_xrInputState.turnY = (fabsf(vecState.currentState.y) > deadzone) ? vecState.currentState.y : 0.0f;
     }
 
-    // Procedural thumb curling heuristic based on buttons and thumbstick touches/deflections
+    // Procedural thumb curling heuristic based on buttons only. Thumbstick
+    // deflection is locomotion/turning input and must never move a finger:
+    // walking or snapping the view used to make the thumb twitch.
     qboolean lefthanded = (vr_lefthanded && vr_lefthanded->value > 0.0f);
     qboolean rightThumbActive = lefthanded ?
-        (g_xrInputState.jump || g_xrInputState.use || g_xrInputState.sprint ||
-         fabsf(g_xrInputState.moveX) > 0.05f || fabsf(g_xrInputState.moveY) > 0.05f) :
-        (g_xrInputState.reload || g_xrInputState.altfire || g_xrInputState.duck ||
-         fabsf(g_xrInputState.turnX) > 0.05f || fabsf(g_xrInputState.turnY) > 0.05f);
+        (g_xrInputState.jump || g_xrInputState.use || g_xrInputState.sprint) :
+        (g_xrInputState.reload || g_xrInputState.altfire || g_xrInputState.duck);
     float targetThumbRight = rightThumbActive ? 1.0f : 0.0f;
 
     qboolean leftThumbActive = lefthanded ?
-        (g_xrInputState.reload || g_xrInputState.altfire || g_xrInputState.duck ||
-         fabsf(g_xrInputState.turnX) > 0.05f || fabsf(g_xrInputState.turnY) > 0.05f) :
-        (g_xrInputState.jump || g_xrInputState.use || g_xrInputState.sprint || g_xrInputState.menu ||
-         fabsf(g_xrInputState.moveX) > 0.05f || fabsf(g_xrInputState.moveY) > 0.05f);
+        (g_xrInputState.reload || g_xrInputState.altfire || g_xrInputState.duck) :
+        (g_xrInputState.jump || g_xrInputState.use || g_xrInputState.sprint || g_xrInputState.menu);
     float targetThumbLeft = leftThumbActive ? 1.0f : 0.0f;
 
     // Smooth response (~100ms) to avoid instantaneous finger snapping
@@ -454,15 +485,18 @@ static void XR_SyncThumbsticksAndCurls( void )
     g_xrInputState.thumbRight += (targetThumbRight - g_xrInputState.thumbRight) * curlLerp;
     g_xrInputState.thumbLeft  += (targetThumbLeft  - g_xrInputState.thumbLeft) * curlLerp;
 
-    // Simulated finger curling axes for headless regression testing
+    // Simulated finger curling axes for headless regression testing. The cvar
+    // value is the curl amount (0.5 = half, 1.0 = full), so Gate 0 can capture
+    // the same hand at 0 / 0.5 / 1.
     if (vr_test_finger_curl && vr_test_finger_curl->value > 0.0f)
     {
-        g_xrInputState.triggerRight = 0.85f;
-        g_xrInputState.triggerLeft  = 0.75f;
-        g_xrInputState.gripRight    = 0.90f;
-        g_xrInputState.gripLeft     = 0.60f;
-        g_xrInputState.thumbRight   = 0.80f;
-        g_xrInputState.thumbLeft    = 0.70f;
+        float curl = bound(0.0f, vr_test_finger_curl->value, 1.0f);
+        g_xrInputState.triggerRight = curl;
+        g_xrInputState.triggerLeft  = curl;
+        g_xrInputState.gripRight    = curl;
+        g_xrInputState.gripLeft     = curl;
+        g_xrInputState.thumbRight   = curl;
+        g_xrInputState.thumbLeft    = curl;
     }
 }
 
@@ -509,6 +543,38 @@ static void XR_SyncHandPoses( XrTime syncTime )
             if (vel.velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)
             {
                 g_xrInputState.rightHandVelocity = vel.linearVelocity;
+            }
+        }
+    }
+
+    // Grip poses are the palm anchor used by the visual weapon and the
+    // standalone hand. Aim poses stay authoritative for the firing ray.
+    if (g_leftGripSpace != XR_NULL_HANDLE && g_xrLocalSpace != XR_NULL_HANDLE)
+    {
+        XrSpaceLocation loc = {0};
+        loc.type = XR_TYPE_SPACE_LOCATION;
+        if (XR_SUCCEEDED(xrLocateSpace(g_leftGripSpace, g_xrLocalSpace, syncTime, &loc)))
+        {
+            if ((loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) &&
+                (loc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+            {
+                g_xrInputState.leftGripPose = loc.pose;
+                g_xrInputState.leftGripActive = true;
+            }
+        }
+    }
+
+    if (g_rightGripSpace != XR_NULL_HANDLE && g_xrLocalSpace != XR_NULL_HANDLE)
+    {
+        XrSpaceLocation loc = {0};
+        loc.type = XR_TYPE_SPACE_LOCATION;
+        if (XR_SUCCEEDED(xrLocateSpace(g_rightGripSpace, g_xrLocalSpace, syncTime, &loc)))
+        {
+            if ((loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) &&
+                (loc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+            {
+                g_xrInputState.rightGripPose = loc.pose;
+                g_xrInputState.rightGripActive = true;
             }
         }
     }
@@ -633,7 +699,10 @@ static void XR_ProcessButtonInputs( usercmd_t *cmd, qboolean lefthanded,
 // Compute hand position relative to head view space for gesture detection
 static qboolean XR_GetHandPositionInHeadView( int hand, XrTime syncTime, XrVector3f *out_pos )
 {
-    XrSpace handSpace = (hand == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
+    // The handle/palm is what touches the temple, not the aim ray origin.
+    XrSpace handSpace = (hand == VR_HAND_LEFT) ? g_leftGripSpace : g_rightGripSpace;
+    if( handSpace == XR_NULL_HANDLE )
+        handSpace = (hand == VR_HAND_LEFT) ? g_leftHandSpace : g_rightHandSpace;
 
     // Automated test override for headless / simulated validation
     if (vr_test_headgesture && vr_test_headgesture->value > 0.0f)
@@ -1205,7 +1274,7 @@ static void XR_ProcessOffhandGrab( qboolean lefthanded )
         return;
 
     vec3_t offOrigin;
-    if( !XR_GetSecondaryHandTransform( offOrigin, NULL ))
+    if( !XR_GetSecondaryGripTransform( offOrigin, NULL ))
         return;
 
     float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
@@ -1271,6 +1340,86 @@ void XR_InputAppendMove( usercmd_t *cmd, float frametime )
     XR_ProcessLocomotionAndTurn( cmd, frametime, rawMoveX, rawMoveY, rawTurnX );
 }
 
+/*
+====================
+XR_GetGripPoseTransform
+
+Returns the raw OpenXR grip (palm) pose in head-relative GoldSrc coordinates.
+The grip pose is the visual anchor: the standalone hand and the weapon socket
+must follow the palm, not the aim ray. Runtimes that do not expose a valid grip
+pose fall back to the aim pose so headless tests and older runtimes keep the
+previous behaviour. No weapon pitch/yaw/roll calibration is applied here; the
+single source of truth (XR_GetWeaponPose) owns that.
+====================
+*/
+static qboolean XR_GetGripPoseTransform( int hand, vec3_t out_origin, vec3_t out_angles )
+{
+    // Headless tests inject a deterministic controller pose. It is already a
+    // palm-style pose, so use the same simulated transform for grip.
+    if( vr_test_hands && vr_test_hands->value > 0.0f )
+    {
+        qboolean valid;
+        qboolean prevRaw = s_rawHandPose;
+        s_rawHandPose = true;
+        if( hand == VR_HAND_RIGHT )
+            valid = XR_GetRightHandTransform( out_origin, out_angles );
+        else
+            valid = XR_GetLeftHandTransform( out_origin, out_angles );
+        s_rawHandPose = prevRaw;
+        return valid;
+    }
+
+    const XrPosef *pose = NULL;
+
+    if( hand == VR_HAND_RIGHT )
+    {
+        if( g_xrInputState.rightGripActive )
+            pose = &g_xrInputState.rightGripPose;
+        else if( g_xrInputState.rightHandActive )
+            pose = &g_xrInputState.rightHandPose;
+    }
+    else
+    {
+        if( g_xrInputState.leftGripActive )
+            pose = &g_xrInputState.leftGripPose;
+        else if( g_xrInputState.leftHandActive )
+            pose = &g_xrInputState.leftHandPose;
+    }
+
+    if( !pose )
+        return false;
+
+    if( out_origin )
+    {
+        float rel_x = pose->position.x - g_xrViews[0].pose.position.x;
+        float rel_y = pose->position.y - g_xrViews[0].pose.position.y;
+        float rel_z = pose->position.z - g_xrViews[0].pose.position.z;
+
+        // Convert to head-relative GoldSrc coordinates:
+        // X = forward (-rel_z), Y = left (-rel_x), Z = up (rel_y)
+        out_origin[0] = -rel_z;
+        out_origin[1] = -rel_x;
+        out_origin[2] =  rel_y;
+    }
+
+    if( out_angles )
+        XR_QuatToEuler( &pose->orientation, out_angles );
+
+    return true;
+}
+
+qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles )
+{
+    int hand = ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? VR_HAND_LEFT : VR_HAND_RIGHT;
+    return XR_GetGripPoseTransform( hand, out_origin, out_angles );
+}
+
+qboolean XR_GetSecondaryGripTransform( vec3_t out_origin, vec3_t out_angles )
+{
+    int hand = ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? VR_HAND_RIGHT : VR_HAND_LEFT;
+    return XR_GetGripPoseTransform( hand, out_origin, out_angles );
+}
+
 qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
     if (vr_lefthanded && vr_lefthanded->value > 0.0f)
@@ -1292,11 +1441,6 @@ qboolean XR_GetSecondaryHandTransform( vec3_t out_origin, vec3_t out_angles )
     return XR_GetLeftHandTransform( out_origin, out_angles );
 }
 
-// Hand presence must follow the raw controller pose. Weapon calibration
-// (vr_weapon_*adjust and the per-weapon pitch/yaw/roll profile) rotates the
-// viewmodel, and must never leak into the always-visible hands.
-static qboolean s_rawHandPose = false;
-
 /*
 =============
 XR_GetHandPresenceTransform
@@ -1309,15 +1453,10 @@ headset is returned, so hand presence never pops out of existence.
 */
 qboolean XR_GetHandPresenceTransform( int hand, vec3_t out_origin, vec3_t out_angles )
 {
-    qboolean valid;
-    qboolean prevRaw = s_rawHandPose;
-
-    s_rawHandPose = true;
-    if( hand == VR_HAND_RIGHT )
-        valid = XR_GetRightHandTransform( out_origin, out_angles );
-    else
-        valid = XR_GetLeftHandTransform( out_origin, out_angles );
-    s_rawHandPose = prevRaw;
+    // Prefer the grip pose (palm) over the aim pose. The grip pose is what the
+    // physical controller handle occupies, so the hand mesh sits on the user's
+    // fingers instead of floating at the aim ray origin.
+    qboolean valid = XR_GetGripPoseTransform( hand, out_origin, out_angles );
 
     if( valid && out_angles && vr_test_hand_angle_probe && vr_test_hand_angle_probe->value > 0.0f )
     {
@@ -1362,9 +1501,12 @@ void XR_GetFingerCurlAxes( int hand, float *out_trigger, float *out_grip, float 
 
     if (vr_test_finger_curl && vr_test_finger_curl->value > 0.0f)
     {
-        trg = (hand == VR_HAND_LEFT) ? 0.75f : 0.85f;
-        grp = (hand == VR_HAND_LEFT) ? 0.60f : 0.90f;
-        thm = (hand == VR_HAND_LEFT) ? 0.70f : 0.80f;
+        // Use the requested amount so 0.5 is actually half curl. The old
+        // fixed values made every capture look identical.
+        float curl = bound(0.0f, vr_test_finger_curl->value, 1.0f);
+        trg = curl;
+        grp = curl;
+        thm = curl;
     }
     else
     {
@@ -1435,10 +1577,21 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
         else
         {
             // 2. Base weapon pose (single source of truth), then add the
-            //    synthetic barrel extension in the same weapon frame.
+            //    synthetic barrel extension in the same weapon frame. The
+            //    muzzle position follows the visual (grip) pose; the firing
+            //    direction above still follows the aim pose.
             vec3_t pose_origin, pose_angles;
-            XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, refState.vieworg, scale,
-                pose_origin, pose_angles );
+            vec3_t gripOrigin, gripAngles;
+            if( XR_GetPrimaryGripTransform( gripOrigin, gripAngles ))
+            {
+                XR_GetWeaponPose( wpn, gripOrigin, gripAngles, turn_yaw, refState.vieworg, scale,
+                    pose_origin, pose_angles );
+            }
+            else
+            {
+                XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, refState.vieworg, scale,
+                    pose_origin, pose_angles );
+            }
 
             vec3_t forward, right, up;
             AngleVectors( pose_angles, forward, right, up );
@@ -1457,7 +1610,7 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
             out_muzzle_offset[2] = (pose_origin[2] - refState.vieworg[2]) + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
         }
 
-        Con_DPrintf( "[VR_GRIP] src=muzzle model=%s origin=(%.2f %.2f %.2f) world=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d pullback=0\n",
+        Con_DPrintf( "[VR_GRIP] src=muzzle model=%s origin=(%.2f %.2f %.2f) world=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d\n",
             wpn, out_muzzle_offset[0], out_muzzle_offset[1], out_muzzle_offset[2],
             out_muzzle_offset[0] + refState.vieworg[0], out_muzzle_offset[1] + refState.vieworg[1], out_muzzle_offset[2] + refState.vieworg[2],
             local_angles[0], local_angles[1], local_angles[2],

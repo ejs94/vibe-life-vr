@@ -385,6 +385,40 @@ void R_VR_ResetCalibration( void ) {}
 
 /*
 =============
+R_TestCameraActive
+
+True while the fixed comparison camera is enabled and the viewmodel exists.
+=============
+*/
+static qboolean R_TestCameraActive( void )
+{
+#ifdef XASH_OPENXR
+	static cvar_t *vr_test_camera = NULL;
+	if( !vr_test_camera )
+		vr_test_camera = gEngfuncs.pfnGetCvarPointer( "vr_test_camera" );
+
+	return ( vr_test_camera && vr_test_camera->value > 0.0f && tr.viewent );
+#else
+	return false;
+#endif
+}
+
+static float R_TestCameraFov( void )
+{
+#ifdef XASH_OPENXR
+	static cvar_t *vr_test_camera_fov = NULL;
+	if( !vr_test_camera_fov )
+		vr_test_camera_fov = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_fov" );
+
+	return ( vr_test_camera_fov && vr_test_camera_fov->value > 15.0f )
+		? vr_test_camera_fov->value : 60.0f;
+#else
+	return 60.0f;
+#endif
+}
+
+/*
+=============
 R_ComputeEyeTransform
 
 Computes the 6DoF world-space origin and viewangles for the active eye.
@@ -394,6 +428,114 @@ static void R_ComputeEyeTransform( int eye, vec3_t outOrigin, vec3_t outAngles )
 {
 	VectorCopy( RI.rvp.vieworigin, outOrigin );
 	VectorCopy( RI.rvp.viewangles, outAngles );
+
+#ifdef XASH_OPENXR
+	// Fixed comparison camera for hand/weapon screenshots. It orbits the
+	// current viewmodel grip and keeps the whole weapon in frame, instead of
+	// judging the grip from the normal first-person eye position.
+	{
+		static cvar_t *vr_test_camera = NULL;
+		static cvar_t *vr_test_camera_distance = NULL;
+		static cvar_t *vr_test_camera_aim = NULL;
+		static cvar_t *vr_test_camera_target = NULL;
+
+		if( !vr_test_camera )
+			vr_test_camera = gEngfuncs.pfnGetCvarPointer( "vr_test_camera" );
+		if( !vr_test_camera_distance )
+			vr_test_camera_distance = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_distance" );
+		if( !vr_test_camera_aim )
+			vr_test_camera_aim = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_aim" );
+		if( !vr_test_camera_target )
+			vr_test_camera_target = gEngfuncs.pfnGetCvarPointer( "vr_test_camera_target" );
+
+		if( vr_test_camera && vr_test_camera->value > 0.0f && tr.viewent )
+		{
+			vec3_t target, fwd, right, up, dir;
+			float dist = ( vr_test_camera_distance && vr_test_camera_distance->value > 8.0f )
+				? vr_test_camera_distance->value : 60.0f;
+
+			int target_mode = vr_test_camera_target ? (int)vr_test_camera_target->value : 0;
+			if( target_mode == 1 || target_mode == 2 )
+			{
+				vec3_t hand_origin, hand_angles;
+				qboolean hand_is_world = false;
+				qboolean have_hand = ( target_mode == 1 )
+					? XR_GetPrimaryGripTransform( hand_origin, hand_angles )
+					: XR_GetSecondaryHandTransform( hand_origin, hand_angles );
+
+				// The simulated secondary controller may not expose a grip pose
+				// every frame. Fall back to the hand entity's world transform so
+				// the fixed camera still centers the actual free hand.
+				if( !have_hand )
+				{
+					have_hand = R_VR_GetHandEntityTransform( ( target_mode == 1 ) ? 0 : 1,
+						hand_origin, hand_angles );
+					hand_is_world = have_hand;
+				}
+
+				if( have_hand )
+				{
+					if( hand_is_world )
+					{
+						VectorCopy( hand_origin, target );
+						AngleVectors( hand_angles, fwd, right, up );
+					}
+					else
+					{
+						static cvar_t *vr_worldscale_cam = NULL;
+						if( !vr_worldscale_cam )
+							vr_worldscale_cam = gEngfuncs.pfnGetCvarPointer( "vr_worldscale" );
+						float scale = ( vr_worldscale_cam && vr_worldscale_cam->value > 0.0f )
+							? vr_worldscale_cam->value : 40.0f;
+						float turn = XR_GetPlayerTurnYaw();
+						float cy = cosf( DEG2RAD( turn ) ), sy = sinf( DEG2RAD( turn ) );
+
+						target[0] = RI.rvp.vieworigin[0] + ( hand_origin[0] * cy - hand_origin[1] * sy ) * scale;
+						target[1] = RI.rvp.vieworigin[1] + ( hand_origin[0] * sy + hand_origin[1] * cy ) * scale;
+						target[2] = RI.rvp.vieworigin[2] + hand_origin[2] * scale;
+
+						hand_angles[1] = anglemod( hand_angles[1] + turn );
+						AngleVectors( hand_angles, fwd, right, up );
+					}
+				}
+				else
+				{
+					VectorCopy( tr.viewent->origin, target );
+					AngleVectors( tr.viewent->angles, fwd, right, up );
+				}
+			}
+			else
+			{
+				VectorCopy( tr.viewent->origin, target );
+				AngleVectors( tr.viewent->angles, fwd, right, up );
+			}
+
+			// The grip/palm is the comparison reference. The weapon body
+			// extends around it; keep the grip near the frame center.
+			float aim = ( vr_test_camera_aim ) ? vr_test_camera_aim->value : 0.0f;
+			if( aim > 0.0f )
+				VectorMA( target, aim, fwd, target );
+
+			switch( (int)vr_test_camera->value )
+			{
+			case 1: VectorMA( target,  dist, right, outOrigin ); break; // right lateral
+			case 2: VectorMA( target,  dist, up,    outOrigin ); break; // top
+			case 3: VectorMA( target,  dist, fwd,   outOrigin ); break; // front
+			case 4: VectorMA( target, -dist, right, outOrigin ); break; // left lateral
+			default: VectorMA( target, dist, right, outOrigin ); break;
+			}
+
+			VectorSubtract( target, outOrigin, dir );
+			VectorAngles( dir, outAngles );
+			// VectorAngles uses the atan2 pitch convention, while
+			// AngleVectors expects Quake pitch (positive looks down). Flip it
+			// so orbiting above the weapon actually looks at the weapon.
+			outAngles[0] = anglemod( -outAngles[0] + 180.0f ) - 180.0f;
+
+			return;
+		}
+	}
+#endif
 
 #ifdef XASH_OPENXR
 	if( eye >= 0 && XR_IsActive() )
@@ -478,7 +620,7 @@ void R_SetupFrustum( void )
 	R_ComputeEyeTransform( g_vr_eye, eyeOrigin, eyeAngles );
 
 #ifdef XASH_OPENXR
-	if( g_vr_eye >= 0 && XR_IsActive() )
+	if( g_vr_eye >= 0 && XR_IsActive() && !R_TestCameraActive() )
 	{
 		// Compute exact camera basis directly from OpenXR orientation quaternion
 		const XrQuaternionf *q = &g_xrViews[g_vr_eye].pose.orientation;
@@ -545,7 +687,7 @@ void R_SetupFrustum( void )
 		GL_FrustumInitOrtho( &RI.frustum, ov->xLeft, ov->xRight, ov->yTop, ov->yBottom, ov->zNear, ov->zFar );
 	}
 #ifdef XASH_OPENXR
-	else if( g_vr_eye >= 0 && XR_IsActive() )
+	else if( g_vr_eye >= 0 && XR_IsActive() && !R_TestCameraActive() )
 	{
 		float leftAngle = g_xrViews[g_vr_eye].fov.angleLeft;
 		float rightAngle = g_xrViews[g_vr_eye].fov.angleRight;
@@ -557,7 +699,10 @@ void R_SetupFrustum( void )
 #endif
 	else
 	{
-		GL_FrustumInitProj( &RI.frustum, 0.0f, R_GetFarClip(), RI.rvp.fov_x, RI.rvp.fov_y ); // NOTE: we ignore nearplane here (mirrors only)
+		float test_fov = R_TestCameraActive() ? R_TestCameraFov() : 0.0f;
+		GL_FrustumInitProj( &RI.frustum, 0.0f, R_GetFarClip(),
+			test_fov > 0.0f ? test_fov : RI.rvp.fov_x,
+			test_fov > 0.0f ? test_fov : RI.rvp.fov_y ); // NOTE: we ignore nearplane here (mirrors only)
 	}
 }
 
@@ -579,6 +724,18 @@ static void R_SetupProjectionMatrix( matrix4x4 m )
 
 	GLfloat zNear = 4.0f;
 	GLfloat zFar = Q_max( 256.0f, RI.farClip );
+
+	if( R_TestCameraActive() )
+	{
+		float fov = R_TestCameraFov();
+		GLfloat yMax = zNear * tan( fov * M_PI_F / 360.0f );
+		GLfloat yMin = -yMax;
+		GLfloat xMax = yMax; // square comparison framing
+		GLfloat xMin = -xMax;
+
+		Matrix4x4_CreateProjection( m, xMax, xMin, yMax, yMin, zNear, zFar );
+		return;
+	}
 
 #ifdef XASH_OPENXR
 	if( g_vr_eye >= 0 && XR_IsActive() )

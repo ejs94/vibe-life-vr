@@ -521,6 +521,7 @@ extern int g_vr_eye;
 void R_VR_Recenter_f( void );
 void R_VR_DumpEye_f( void );
 void R_VR_Telemetry_f( void );
+qboolean R_VR_GetHandEntityTransform( int side, vec3_t out_origin, vec3_t out_angles );
 #endif
 void R_ClearScene( void );
 void R_GetTextureParms( int *w, int *h, int texnum );

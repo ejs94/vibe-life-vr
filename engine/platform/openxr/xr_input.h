@@ -61,10 +61,14 @@ typedef struct {
 
     XrPosef leftHandPose;
     XrPosef rightHandPose;
+    XrPosef leftGripPose;
+    XrPosef rightGripPose;
     XrVector3f leftHandVelocity;
     XrVector3f rightHandVelocity;
     qboolean leftHandActive;
     qboolean rightHandActive;
+    qboolean leftGripActive;
+    qboolean rightGripActive;
 } xr_input_state_t;
 
 extern EXPORT xr_input_state_t g_xrInputState;
@@ -75,6 +79,8 @@ EXPORT void XR_InputAppendMove( usercmd_t *cmd, float frametime );
 EXPORT float XR_GetPlayerTurnYaw( void );
 
 EXPORT qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles );
+EXPORT qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles );
+EXPORT qboolean XR_GetSecondaryGripTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles );
 EXPORT qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle );
@@ -108,6 +114,8 @@ static inline void XR_InputAppendMove( usercmd_t *cmd, float frametime ) {}
 static inline float XR_GetPlayerTurnYaw( void ) { return 0.0f; }
 
 static inline qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
+static inline qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
+static inline qboolean XR_GetSecondaryGripTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity ) { return false; }
 static inline qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles ) { return false; }
 static inline qboolean XR_GetPrimaryHandMuzzleWorldPosition( vec3_t out_world_muzzle ) { return false; }

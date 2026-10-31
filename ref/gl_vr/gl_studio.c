@@ -40,11 +40,127 @@ CVAR_DEFINE_AUTO( r_shadows, "0", 0, "draw ugly shadows" );
 #ifdef XASH_OPENXR
 static cl_entity_t s_offhandEnt;
 static cl_entity_t s_primaryHandEnt;
-static model_t     *s_handModel = NULL;
-static model_t     *s_primaryHandModelOverride = NULL;
-static char         s_primaryHandModelName[64] = "";
+static model_t     *s_handModelCache[2] = { NULL, NULL };
+static char         s_handModelCacheName[2][64] = { {0}, {0} };
 static qboolean    s_viewmodel_has_offhand = false;
+static qboolean    s_viewmodel_has_primary_hand = false;
 static qboolean    s_twohanded_active = false;
+
+// Semantic hand bone slots. The baked viewmodel and the standalone hand use
+// different prefixes (Bip01, Xbow biped, Bone...) but the same finger layout.
+typedef enum
+{
+	VR_HAND_SLOT_HAND = 0,
+	VR_HAND_SLOT_PALM,
+	VR_HAND_SLOT_THUMB0,
+	VR_HAND_SLOT_THUMB1,
+	VR_HAND_SLOT_THUMB2,
+	VR_HAND_SLOT_INDEX0,
+	VR_HAND_SLOT_INDEX1,
+	VR_HAND_SLOT_INDEX2,
+	VR_HAND_SLOT_MIDDLE0,
+	VR_HAND_SLOT_MIDDLE1,
+	VR_HAND_SLOT_MIDDLE2,
+	VR_HAND_SLOT_RING0,
+	VR_HAND_SLOT_RING1,
+	VR_HAND_SLOT_RING2,
+	VR_HAND_SLOT_PINKY0,
+	VR_HAND_SLOT_PINKY1,
+	VR_HAND_SLOT_PINKY2,
+	VR_HAND_SLOT_COUNT
+} vr_hand_slot_t;
+
+static vec4_t   s_bakedHandQ[2][VR_HAND_SLOT_COUNT];
+static qboolean s_bakedHandQValid[2][VR_HAND_SLOT_COUNT];
+
+static qboolean R_StrEndsWith( const char *s, const char *suffix )
+{
+	size_t ls = Q_strlen( s );
+	size_t lf = Q_strlen( suffix );
+	return ( ls >= lf && !Q_strcmp( s + ls - lf, suffix ));
+}
+
+/*
+====================
+R_VR_HandSemantic
+
+Maps a baked or standalone bone name to (side, slot). This is deliberately
+suffix-based so Bip01, Xbow biped and legacy BoneNN viewmodels share one path.
+====================
+*/
+static qboolean R_VR_HandSemantic( const char *name, int *out_side, int *out_slot )
+{
+	int side = -1;
+	int slot = -1;
+
+	if( !name || !out_side || !out_slot )
+		return false;
+
+	if( Q_stristr( name, " R " )) side = 0;
+	else if( Q_stristr( name, " L " )) side = 1;
+
+	// Legacy flat viewmodels used numbered bones instead of semantic names.
+	if( !Q_strcmp( name, "Bone09" )) { side = 0; slot = VR_HAND_SLOT_HAND; }
+	else if( !Q_strcmp( name, "Bone24" )) { side = 1; slot = VR_HAND_SLOT_HAND; }
+	else if( !Q_strcmp( name, "Bone27" )) { side = 0; slot = VR_HAND_SLOT_THUMB0; }
+	else if( !Q_strcmp( name, "Bone28" )) { side = 0; slot = VR_HAND_SLOT_THUMB1; }
+	else if( !Q_strcmp( name, "Bone29" )) { side = 0; slot = VR_HAND_SLOT_THUMB2; }
+	else if( !Q_strcmp( name, "Bone31" )) { side = 0; slot = VR_HAND_SLOT_INDEX0; }
+	else if( !Q_strcmp( name, "Bone32" )) { side = 0; slot = VR_HAND_SLOT_INDEX1; }
+	else if( !Q_strcmp( name, "Bone33" )) { side = 0; slot = VR_HAND_SLOT_INDEX2; }
+	else if( !Q_strcmp( name, "Bone35" )) { side = 0; slot = VR_HAND_SLOT_MIDDLE0; }
+	else if( !Q_strcmp( name, "Bone36" )) { side = 0; slot = VR_HAND_SLOT_MIDDLE1; }
+	else if( !Q_strcmp( name, "Bone37" )) { side = 0; slot = VR_HAND_SLOT_MIDDLE2; }
+	else if( !Q_strcmp( name, "Bone39" )) { side = 0; slot = VR_HAND_SLOT_RING0; }
+	else if( !Q_strcmp( name, "Bone40" )) { side = 0; slot = VR_HAND_SLOT_RING1; }
+	else if( !Q_strcmp( name, "Bone41" )) { side = 0; slot = VR_HAND_SLOT_RING2; }
+	else if( !Q_strcmp( name, "Bone43" )) { side = 0; slot = VR_HAND_SLOT_PINKY0; }
+	else if( !Q_strcmp( name, "Bone44" )) { side = 0; slot = VR_HAND_SLOT_PINKY1; }
+	else if( !Q_strcmp( name, "Bone45" )) { side = 0; slot = VR_HAND_SLOT_PINKY2; }
+	else if( Q_stristr( name, "Palm" )) slot = VR_HAND_SLOT_PALM;
+	else if( Q_stristr( name, "Hand" )) slot = VR_HAND_SLOT_HAND;
+	else if( Q_stristr( name, "Finger0" ))
+	{
+		if( R_StrEndsWith( name, "02" )) slot = VR_HAND_SLOT_THUMB2;
+		else if( R_StrEndsWith( name, "01" )) slot = VR_HAND_SLOT_THUMB1;
+		else slot = VR_HAND_SLOT_THUMB0;
+	}
+	else if( Q_stristr( name, "Finger1" ))
+	{
+		if( R_StrEndsWith( name, "12" )) slot = VR_HAND_SLOT_INDEX2;
+		else if( R_StrEndsWith( name, "11" )) slot = VR_HAND_SLOT_INDEX1;
+		else slot = VR_HAND_SLOT_INDEX0;
+	}
+	else if( Q_stristr( name, "Finger2" ))
+	{
+		if( R_StrEndsWith( name, "22" )) slot = VR_HAND_SLOT_MIDDLE2;
+		else if( R_StrEndsWith( name, "21" )) slot = VR_HAND_SLOT_MIDDLE1;
+		else slot = VR_HAND_SLOT_MIDDLE0;
+	}
+	else if( Q_stristr( name, "Finger3" ))
+	{
+		if( R_StrEndsWith( name, "32" )) slot = VR_HAND_SLOT_RING2;
+		else if( R_StrEndsWith( name, "31" )) slot = VR_HAND_SLOT_RING1;
+		else slot = VR_HAND_SLOT_RING0;
+	}
+	else if( Q_stristr( name, "Finger4" ))
+	{
+		if( R_StrEndsWith( name, "42" )) slot = VR_HAND_SLOT_PINKY2;
+		else if( R_StrEndsWith( name, "41" )) slot = VR_HAND_SLOT_PINKY1;
+		else slot = VR_HAND_SLOT_PINKY0;
+	}
+
+	if( side < 0 || slot < 0 )
+		return false;
+
+	*out_side = side;
+	*out_slot = slot;
+	return true;
+}
+
+static qboolean    s_vrHandGripLock = false;
+static vec3_t      s_vrHandGripOrigin = {0};
+static qboolean    s_vrHandsDeferredToGrip = false;
 static vec3_t      s_vrDebugRawHandOrigin = {0};
 static vec3_t      s_vrDebugRawHandAngles = {0};
 static qboolean    s_vrDebugHandActive = false;
@@ -151,6 +267,197 @@ static cvar_t			*cl_righthand = NULL;
 
 static r_studio_interface_t	*pStudioDraw;
 static studio_draw_state_t	g_studio;		// global studio state
+
+static void R_VR_Mat3ToQuat( const float m[3][3], vec4_t q )
+{
+	float trace = m[0][0] + m[1][1] + m[2][2];
+	float s;
+
+	if( trace > 0.0f )
+	{
+		s = sqrtf( trace + 1.0f ) * 2.0f;
+		q[3] = 0.25f * s;
+		q[0] = ( m[2][1] - m[1][2] ) / s;
+		q[1] = ( m[0][2] - m[2][0] ) / s;
+		q[2] = ( m[1][0] - m[0][1] ) / s;
+	}
+	else if( m[0][0] > m[1][1] && m[0][0] > m[2][2] )
+	{
+		s = sqrtf( 1.0f + m[0][0] - m[1][1] - m[2][2] ) * 2.0f;
+		q[3] = ( m[2][1] - m[1][2] ) / s;
+		q[0] = 0.25f * s;
+		q[1] = ( m[0][1] + m[1][0] ) / s;
+		q[2] = ( m[0][2] + m[2][0] ) / s;
+	}
+	else if( m[1][1] > m[2][2] )
+	{
+		s = sqrtf( 1.0f + m[1][1] - m[0][0] - m[2][2] ) * 2.0f;
+		q[3] = ( m[0][2] - m[2][0] ) / s;
+		q[0] = ( m[0][1] + m[1][0] ) / s;
+		q[1] = 0.25f * s;
+		q[2] = ( m[1][2] + m[2][1] ) / s;
+	}
+	else
+	{
+		s = sqrtf( 1.0f + m[2][2] - m[0][0] - m[1][1] ) * 2.0f;
+		q[3] = ( m[1][0] - m[0][1] ) / s;
+		q[0] = ( m[0][2] + m[2][0] ) / s;
+		q[1] = ( m[1][2] + m[2][1] ) / s;
+		q[2] = 0.25f * s;
+	}
+
+	float len = sqrtf( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3] );
+	if( len > 0.00001f )
+	{
+		q[0] /= len; q[1] /= len; q[2] /= len; q[3] /= len;
+	}
+}
+
+static void R_VR_ClearBakedHandPose( void )
+{
+	memset( s_bakedHandQ, 0, sizeof( s_bakedHandQ ));
+	memset( s_bakedHandQValid, 0, sizeof( s_bakedHandQValid ));
+}
+
+/*
+====================
+R_VR_CacheBakedHandPose
+
+Runs after the viewmodel has been drawn. Stores the local rotation of every
+baked hand/finger bone so the standalone fallback hand can copy it.
+====================
+*/
+static void R_VR_CacheBakedHandPose( void )
+{
+	R_VR_ClearBakedHandPose();
+
+	if( !tr.viewent || !tr.viewent->model || tr.viewent->model->type != mod_studio )
+		return;
+
+	studiohdr_t *header = (studiohdr_t *)tr.viewent->model->cache.data;
+	if( !header )
+		return;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)header + header->boneindex);
+	for( int i = 0; i < header->numbones; i++ )
+	{
+		int side, slot;
+		if( !R_VR_HandSemantic( pbones[i].name, &side, &slot ))
+			continue;
+
+		int parent = pbones[i].parent;
+		if( parent < 0 )
+			continue;
+
+		matrix3x4 *pw = &g_studio.bonestransform[parent];
+		matrix3x4 *bw = &g_studio.bonestransform[i];
+		float local[3][3];
+
+		for( int r = 0; r < 3; r++ )
+		{
+			for( int c = 0; c < 3; c++ )
+			{
+				local[r][c] = (*pw)[0][r] * (*bw)[0][c]
+				            + (*pw)[1][r] * (*bw)[1][c]
+				            + (*pw)[2][r] * (*bw)[2][c];
+			}
+		}
+
+		R_VR_Mat3ToQuat( local, s_bakedHandQ[side][slot] );
+		s_bakedHandQValid[side][slot] = true;
+	}
+}
+
+static void R_VR_QuatSlerp( const vec4_t a, const vec4_t b, float t, vec4_t out )
+{
+	float dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+	vec4_t bb = { b[0], b[1], b[2], b[3] };
+
+	if( dot < 0.0f )
+	{
+		dot = -dot;
+		bb[0] = -bb[0]; bb[1] = -bb[1]; bb[2] = -bb[2]; bb[3] = -bb[3];
+	}
+
+	if( dot > 0.9995f )
+	{
+		out[0] = a[0] + ( bb[0] - a[0] ) * t;
+		out[1] = a[1] + ( bb[1] - a[1] ) * t;
+		out[2] = a[2] + ( bb[2] - a[2] ) * t;
+		out[3] = a[3] + ( bb[3] - a[3] ) * t;
+	}
+	else
+	{
+		float theta = acosf( dot );
+		float sin_theta = sinf( theta );
+		float wa = sinf( ( 1.0f - t ) * theta ) / sin_theta;
+		float wb = sinf( t * theta ) / sin_theta;
+		out[0] = a[0] * wa + bb[0] * wb;
+		out[1] = a[1] * wa + bb[1] * wb;
+		out[2] = a[2] * wa + bb[2] * wb;
+		out[3] = a[3] * wa + bb[3] * wb;
+	}
+
+	float len = sqrtf( out[0]*out[0] + out[1]*out[1] + out[2]*out[2] + out[3]*out[3] );
+	if( len > 0.00001f )
+	{
+		out[0] /= len; out[1] /= len; out[2] /= len; out[3] /= len;
+	}
+}
+
+/*
+====================
+R_VR_ApplyBakedHandPose
+
+Blends the cached baked finger rotations into a standalone hand. The hand root
+and wrist remain controller/foregrip-driven; only the finger chains copy the
+animation. vr_hand_anim_blend controls the 6DoF/baked balance.
+====================
+*/
+static void R_VR_ApplyBakedHandPose( cl_entity_t *e, int numbones, mstudiobone_t *pbones, vec4_t *q )
+{
+	(void)e;
+	static cvar_t *vr_hand_pose_source = NULL;
+	static cvar_t *vr_hand_anim_blend = NULL;
+
+	if( !vr_hand_pose_source )
+		vr_hand_pose_source = gEngfuncs.pfnGetCvarPointer( "vr_hand_pose_source" );
+	if( !vr_hand_anim_blend )
+		vr_hand_anim_blend = gEngfuncs.pfnGetCvarPointer( "vr_hand_anim_blend" );
+
+	if( !vr_hand_pose_source || vr_hand_pose_source->value <= 0.0f )
+		return;
+
+	float blend = vr_hand_anim_blend ? vr_hand_anim_blend->value : 1.0f;
+	if( blend <= 0.0f )
+		return;
+	if( blend > 1.0f )
+		blend = 1.0f;
+
+	for( int i = 0; i < numbones; i++ )
+	{
+		int side, slot;
+		if( !R_VR_HandSemantic( pbones[i].name, &side, &slot ))
+			continue;
+
+		if( slot < VR_HAND_SLOT_THUMB0 || slot > VR_HAND_SLOT_PINKY2 )
+			continue;
+
+		// The standalone Rimrook thumb has two joints; the baked MMOD thumb
+		// has three. Ignore the third segment rather than over-rotating the
+		// distal joint.
+		if( slot == VR_HAND_SLOT_THUMB2 )
+			continue;
+
+		if( !s_bakedHandQValid[side][slot] )
+			continue;
+
+		vec4_t result;
+		R_VR_QuatSlerp( q[i], s_bakedHandQ[side][slot], blend, result );
+		q[i][0] = result[0]; q[i][1] = result[1];
+		q[i][2] = result[2]; q[i][3] = result[3];
+	}
+}
 
 // global variables
 static qboolean m_fDoRemap;
@@ -267,17 +574,27 @@ hidden to avoid a duplicated third hand.
 */
 static qboolean R_VR_OffHandAttachedToWeapon( void )
 {
-	if( XR_IsTwoHandStabilized( ))
-		return true;
-
 	static cvar_t *vr_twohanded = NULL;
 	if( !vr_twohanded ) vr_twohanded = gEngfuncs.pfnGetCvarPointer( "vr_twohanded" );
 	if( !vr_twohanded || vr_twohanded->value <= 0.0f )
 		return false;
 
+	if( XR_IsTwoHandStabilized( ))
+		return true;
+
+	// Squeezing the off-hand controller is the normal way to hold it, so a
+	// bare grip threshold must never hide the standalone hand. It is only a
+	// two-hand attach request when the active weapon actually defines a
+	// foregrip socket (crossbow/RPG); other weapons keep the free off-hand.
 	float trigSec = 0.0f, gripSec = 0.0f, thmbSec = 0.0f;
 	XR_GetFingerCurlAxes( R_VR_SecondaryHandIndex(), &trigSec, &gripSec, &thmbSec );
-	return ( gripSec > 0.4f );
+	if( gripSec <= 0.55f )
+		return false;
+
+	const char *wpn = ( tr.viewent && tr.viewent->model && tr.viewent->model->name[0] )
+		? tr.viewent->model->name : "";
+	vec3_t fg_off, fg_rot;
+	return ( wpn[0] && XR_GetWeaponForegrip( wpn, fg_off, fg_rot ));
 }
 
 /*
@@ -290,35 +607,98 @@ empty primary hand.
 */
 static model_t *R_LoadVrHandModel( qboolean primary )
 {
-	if( primary )
-	{
-		static cvar_t *vr_primary_hand_model = NULL;
-		if( !vr_primary_hand_model ) vr_primary_hand_model = gEngfuncs.pfnGetCvarPointer( "vr_primary_hand_model" );
+	static cvar_t *vr_primary_hand_model = NULL;
+	static cvar_t *vr_offhand_hand_model = NULL;
+	static cvar_t *vr_hand_profile = NULL;
+	static cvar_t *vr_hand_ghost_model = NULL;
+	static cvar_t *vr_hand_derived_model = NULL;
 
-		if( vr_primary_hand_model && vr_primary_hand_model->string[0] )
+	if( !vr_primary_hand_model ) vr_primary_hand_model = gEngfuncs.pfnGetCvarPointer( "vr_primary_hand_model" );
+	if( !vr_offhand_hand_model ) vr_offhand_hand_model = gEngfuncs.pfnGetCvarPointer( "vr_offhand_hand_model" );
+	if( !vr_hand_profile ) vr_hand_profile = gEngfuncs.pfnGetCvarPointer( "vr_hand_profile" );
+	if( !vr_hand_ghost_model ) vr_hand_ghost_model = gEngfuncs.pfnGetCvarPointer( "vr_hand_ghost_model" );
+	if( !vr_hand_derived_model ) vr_hand_derived_model = gEngfuncs.pfnGetCvarPointer( "vr_hand_derived_model" );
+
+	const char *profile = ( vr_hand_profile && vr_hand_profile->string[0] ) ? vr_hand_profile->string : "rimrook";
+	const char *override = NULL;
+	if( primary && vr_primary_hand_model && vr_primary_hand_model->string[0] )
+		override = vr_primary_hand_model->string;
+	else if( !primary && vr_offhand_hand_model && vr_offhand_hand_model->string[0] )
+		override = vr_offhand_hand_model->string;
+
+	const char *ghost = ( vr_hand_ghost_model && vr_hand_ghost_model->string[0] )
+		? vr_hand_ghost_model->string : "models/v_hand_ghost.mdl";
+	const char *derived = ( vr_hand_derived_model && vr_hand_derived_model->string[0] )
+		? vr_hand_derived_model->string : NULL;
+
+	static cvar_t *vr_holster = NULL;
+	static cvar_t *vr_hand_open_model = NULL;
+	if( !vr_holster ) vr_holster = gEngfuncs.pfnGetCvarPointer( "vr_holster" );
+	if( !vr_hand_open_model ) vr_hand_open_model = gEngfuncs.pfnGetCvarPointer( "vr_hand_open_model" );
+
+	qboolean unarmed = ( vr_holster && vr_holster->value > 0.0f )
+		|| ( r_drawviewmodel && r_drawviewmodel->value == 0.0f )
+		|| !tr.viewent || !tr.viewent->model;
+
+	const char *path = NULL;
+	if( unarmed )
+	{
+		path = ( vr_hand_open_model && vr_hand_open_model->string[0] )
+			? vr_hand_open_model->string : "models/v_hand.mdl";
+	}
+	else if( !Q_strcmp( profile, "provided" ) && override )
+		path = override;
+	else if( !Q_strcmp( profile, "derived" ))
+		path = derived;
+	else if( !Q_strcmp( profile, "ghost" ))
+		path = ghost;
+	else if( !Q_strcmp( profile, "auto" ))
+	{
+		if( derived ) path = derived;
+		else if( override ) path = override;
+		else path = ghost;
+	}
+	else
+	{
+		// rimrook / development reference
+		path = "models/v_hand.mdl";
+	}
+
+	if( !path || !path[0] )
+		path = "models/v_hand.mdl";
+
+	int slot = primary ? 0 : 1;
+	if( Q_strcmp( s_handModelCacheName[slot], path ))
+	{
+		Q_strncpy( s_handModelCacheName[slot], path, sizeof( s_handModelCacheName[slot] ));
+		s_handModelCache[slot] = gEngfuncs.Mod_ForName( path, false, true );
+	}
+
+	if( s_handModelCache[slot] && s_handModelCache[slot]->type == mod_studio )
+	{
+		static char s_loggedPath[2][64] = { {0}, {0} };
+		if( Q_strcmp( s_loggedPath[slot], path ))
 		{
-			// Reload when the user points the cvar at a different model
-			if( Q_strcmp( s_primaryHandModelName, vr_primary_hand_model->string ))
-			{
-				Q_strncpy( s_primaryHandModelName, vr_primary_hand_model->string, sizeof( s_primaryHandModelName ));
-				s_primaryHandModelOverride = gEngfuncs.Mod_ForName( vr_primary_hand_model->string, false, true );
-			}
-
-			if( s_primaryHandModelOverride && s_primaryHandModelOverride->type == mod_studio )
-				return s_primaryHandModelOverride;
+			Q_strncpy( s_loggedPath[slot], path, sizeof( s_loggedPath[slot] ));
+			gEngfuncs.Con_DPrintf( "[VR_HAND_PROFILE] slot=%s profile=%s unarmed=%d path=%s model=%s\n",
+				primary ? "primary" : "offhand", profile, unarmed ? 1 : 0, path, s_handModelCache[slot]->name );
 		}
+		return s_handModelCache[slot];
 	}
 
-	if( !s_handModel )
+	// Safe fallback: always keep a usable hand model.
+	if( Q_strcmp( s_handModelCacheName[slot], "models/v_hand.mdl" ))
 	{
-		s_handModel = gEngfuncs.Mod_ForName( "models/v_hand.mdl", false, true );
-		if( !s_handModel )
-			s_handModel = gEngfuncs.Mod_ForName( "models/v_hands.mdl", false, true );
-		if( !s_handModel )
-			s_handModel = gEngfuncs.Mod_ForName( "models/v_vhand.mdl", false, true );
+		Q_strncpy( s_handModelCacheName[slot], "models/v_hand.mdl", sizeof( s_handModelCacheName[slot] ));
+		s_handModelCache[slot] = gEngfuncs.Mod_ForName( "models/v_hand.mdl", false, true );
 	}
 
-	return s_handModel;
+	if( !s_handModelCache[slot] )
+		s_handModelCache[slot] = gEngfuncs.Mod_ForName( "models/v_hands.mdl", false, true );
+	if( !s_handModelCache[slot] )
+		s_handModelCache[slot] = gEngfuncs.Mod_ForName( "models/v_vhand.mdl", false, true );
+
+	return s_handModelCache[slot];
 }
 
 /*
@@ -695,7 +1075,9 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 	if( e == tr.viewent && XR_IsActive() )
 	{
 		vec3_t handOrigin, handAngles;
-		if( XR_GetPrimaryHandTransform( handOrigin, handAngles ))
+		// The visual weapon follows the grip/palm pose. The aim pose remains
+		// authoritative for the laser and the firing line.
+		if( XR_GetPrimaryGripTransform( handOrigin, handAngles ))
 		{
 			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 			float turn_yaw = XR_GetPlayerTurnYaw();
@@ -731,39 +1113,15 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 				}
 			}
 
-			// Pull the weapon toward the eye when its grip would sit inside a
-			// wall. PM_STUDIO_IGNORE keeps the viewmodel itself from blocking
-			// the trace.
-			static cvar_t *vr_weapon_pullback = NULL;
-			if( !vr_weapon_pullback ) vr_weapon_pullback = gEngfuncs.pfnGetCvarPointer( "vr_weapon_pullback" );
-
-			float pullback_active = 0.0f;
-			if( vr_weapon_pullback && vr_weapon_pullback->value > 0.0f && gEngfuncs.CL_TraceLine )
-			{
-				vec3_t eye = Vec3( RI.rvp.vieworigin );
-				pmtrace_t tr = gEngfuncs.CL_TraceLine( eye, origin, PM_STUDIO_IGNORE );
-
-				if( tr.fraction < 1.0f )
-				{
-					vec3_t dir;
-					float dist = VectorDistance( eye, origin );
-					float allowed = dist * tr.fraction - 4.0f;
-
-					if( allowed < 8.0f ) allowed = 8.0f;
-
-					VectorSubtract( origin, eye, dir );
-					VectorNormalize( dir );
-					VectorMA( eye, allowed, dir, origin );
-					pullback_active = 1.0f;
-				}
-			}
-
+			// Weapon pull-back is intentionally disabled. Without Box3D and
+			// inverse kinematics the trace/offset path moved the weapon off the
+			// authored grip and hindered weapon development.
 			VectorCopy( origin, e->origin );
 			VectorCopy( angles, e->angles );
 
-			gEngfuncs.Con_DPrintf( "[VR_GRIP] src=renderer model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d pullback=%d\n",
+			gEngfuncs.Con_DPrintf( "[VR_GRIP] src=renderer model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d\n",
 				wpn, origin[0], origin[1], origin[2], angles[0], angles[1], angles[2],
-				(vr_lefthanded && vr_lefthanded->value > 0.0f) ? 1 : 0, (int)pullback_active );
+				(vr_lefthanded && vr_lefthanded->value > 0.0f) ? 1 : 0 );
 		}
 	}
 	else if( ( e == &s_offhandEnt || e == &s_primaryHandEnt ) && XR_IsActive() )
@@ -792,23 +1150,10 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			angles[1] = anglemod( handAngles[1] + turn_yaw );
 			angles[2] = handAngles[2];
 
-			// The standalone two-hand model is centered on the palm, which is
-			// the same anchor as the tracked controller grip, so the default
-			// offsets are zero. The cvars remain for per-user fine tuning.
-			{
-				float off_fwd = vr_hand_offset_forward ? vr_hand_offset_forward->value : 0.0f;
-				float off_rt  = vr_hand_offset_right ? vr_hand_offset_right->value : 0.0f;
-				float off_up  = vr_hand_offset_up ? vr_hand_offset_up->value : 0.0f;
-
-				if( off_fwd != 0.0f || off_rt != 0.0f || off_up != 0.0f )
-				{
-					vec3_t fwd, rt, up;
-					AngleVectors( angles, fwd, rt, up );
-					VectorMA( origin, off_fwd, fwd, origin );
-					VectorMA( origin, off_rt, rt, origin );
-					VectorMA( origin, off_up, up, origin );
-				}
-			}
+			// The standalone model is authored with the palm at (0,0,0), and
+			// the OpenXR grip pose origin is the palm. No drawing offset is
+			// allowed here: wrist/palm compensations were the source of the
+			// old double correction.
 
 			if( e == &s_offhandEnt )
 			{
@@ -821,7 +1166,7 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 			// Two-handed foregrip socket: while the off-hand is gripping the
 			// weapon, snap its palm to the weapon's foregrip landmark instead of
 			// leaving it at the physical controller position.
-			if( e == &s_offhandEnt && R_VR_OffHandAttachedToWeapon( ))
+			if( e == &s_offhandEnt && s_viewmodel_has_offhand && R_VR_OffHandAttachedToWeapon( ))
 			{
 				static cvar_t *vr_foregrip = NULL;
 				if( !vr_foregrip ) vr_foregrip = gEngfuncs.pfnGetCvarPointer( "vr_foregrip" );
@@ -832,7 +1177,7 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 				    XR_GetWeaponForegrip( wpn, fg_off, fg_rot ))
 				{
 					vec3_t ph_origin, ph_angles, wpn_origin, wpn_angles;
-					if( XR_GetPrimaryHandTransform( ph_origin, ph_angles ))
+					if( XR_GetPrimaryGripTransform( ph_origin, ph_angles ))
 					{
 						XR_GetWeaponPose( wpn, ph_origin, ph_angles, turn_yaw, RI.rvp.vieworigin, scale,
 							wpn_origin, wpn_angles );
@@ -857,6 +1202,15 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 		}
 	}
 #endif
+
+	// Position-only grip lock: keep the controller/foregrip orientation so the
+	// existing hand pose and roll-isolation invariants still hold, but place the
+	// standalone palm exactly where the baked grip bone sits.
+	if( s_vrHandGripLock && ( e == &s_primaryHandEnt || e == &s_offhandEnt ))
+	{
+		VectorCopy( s_vrHandGripOrigin, origin );
+		VectorCopy( origin, e->origin );
+	}
 
 	Matrix3x4_CreateFromEntity( g_studio.rotationmatrix, angles, origin, 1.0f );
 
@@ -1143,6 +1497,18 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 
 	float scale = (vr_finger_curl_scale && vr_finger_curl_scale->value > 0.0f) ? vr_finger_curl_scale->value : 1.0f;
 
+	// The baked viewmodel hand is already authored around the weapon grip.
+	// Curling it procedurally on top of that pose can read as claws, so keep
+	// an explicit off / index-only / current switch for comparison captures.
+	static cvar_t *vr_baked_hand_curling = NULL;
+	if( !vr_baked_hand_curling )
+		vr_baked_hand_curling = gEngfuncs.pfnGetCvarPointer( "vr_baked_hand_curling" );
+	const qboolean is_baked_hand = ( e == tr.viewent );
+	const int baked_mode = vr_baked_hand_curling ? (int)vr_baked_hand_curling->value : 1;
+
+	if( is_baked_hand && baked_mode <= 0 )
+		return;
+
 	float trigL = 0.0f, gripL = 0.0f, thmbL = 0.0f;
 	float trigR = 0.0f, gripR = 0.0f, thmbR = 0.0f;
 	XR_GetFingerCurlAxes( VR_HAND_LEFT,  &trigL, &gripL, &thmbL );
@@ -1168,10 +1534,13 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 		float thm = is_left ? thmbL : thmbR;
 
 		float curl_angle = 0.0f;
+		qboolean is_index = false;
+		qboolean is_thumb = false;
 
 		// Thumb: Finger0, Finger01, Finger02 / Bone27, Bone28, Bone29
 		if( Q_stristr( name, "Finger0" ) || Q_stristr( name, "Thumb" ) || !Q_strcmp( name, "Bone27" ) || !Q_strcmp( name, "Bone28" ) || !Q_strcmp( name, "Bone29" ) )
 		{
+			is_thumb = true;
 			// Compare the last two characters, not a substring: "Bip01"
 			// itself contains "01", which misclassifies the thumb base.
 			const int nl = Q_strlen( name );
@@ -1187,6 +1556,7 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 		// Index finger: Finger1, Finger11, Finger12 / Bone31, Bone32, Bone33
 		else if( Q_stristr( name, "Finger1" ) || Q_stristr( name, "Index" ) || !Q_strcmp( name, "Bone31" ) || !Q_strcmp( name, "Bone32" ) || !Q_strcmp( name, "Bone33" ) )
 		{
+			is_index = true;
 			if( Q_stristr( name, "12" ) || !Q_strcmp( name, "Bone33" ) )
 				curl_angle = 0.65f * trg * scale;
 			else if( Q_stristr( name, "11" ) || !Q_strcmp( name, "Bone32" ) )
@@ -1229,8 +1599,31 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 			continue;
 		}
 
+		// Index-only comparison mode: leave the thumb and the other three
+		// fingers at the baked rest pose.
+		if( is_baked_hand && baked_mode == 2 && !is_index )
+			continue;
+
 		if( curl_angle > 0.001f )
 		{
+			// With baked animation as the base, keep only a bounded amount of
+			// procedural input curl. This is the 6DoF/baked degree of freedom.
+			if( e == &s_offhandEnt || e == &s_primaryHandEnt )
+			{
+				static cvar_t *vr_hand_pose_source_c = NULL;
+				static cvar_t *vr_hand_anim_blend_c = NULL;
+				static cvar_t *vr_hand_input_curl_c = NULL;
+				if( !vr_hand_pose_source_c ) vr_hand_pose_source_c = gEngfuncs.pfnGetCvarPointer( "vr_hand_pose_source" );
+				if( !vr_hand_anim_blend_c ) vr_hand_anim_blend_c = gEngfuncs.pfnGetCvarPointer( "vr_hand_anim_blend" );
+				if( !vr_hand_input_curl_c ) vr_hand_input_curl_c = gEngfuncs.pfnGetCvarPointer( "vr_hand_input_curl" );
+				float baked = ( vr_hand_pose_source_c && vr_hand_pose_source_c->value > 0.0f )
+					? ( vr_hand_anim_blend_c ? vr_hand_anim_blend_c->value : 1.0f ) : 0.0f;
+				baked = bound( 0.0f, baked, 1.0f );
+				float input_curl = ( vr_hand_input_curl_c ? vr_hand_input_curl_c->value : 0.35f );
+				input_curl = bound( 0.0f, input_curl, 1.0f );
+				curl_angle *= ( 1.0f - baked ) + baked * input_curl;
+			}
+
 			float half_a = curl_angle * 0.5f;
 			if( R_AllowFlipViewModel( e ))
 				half_a = -half_a; // a reflection inverts the curl direction
@@ -1241,14 +1634,35 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 
 			if( e == &s_offhandEnt || e == &s_primaryHandEnt )
 			{
-				// Rimrook two-hand rig: the finger bones' local Y axis is the
-				// curl axis. Their local Z is the palm normal (rotating around
-				// it bends the fingers sideways instead of closing the fist).
-				// Post-multiply by delta_q = (0, s, 0, c) for a local Y rotation.
-				q[i][0] = qx * c - qz * s;
-				q[i][1] = qw * s + qy * c;
-				q[i][2] = qx * s + qz * c;
-				q[i][3] = qw * c - qy * s;
+				static cvar_t *vr_thumb_curl_axis = NULL;
+				if( !vr_thumb_curl_axis )
+					vr_thumb_curl_axis = gEngfuncs.pfnGetCvarPointer( "vr_thumb_curl_axis" );
+
+				if( is_thumb && ( !vr_thumb_curl_axis || vr_thumb_curl_axis->value > 0.5f ))
+				{
+					// The thumb needs its own axis. Rotating the Rimrook
+					// thumb around the same local Y as the fingers lifts it
+					// away from the palm; local Z on the thumb chain brings it
+					// across the palm. Mirror the sign for the left hand.
+					float thumb_half = is_left ? half_a : -half_a;
+					float ts = sinf( thumb_half );
+					float tc = cosf( thumb_half );
+
+					q[i][0] = qx * tc + qy * ts;
+					q[i][1] = qy * tc - qx * ts;
+					q[i][2] = qz * tc + qw * ts;
+					q[i][3] = qw * tc - qz * ts;
+				}
+				else
+				{
+					// Rimrook two-hand rig: the finger bones' local Y axis is
+					// the curl axis. Local Z is the palm normal (rotating around
+					// it bends the fingers sideways instead of closing the fist).
+					q[i][0] = qx * c - qz * s;
+					q[i][1] = qw * s + qy * c;
+					q[i][2] = qx * s + qz * c;
+					q[i][3] = qw * c - qy * s;
+				}
 			}
 			else
 			{
@@ -1301,6 +1715,141 @@ static int R_StudioFindSequence( studiohdr_t *header, const char *name )
 	}
 
 	return -1;
+}
+
+/*
+====================
+R_VR_AnchorViewmodelToGrip
+
+Locks the animated weapon grip bone to the physical palm after the studio
+bones have been evaluated. This is the missing half of the viewmodel pose:
+XR_GetWeaponPose sets the entity transform, but the flat-screen animation can
+still translate and rotate the model root relative to the hand during fire,
+reload and holster. Translating the final bone matrices keeps the grip socket
+stable without freezing the animation.
+
+The residual anchor offset is expressed in the hand frame and defaults to zero;
+the grip bone of the shipped models is the wrist, so a small negative forward
+offset can be used to seat the actual handle in the palm.
+====================
+*/
+static void R_VR_AnchorViewmodelToGrip( cl_entity_t *e )
+{
+	static cvar_t *vr_weapon_anchor_root = NULL;
+
+	if( !e || e != tr.viewent || !XR_IsActive() || !m_pStudioHeader )
+		return;
+
+	if( !vr_weapon_anchor_root ) vr_weapon_anchor_root = gEngfuncs.pfnGetCvarPointer( "vr_weapon_anchor_root" );
+	if( !vr_weapon_anchor_root || vr_weapon_anchor_root->value <= 0.0f )
+		return;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)m_pStudioHeader + m_pStudioHeader->boneindex);
+	if( !pbones || m_pStudioHeader->numbones <= 0 )
+		return;
+
+	static const char *right_bones[] = {
+		"Bip01 R Hand", "Xbow biped R Hand", "Bone09", "Bip01 L Hand", "grip"
+	};
+	static const char *left_bones[] = {
+		"Bip01 L Hand", "Xbow biped L Hand", "Bone09", "Bip01 R Hand", "grip"
+	};
+	const char **candidates = ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? left_bones : right_bones;
+	const size_t candidate_count = sizeof( right_bones ) / sizeof( right_bones[0] );
+
+	int grip = -1;
+	for( size_t b = 0; b < candidate_count && grip < 0; b++ )
+	{
+		for( int i = 0; i < m_pStudioHeader->numbones; i++ )
+		{
+			if( !Q_strcmp( pbones[i].name, candidates[b] ))
+			{
+				grip = i;
+				break;
+			}
+		}
+	}
+	if( grip < 0 )
+		return;
+
+	vec3_t handOrigin, handAngles;
+	if( !XR_GetPrimaryGripTransform( handOrigin, handAngles ))
+		return;
+
+	float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
+	float turn_yaw = XR_GetPlayerTurnYaw();
+	float yaw_rad = DEG2RAD( turn_yaw );
+	float cy = cosf( yaw_rad );
+	float sy = sinf( yaw_rad );
+
+	vec3_t palm;
+	palm[0] = RI.rvp.vieworigin[0] + ( handOrigin[0] * cy - handOrigin[1] * sy ) * scale;
+	palm[1] = RI.rvp.vieworigin[1] + ( handOrigin[0] * sy + handOrigin[1] * cy ) * scale;
+	palm[2] = RI.rvp.vieworigin[2] + handOrigin[2] * scale;
+
+	// The anchor target is exactly the OpenXR grip pose origin, which the hand
+	// model defines as its palm. Do not apply wrist->palm drawing offsets or
+	// legacy residual anchor offsets here; they would reintroduce the double
+	// correction this task is removing.
+	vec3_t actual = { g_studio.bonestransform[grip][0][3],
+	                  g_studio.bonestransform[grip][1][3],
+	                  g_studio.bonestransform[grip][2][3] };
+	vec3_t delta;
+	VectorSubtract( palm, actual, delta );
+
+	if( VectorLength( delta ) < 0.001f )
+		return;
+
+	// Translate the final bone matrices and the entity matrix together so the
+	// rendered mesh, the light transforms and the attachments stay coherent.
+	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
+	{
+		// Collapsed spare props are stored as all-zero matrices; do not give
+		// them a translation and accidentally resurrect them.
+		qboolean zeroed = true;
+		for( int r = 0; r < 3 && zeroed; r++ )
+		{
+			for( int c = 0; c < 3; c++ )
+			{
+				if( g_studio.bonestransform[i][r][c] != 0.0f )
+				{
+					zeroed = false;
+					break;
+				}
+			}
+		}
+		if( zeroed )
+			continue;
+
+		g_studio.bonestransform[i][0][3] += delta[0];
+		g_studio.bonestransform[i][1][3] += delta[1];
+		g_studio.bonestransform[i][2][3] += delta[2];
+		g_studio.lighttransform[i][0][3] += delta[0];
+		g_studio.lighttransform[i][1][3] += delta[1];
+		g_studio.lighttransform[i][2][3] += delta[2];
+	}
+
+	g_studio.rotationmatrix[0][3] += delta[0];
+	g_studio.rotationmatrix[1][3] += delta[1];
+	g_studio.rotationmatrix[2][3] += delta[2];
+
+	e->origin[0] += delta[0];
+	e->origin[1] += delta[1];
+	e->origin[2] += delta[2];
+
+	static cvar_t *vr_grip_probe = NULL;
+	if( !vr_grip_probe ) vr_grip_probe = gEngfuncs.pfnGetCvarPointer( "vr_grip_probe" );
+	if( vr_grip_probe && vr_grip_probe->value > 0.0f )
+	{
+		static float s_lastAnchorLog = -10.0f;
+		if( g_studio.time - s_lastAnchorLog >= 1.0f )
+		{
+			s_lastAnchorLog = g_studio.time;
+			gEngfuncs.Con_Printf( "^5[VR_ANCHOR] bone=%s delta=(%.3f %.3f %.3f) palm=(%.3f %.3f %.3f)\n",
+				pbones[grip].name, delta[0], delta[1], delta[2],
+				palm[0], palm[1], palm[2] );
+		}
+	}
 }
 
 /*
@@ -1531,6 +2080,15 @@ static void R_StudioSetupBones( cl_entity_t *e )
 
 #ifdef XASH_OPENXR
 	// Apply procedural finger curling based on OpenXR analog axes (Trigger = Index, Grip = Middle/Ring/Pinky, Touch/Buttons = Thumb)
+	// Standalone fallback hands copy the baked finger animation first. The
+	// hand root remains controller/foregrip-driven. Procedural input then adds
+	// a bounded curl on top, so the player keeps a 6DoF influence instead of
+	// replacing the baked animation with flat-screen motion.
+	if( (e == &s_offhandEnt || e == &s_primaryHandEnt) && XR_IsActive() )
+	{
+		R_VR_ApplyBakedHandPose( e, m_pStudioHeader->numbones, pbones, q );
+	}
+
 	if( (e == tr.viewent || e == &s_offhandEnt || e == &s_primaryHandEnt) && XR_IsActive() )
 	{
 		R_StudioApplyFingerCurling( e, m_pStudioHeader->numbones, pbones, q );
@@ -1546,21 +2104,35 @@ static void R_StudioSetupBones( cl_entity_t *e )
 
 	if( is_viewent )
 	{
+		s_viewmodel_has_primary_hand = false;
 		s_viewmodel_has_offhand = false;
+
 		for( int b = 0; b < m_pStudioHeader->numbones; b++ )
 		{
-			const char *bname = pbones[b].name;
-			if( !Q_strcmp( bname, "Bip01 L Hand" ) ||
-			    !Q_strcmp( bname, "Xbow biped L Hand" ) ||
-			    !Q_strcmp( bname, "LeftArm" ) ||
-			    (!Q_strcmp( bname, "Bone24" ) && e->model && Q_stristr( e->model->name, "9mmar" )) )
+			int side, slot;
+			if( !R_VR_HandSemantic( pbones[b].name, &side, &slot ))
+				continue;
+
+			if( slot == VR_HAND_SLOT_HAND )
 			{
-				s_viewmodel_has_offhand = true;
-				break;
+				if( side == 0 )
+					s_viewmodel_has_primary_hand = true;
+				else
+					s_viewmodel_has_offhand = true;
 			}
 		}
 
 		s_twohanded_active = R_VR_OffHandAttachedToWeapon();
+
+		static model_t *s_lastHandStateModel = NULL;
+		if( s_lastHandStateModel != e->model )
+		{
+			s_lastHandStateModel = e->model;
+			gEngfuncs.Con_DPrintf( "[VR_HAND_STATE] model=%s baked_primary=%d baked_offhand=%d\n",
+				( e->model && e->model->name[0] ) ? e->model->name : "(null)",
+				s_viewmodel_has_primary_hand ? 1 : 0,
+				s_viewmodel_has_offhand ? 1 : 0 );
+		}
 	}
 #endif
 
@@ -1677,6 +2249,12 @@ static void R_StudioSetupBones( cl_entity_t *e )
 			Matrix3x4_ConcatTransforms( g_studio.lighttransform[i], g_studio.lighttransform[pbones[i].parent], bonematrix );
 		}
 	}
+
+#ifdef XASH_OPENXR
+	// Final visual lock: the animated grip bone follows the physical palm even
+	// while the viewmodel plays fire/reload/holster translations.
+	R_VR_AnchorViewmodelToGrip( e );
+#endif
 }
 
 /*
@@ -4223,8 +4801,30 @@ static void R_VR_DebugHandPose( cl_entity_t *ent, model_t *model )
 	up[1] = g_studio.rotationmatrix[1][2];
 	up[2] = g_studio.rotationmatrix[2][2];
 
+	// Palm vs grip-pose origin: the model is authored with the palm at
+	// (0,0,0), so this must be near zero. A large value means the hand mesh
+	// is still wrist-centered or a drawing offset leaked back in.
+	float grip_dist = -1.0f;
+	{
+		int hand = ( ent == &s_primaryHandEnt ) ? R_VR_PrimaryHandIndex() : R_VR_SecondaryHandIndex();
+		vec3_t horg, hang;
+		if( XR_GetHandPresenceTransform( hand, horg, hang ))
+		{
+			float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
+			float turn_yaw = XR_GetPlayerTurnYaw();
+			float ya = DEG2RAD( turn_yaw );
+			vec3_t pose_world;
+			pose_world[0] = RI.rvp.vieworigin[0] + ( horg[0] * cosf( ya ) - horg[1] * sinf( ya )) * scale;
+			pose_world[1] = RI.rvp.vieworigin[1] + ( horg[0] * sinf( ya ) + horg[1] * cosf( ya )) * scale;
+			pose_world[2] = RI.rvp.vieworigin[2] + horg[2] * scale;
+
+			vec3_t palm_world = { bt[i_palm][0][3], bt[i_palm][1][3], bt[i_palm][2][3] };
+			grip_dist = VectorDistance( palm_world, pose_world );
+		}
+	}
+
 	gEngfuncs.Con_Printf(
-		"^5[HAND_POSE] ent=%s body=%d chain=%s palm=(%.3f %.3f %.3f) fingertip=(%.3f %.3f %.3f) thumb=(%.3f %.3f %.3f) thumbbase=(%.3f %.3f %.3f) wrist=(%.3f %.3f %.3f) fwd=(%.3f %.3f %.3f) up=(%.3f %.3f %.3f)\n",
+		"^5[HAND_POSE] ent=%s body=%d chain=%s palm=(%.3f %.3f %.3f) fingertip=(%.3f %.3f %.3f) thumb=(%.3f %.3f %.3f) thumbbase=(%.3f %.3f %.3f) wrist=(%.3f %.3f %.3f) fwd=(%.3f %.3f %.3f) up=(%.3f %.3f %.3f) grip_dist=%.3f grip_lock=%d\n",
 		entname, (int)ent->curstate.body, prefix,
 		bt[i_palm][0][3],  bt[i_palm][1][3],  bt[i_palm][2][3],
 		bt[i_tip][0][3],   bt[i_tip][1][3],   bt[i_tip][2][3],
@@ -4235,7 +4835,7 @@ static void R_VR_DebugHandPose( cl_entity_t *ent, model_t *model )
 		(i_wrist >= 0) ? bt[i_wrist][0][3] : 0.0f,
 		(i_wrist >= 0) ? bt[i_wrist][1][3] : 0.0f,
 		(i_wrist >= 0) ? bt[i_wrist][2][3] : 0.0f,
-		fwd[0], fwd[1], fwd[2], up[0], up[1], up[2] );
+		fwd[0], fwd[1], fwd[2], up[0], up[1], up[2], grip_dist, s_vrHandGripLock ? 1 : 0 );
 }
 
 /*
@@ -4336,7 +4936,7 @@ static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model )
 	float seat_err = -1.0f;
 	vec3_t hand_world = { 0.0f, 0.0f, 0.0f };
 	vec3_t horg, hang;
-	if( XR_GetPrimaryHandTransform( horg, hang ))
+	if( XR_GetPrimaryGripTransform( horg, hang ))
 	{
 		float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
 		float turn_yaw = XR_GetPlayerTurnYaw();
@@ -4344,6 +4944,10 @@ static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model )
 		hand_world[0] = RI.rvp.vieworigin[0] + ( horg[0] * cosf( ya ) - horg[1] * sinf( ya )) * scale;
 		hand_world[1] = RI.rvp.vieworigin[1] + ( horg[0] * sinf( ya ) + horg[1] * cosf( ya )) * scale;
 		hand_world[2] = RI.rvp.vieworigin[2] + horg[2] * scale;
+
+		// The probe target is the palm, i.e. the OpenXR grip pose origin.
+		// No drawing or residual anchor offsets are applied: this is the
+		// number the acceptance gate must see.
 		seat_err = VectorDistance( world, hand_world );
 	}
 
@@ -4356,12 +4960,12 @@ static void R_VR_DebugGripBone( cl_entity_t *ent, model_t *model )
 	err_local[1] = g_studio.rotationmatrix[0][1] * err_world[0] + g_studio.rotationmatrix[1][1] * err_world[1] + g_studio.rotationmatrix[2][1] * err_world[2];
 	err_local[2] = g_studio.rotationmatrix[0][2] * err_world[0] + g_studio.rotationmatrix[1][2] * err_world[1] + g_studio.rotationmatrix[2][2] * err_world[2];
 
-	gEngfuncs.Con_Printf( "^5[VR_GRIP_BONE] model=%s bone=%s seq=%d label=%s frame=%.2f world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) seat_err=%.3f err=(%.3f %.3f %.3f) bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
+	gEngfuncs.Con_Printf( "^5[VR_GRIP_BONE] model=%s bone=%s seq=%d label=%s frame=%.2f world=(%.3f %.3f %.3f) model=(%.3f %.3f %.3f) seat_err=%.3f palm_dist=%.3f err=(%.3f %.3f %.3f) bx=(%.3f %.3f %.3f) by=(%.3f %.3f %.3f) bz=(%.3f %.3f %.3f)\n",
 		model->name, pbones[grip].name,
 		(int)ent->curstate.sequence, seq_label, ent->curstate.frame,
 		world[0], world[1], world[2],
 		local[0], local[1], local[2],
-		seat_err,
+		seat_err, seat_err,
 		err_local[0], err_local[1], err_local[2],
 		bx[0], bx[1], bx[2], by[0], by[1], by[2], bz[0], bz[1], bz[2] );
 
@@ -4518,6 +5122,130 @@ static void R_DrawPrimaryHand( void )
 
 /*
 ====================
+R_VR_FindHandBone
+
+Finds the baked hand landmark used by the weapon viewmodel. The fallback lists
+mirror the weapon profile grip bone discovery and the old viewmodel offhand
+detection.
+====================
+*/
+static int R_VR_FindHandBone( studiohdr_t *header, const char **names, int count )
+{
+	if( !header )
+		return -1;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)header + header->boneindex);
+	for( int n = 0; n < count; n++ )
+	{
+		for( int i = 0; i < header->numbones; i++ )
+		{
+			if( !Q_strcmp( pbones[i].name, names[n] ))
+				return i;
+		}
+	}
+	return -1;
+}
+
+/*
+====================
+R_VR_DrawHandAtBone
+
+Draws a standalone hand at the exact world transform of one baked viewmodel
+bone. This makes the replacement hand copy the baked hand instead of drifting
+to the physical controller palm.
+====================
+*/
+static void R_VR_DrawHandAtBone( cl_entity_t *ent, model_t *model, int bone )
+{
+	if( !ent || !model || model->type != mod_studio || bone < 0 )
+		return;
+
+	s_vrHandGripOrigin[0] = g_studio.bonestransform[bone][0][3];
+	s_vrHandGripOrigin[1] = g_studio.bonestransform[bone][1][3];
+	s_vrHandGripOrigin[2] = g_studio.bonestransform[bone][2][3];
+
+	// Optional full lock (2): copy the baked bone orientation as well.
+	static cvar_t *vr_hand_grip_lock = NULL;
+	if( !vr_hand_grip_lock ) vr_hand_grip_lock = gEngfuncs.pfnGetCvarPointer( "vr_hand_grip_lock" );
+	if( vr_hand_grip_lock && vr_hand_grip_lock->value >= 2.0f )
+		Matrix3x4_AnglesFromMatrix( g_studio.bonestransform[bone], ent->angles );
+
+	s_vrHandGripLock = true;
+	R_DrawHandEntity( ent, model );
+	s_vrHandGripLock = false;
+}
+
+/*
+====================
+R_VR_DrawHandsAtGrip
+
+Called after the weapon viewmodel has been drawn, so g_studio.bonestransform
+contains the baked grip and offhand bone transforms for this frame.
+====================
+*/
+static int R_VR_FindSemanticBone( studiohdr_t *header, int side, int slot )
+{
+	if( !header )
+		return -1;
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)header + header->boneindex);
+	for( int i = 0; i < header->numbones; i++ )
+	{
+		int s, sl;
+		if( R_VR_HandSemantic( pbones[i].name, &s, &sl ) && s == side && sl == slot )
+			return i;
+	}
+	return -1;
+}
+
+qboolean R_VR_GetHandEntityTransform( int side, vec3_t out_origin, vec3_t out_angles )
+{
+	cl_entity_t *e = side ? &s_offhandEnt : &s_primaryHandEnt;
+
+	if( !e->model )
+		return false;
+
+	VectorCopy( e->origin, out_origin );
+	VectorCopy( e->angles, out_angles );
+	return true;
+}
+
+static void R_VR_DrawHandsAtGrip( void )
+{
+	cl_entity_t *view = tr.viewent;
+	if( !view || !view->model || view->model->type != mod_studio )
+		return;
+
+	studiohdr_t *header = (studiohdr_t *)view->model->cache.data;
+	if( !header )
+		return;
+
+	// Cache the baked finger animation before the standalone hands overwrite
+	// the studio bone arrays.
+	R_VR_CacheBakedHandPose();
+
+	static const char *right_bones[] = { "Bip01 R Hand", "Xbow biped R Hand", "Bone09", "grip" };
+
+	int rbone = R_VR_FindSemanticBone( header, 0, VR_HAND_SLOT_HAND );
+	if( rbone < 0 )
+		rbone = R_VR_FindHandBone( header, right_bones, (int)( sizeof( right_bones ) / sizeof( right_bones[0] )));
+
+	model_t *right_model = R_LoadVrHandModel( true );
+
+	if( rbone >= 0 && right_model )
+		R_VR_DrawHandAtBone( &s_primaryHandEnt, right_model, rbone );
+	else
+		R_DrawPrimaryHand();
+
+	// The blocky standalone hand is a free-hand presence, not a grip hand.
+	// Support/foregrip only exists as the baked viewmodel hand.
+	R_DrawOffHand();
+
+	s_vrHandsDeferredToGrip = false;
+}
+
+/*
+====================
 R_VR_DrawHandsLayer
 
 Draws the persistent 6DoF hand presence layer. Returns true when the layer
@@ -4545,13 +5273,14 @@ static qboolean R_VR_DrawHandsLayer( void )
 	if( FBitSet( RI.rvp.flags, RF_DRAW_CUBEMAP ) || ENGINE_GET_PARM( PARM_THIRDPERSON ) || !CL_IsViewEntityLocalPlayer( ))
 		return false;
 
-	if( !R_VR_WeaponTrueDepth() )
-		pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
-
 	// The weapon viewmodel carries the primary hand mesh whenever a studio
 	// viewmodel is actually drawn; otherwise render the standalone empty hand.
 	cl_entity_t *view = tr.viewent;
-	qboolean weapon_drawn = ( !dead && view && view->model && view->model->type == mod_studio && r_drawviewmodel->value != 0.0f );
+	static cvar_t *vr_holster_layer = NULL;
+	if( !vr_holster_layer ) vr_holster_layer = gEngfuncs.pfnGetCvarPointer( "vr_holster" );
+	qboolean holstered = ( vr_holster_layer && vr_holster_layer->value > 0.0f );
+	qboolean weapon_drawn = ( !dead && view && view->model && view->model->type == mod_studio
+		&& r_drawviewmodel->value != 0.0f && !holstered );
 
 	// vr_hide_arms >= 2 strips the glove/hand meshes off the weapon viewmodel,
 	// so the viewmodel no longer supplies a hand and the standalone hand must
@@ -4560,15 +5289,38 @@ static qboolean R_VR_DrawHandsLayer( void )
 	if( !vr_hide_arms ) vr_hide_arms = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
 	qboolean weapon_hides_hand = ( vr_hide_arms && vr_hide_arms->value >= 2.0f );
 
-	if( weapon_hides_hand || !weapon_drawn )
+	static cvar_t *vr_hand_grip_lock = NULL;
+	if( !vr_hand_grip_lock ) vr_hand_grip_lock = gEngfuncs.pfnGetCvarPointer( "vr_hand_grip_lock" );
+	qboolean grip_lock = ( vr_hand_grip_lock && vr_hand_grip_lock->value > 0.0f );
+
+	// The built-in baked hands already cover both hands. Drawing the persistent
+	// layer as well is what created the floating duplicate hand next to the
+	// weapon. Only add the offhand when the viewmodel has no baked offhand.
+	if( weapon_drawn && !weapon_hides_hand )
 	{
-		if( weapon_drawn && weapon_hides_hand )
-			gEngfuncs.Con_DPrintf( "[VR_HANDS_DBG] Weapon hand hidden by vr_hide_arms, drawing standalone primary hand\n" );
-		R_DrawPrimaryHand();
+		if( !s_viewmodel_has_primary_hand )
+			R_DrawPrimaryHand();
+		if( !s_viewmodel_has_offhand )
+			R_DrawOffHand();
+		return true;
 	}
 
-	// Two-handed suppression only makes sense while the viewmodel still owns the
-	// supporting hand; once its hands are stripped, draw the off-hand as well.
+	// With the baked hands stripped, defer the standalone hands until after the
+	// weapon is drawn; then copy the baked grip/offhand bone transforms exactly.
+	if( weapon_drawn && weapon_hides_hand && grip_lock )
+	{
+		if( s_viewmodel_has_primary_hand )
+			gEngfuncs.Con_DPrintf( "[VR_HANDS] vr_hide_arms 2 strips an authored baked hand; standalone replacement is debug-only. Use vr_hide_arms 0 for the authoritative hand.\n" );
+		s_vrHandsDeferredToGrip = true;
+		return true;
+	}
+
+	if( !R_VR_WeaponTrueDepth() )
+		pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+
+	if( !weapon_drawn || weapon_hides_hand )
+		R_DrawPrimaryHand();
+
 	if( !weapon_drawn || weapon_hides_hand || !R_VR_OffHandAttachedToWeapon( ))
 		R_DrawOffHand();
 
@@ -5059,6 +5811,39 @@ void R_DrawViewModel( void )
 
 	R_GatherPlayerLight( view );
 
+#ifdef XASH_OPENXR
+	// Fixed comparison camera: draw the viewmodel as a regular world entity so
+	// the orbit camera sees the same transform that the gameplay camera sees.
+	// The normal viewmodel pass is screen-relative and cannot be inspected from
+	// a lateral or top camera.
+	{
+		static cvar_t *vr_test_camera = NULL;
+		if( !vr_test_camera )
+			vr_test_camera = gEngfuncs.pfnGetCvarPointer( "vr_test_camera" );
+
+		static cvar_t *vr_holster_test = NULL;
+		if( !vr_holster_test ) vr_holster_test = gEngfuncs.pfnGetCvarPointer( "vr_holster" );
+
+		if( vr_test_camera && vr_test_camera->value > 0.0f &&
+		    r_drawviewmodel && r_drawviewmodel->value != 0.0f &&
+		    !( vr_holster_test && vr_holster_test->value > 0.0f ) &&
+		    view && view->model && view->model->type == mod_studio )
+		{
+			RI.currententity = view;
+			RI.currentmodel = view->model;
+			R_StudioSetupTimings();
+			R_StudioDrawModelInternal( view, STUDIO_RENDER );
+
+			static cvar_t *vr_hide_arms_test = NULL;
+			if( !vr_hide_arms_test ) vr_hide_arms_test = gEngfuncs.pfnGetCvarPointer( "vr_hide_arms" );
+			if( vr_hide_arms_test && vr_hide_arms_test->value >= 2.0f )
+				R_VR_DrawHandsAtGrip();
+
+			return;
+		}
+	}
+#endif
+
 	static model_t *s_lastVmModel = (model_t *)-1;
 	if( view->model != s_lastVmModel )
 	{
@@ -5073,6 +5858,13 @@ void R_DrawViewModel( void )
 	// stay visible with r_drawviewmodel 0, empty hands or a fading weapon.
 	hands_drawn = R_VR_DrawHandsLayer();
 #endif
+
+	{
+		static cvar_t *vr_holster_view = NULL;
+		if( !vr_holster_view ) vr_holster_view = gEngfuncs.pfnGetCvarPointer( "vr_holster" );
+		if( vr_holster_view && vr_holster_view->value > 0.0f )
+			return;
+	}
 
 	if( r_drawviewmodel->value == 0 )
 		return;
@@ -5125,6 +5917,11 @@ void R_DrawViewModel( void )
 	}
 
 #ifdef XASH_OPENXR
+	// The hand layer deferred the standalone hands until the viewmodel was
+	// drawn, so the grip and offhand bone transforms are current.
+	if( s_vrHandsDeferredToGrip )
+		R_VR_DrawHandsAtGrip();
+
 	static cvar_t *vr_offhand_render = NULL;
 	if( !vr_offhand_render ) vr_offhand_render = gEngfuncs.pfnGetCvarPointer( "vr_offhand_render" );
 

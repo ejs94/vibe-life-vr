@@ -846,7 +846,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     // MP5 / 9mmAR
     w = &s_weaponProfiles[s_numWeaponProfiles++];
     memset( w, 0, sizeof(*w) );
-    Q_strncpy( w->model_name, "v_9mmar.mdl", sizeof(w->model_name) );
+    Q_strncpy( w->model_name, "v_9mmAR.mdl", sizeof(w->model_name) );
     Q_strncpy( w->display_name, "MP5 / 9mm Assault Rifle", sizeof(w->display_name) );
     Q_strncpy( w->type, "hitscan", sizeof(w->type) );
     w->muzzle_attachment = 0;
