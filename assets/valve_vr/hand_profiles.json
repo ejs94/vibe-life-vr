@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "description": "Standalone hand presence profiles. Baked weapon hands remain authoritative.",
+  "profiles": {
+    "open": {
+      "model": "models/v_hand.mdl",
+      "role": "generated_blocky_glove_for_unarmed_and_free_offhand",
+      "default": true
+    },
+    "provided": {
+      "model": "",
+      "role": "optional_standalone_hand_shipped_by_a_mod"
+    },
+    "derived": {
+      "model": "",
+      "role": "experimental_extracted_hand"
+    }
+  },
+  "rules": [
+    "never replace a baked weapon hand with a standalone hand by default",
+    "no per-weapon hand mesh or texture changes",
+    "blocky hand is a presence indicator, not a grip replacement"
+  ]
+}

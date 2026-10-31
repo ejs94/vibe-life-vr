@@ -3,38 +3,15 @@
 The VR asset overlay bundles the following community work. Keep this file in
 sync whenever a bundled asset changes.
 
-## models/v_hand.mdl — "HEV Arms That Don't Suck"
+## models/v_hand.mdl — generated blocky glove
 
-* **Author:** Rimrook
-* **Extra credit:** DiamondD (sleeve texture)
-* **License:** Public Domain. The original release states
-  "TERMS OF USAGE: i don't care", which grants unrestricted use, modification
-  and redistribution.
-* **Source archive:** `hev_arms_by_rimrook.zip`
-  (MD5 `3f0a47d9a8cf8613389f11cf21d107a8`)
-* **Changes made:** the source hand pair is kept as **both hands in one
-  `models/v_hand.mdl`**, arranged as two bodygroups (`rhand` / `lhand`, each with
-  a `blank` variant) so the engine can select the anatomical hand per
-  controller without runtime mirroring. Both chains use the Valve convention
-  (`Bip01 R/L Hand`, `Bip01 R/L Finger0..42`); the model is rescaled to the
-  native GoldSrc hand size, recentered on the palm (controller grip), and each
-  hand gets a mirrored pitch so the palms face inward and the thumbs point up
-  (a natural controller-grip pose). See
-  [`scripts/build_twohand_mdl.py`](../../scripts/build_twohand_mdl.py) for the
-  exact, reproducible transformation and
-  [`scripts/build_pxstudiomdl.sh`](../../scripts/build_pxstudiomdl.sh) for the
-  native compiler build, plus section 2.8.2 of
-  [`Documentation/vr/ENGINEERING_NOTEBOOK.md`](../../Documentation/vr/ENGINEERING_NOTEBOOK.md)
-  for the rationale.
-
-### Inner glove liner (2026-10-22)
-
-* Added a duplicate, inward-offset shell for every glove/sleeve triangle with
-  the dark `glove_inner.bmp` material, so the inside of the glove reads black
-  through the wrist opening. The hand entities render two-sided (`GL_Cull
-  GL_NONE`) so the liner is visible from inside.
-* Reproducible with
-  [`scripts/add_hand_inner_liner.py`](../../scripts/add_hand_inner_liner.py).
+* **Author:** generated in-project by `scripts/build_block_hand.py`.
+* **Geometry:** low-poly boxes on the 35-bone hand contract (`rhand` / `lhand`
+  bodygroups, `Bip01 R/L Hand`, `Palm`, `Finger0..42`).
+* **Purpose:** unambiguous hand presence for unarmed and free-offhand states.
+  It is not a detailed glove and is never used to replace a baked weapon hand.
+* The previous detailed reference glove was retired from the active project.
+  No third-party hand mesh is shipped as `v_hand.mdl`.
 
 ## Half-Life MMOD — Reanimated Pack
 
@@ -52,6 +29,9 @@ sync whenever a bundled asset changes.
   below. The `bshift_addon`, `gearbox_addon`, world models and sounds are not
   bundled. The alternate `accurate_v_shotgun_reload/v_shotgun.mdl` is not used;
   it differs from the selected shotgun only by removing two pump sound events.
+  The untouched `v_9mmar.mdl` remains in the source archive and in
+  `out/mmod_import/valve_addon/models/` for provenance; it is not deployed.
+  The runtime file is the HLSDK-compatible `models/v_9mmAR.mdl`.
 * **Changes made:** the MDLs are used as compiled by the pack author. The VR
   overlay hides the baked HEV hands with `vr_hide_arms 2`, supplies the
   standalone `models/v_hand.mdl` instead, and calibrates grip/muzzle sockets in
@@ -80,7 +60,7 @@ python3 scripts/render_mdl_360.py --qc out/mmod_decompiled/<model>/<model>.qc \
 | Model | Tris | Boundary edges | Status |
 | :--- | ---: | ---: | :--- |
 | `v_357.mdl` | 880 | 300 | PASS — body, cylinder and speedloader present |
-| `v_9mmar.mdl` | 698 | 231 | PASS — receiver, magazine and stock present |
+| `v_9mmAR.mdl` | 698 | 231 | PASS — receiver, magazine and stock present (source file `v_9mmar.mdl` renamed for HLSDK parity) |
 | `v_9mmhandgun.mdl` | 726 | 117 | PASS — slide, frame, magazine and silencer body present |
 | `v_crossbow.mdl` | 592 | 278 | PASS — limbs, rail, scope, grip and bolt present; no authored attachment |
 | `v_crowbar.mdl` | 84 | 8 | PASS — shaft and hooked end present |
@@ -97,4 +77,11 @@ python3 scripts/render_mdl_360.py --qc out/mmod_decompiled/<model>/<model>.qc \
 
 Boundary counts above are geometry warnings, not failures: many GoldSrc
 viewmodels are intentionally open at the muzzle, ejection port or magazine
-well. The pass verdict comes from the orbit sheets plus the in-engine check.
+well. The orbit sheets are a topology smoke test rendered in the reference
+pose; they do not prove that the assembled idle pose is closed or textured.
+The textured idle-pose audit is the next gate for this asset set.
+
+`v_9mmar.mdl` is kept as the source name for provenance. The runtime overlay
+also ships `v_9mmAR.mdl` because the HLSDK requests that exact case
+(`3rdparty/hlsdk-portable/dlls/mp5.cpp`); on case-sensitive Android/Linux the
+lowercase file alone would be ignored and the vanilla viewmodel would load.

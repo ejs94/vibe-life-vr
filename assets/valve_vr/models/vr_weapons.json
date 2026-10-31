@@ -50,7 +50,7 @@
         "fire_duration_ms": 100
       }
     },
-    "v_9mmar.mdl": {
+    "v_9mmAR.mdl": {
       "name": "MP5 / 9mm Assault Rifle",
       "type": "hitscan",
       "muzzle_attachment": 0,
