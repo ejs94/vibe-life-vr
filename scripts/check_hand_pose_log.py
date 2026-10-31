@@ -39,6 +39,8 @@ LINE_RE = re.compile(
     r"palm=\(([^)]+)\)\s+fingertip=\(([^)]+)\)\s+thumb=\(([^)]+)\)\s+"
     r"thumbbase=\(([^)]+)\)(?:.*wrist=\(([^)]+)\))?"
     r"(?:\s+fwd=\(([^)]+)\)\s+up=\(([^)]+)\))?"
+    r"(?:\s+grip_dist=([-\d.]+))?"
+    r"(?:\s+grip_lock=(\d+))?"
 )
 
 REACH_MIN, REACH_MAX = 5.8, 7.2
@@ -93,6 +95,8 @@ def main() -> int:
                 "wrist": parse_vec(m.group(8)) if m.group(8) else None,
                 "fwd": parse_vec(m.group(9)) if m.group(9) else None,
                 "up": parse_vec(m.group(10)) if m.group(10) else None,
+                "grip_dist": float(m.group(11)) if m.group(11) else None,
+                "grip_lock": int(m.group(12)) if m.group(12) else 0,
             })
 
     failures = []
@@ -140,12 +144,22 @@ def main() -> int:
             if want * base_off[1] <= SIGN_EPS:
                 failures.append(f"{tag}: palm not inward, thumbbase.y={base_off[1]:.2f}")
 
-        # Reach sanity, pose-invariant.
-        if s["wrist"]:
+        # Reach sanity, pose-invariant. The palm is the model origin and the
+        # runtime reference, so measure palm->fingertip, not wrist->fingertip.
+        checks += 1
+        reach = math.dist(s["palm"], s["fingertip"])
+        if not (REACH_MIN <= reach <= REACH_MAX):
+            failures.append(f"{tag}: palm->fingertip reach {reach:.2f} out of range")
+
+        # The palm must coincide with the OpenXR grip pose origin unless the
+        # standalone hand is locked to a baked viewmodel grip bone. In that mode
+        # the controller palm is intentionally not the reference.
+        if not s.get("grip_lock"):
             checks += 1
-            reach = math.dist(s["wrist"], s["fingertip"])
-            if not (REACH_MIN <= reach <= REACH_MAX):
-                failures.append(f"{tag}: wrist->fingertip reach {reach:.2f} out of range")
+            if s["grip_dist"] is None:
+                failures.append(f"{tag}: missing grip_dist (palm vs grip pose origin)")
+            elif s["grip_dist"] > 0.1:
+                failures.append(f"{tag}: palm is {s['grip_dist']:.3f}u from grip pose origin")
 
         # Bodygroup selection: chain R is body 0, chain L is body 3.
         checks += 1

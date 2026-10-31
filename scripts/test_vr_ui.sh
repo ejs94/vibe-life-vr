@@ -55,6 +55,9 @@ mkdir -p "$OUTPUT_DIR"
 
 # 2. Environment Configuration for Monado OpenXR
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json

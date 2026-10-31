@@ -60,6 +60,9 @@ mkdir -p "${EVIDENCE_DIR}"
 cp -f "${SCRIPT_DIR}/manual_reload_test.cfg" "${OUT_VALVE}/manual_reload_test.cfg"
 
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -82,7 +85,7 @@ trap cleanup EXIT
 cd "${REPO_DIR}/out"
 set +e
 timeout 150 ./xash3d -dev 1 -condebug -ref gl_vr +sv_cheats 1 \
-    +map c1a0 +exec manual_reload_test.cfg > "${EVIDENCE_DIR}/manual_reload_engine.log" 2>&1
+    +map crossfire +exec manual_reload_test.cfg > "${EVIDENCE_DIR}/manual_reload_engine.log" 2>&1
 RUN_RC=$?
 set -e
 

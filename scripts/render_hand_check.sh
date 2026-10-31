@@ -2,7 +2,7 @@
 # Render the standalone VR hand model under the Monado simulated runtime.
 #
 # Installs the requested v_hand.mdl into out/valve/models, runs the engine on
-# c1a0 with rimrook_hand_check.cfg, and leaves the eye dumps in the working
+# crossfire with rimrook_hand_check.cfg, and leaves the eye dumps in the working
 # directory. The caller decides what the dumps are named.
 #
 # Usage: scripts/render_hand_check.sh <path-to-v_hand.mdl> <output-prefix>
@@ -19,6 +19,9 @@ MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
 MONADO_BUILD_DIR="${MONADO_DIR}/build-sim"
 
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -44,7 +47,7 @@ sleep 2
 cd "${REPO_DIR}/out"
 rm -f rimrook_hands_open.ppm rimrook_hands_curl.ppm
 timeout 90 ./xash3d -dev 1 -condebug -ref gl_vr \
-    +sv_cheats 1 +map c1a0 +exec rimrook_hand_check.cfg \
+    +sv_cheats 1 +map crossfire +exec rimrook_hand_check.cfg \
     > "/tmp/opencode/${PREFIX}_engine.log" 2>&1 || true
 
 mv -f rimrook_hands_open.ppm "${PREFIX}_open.ppm" 2>/dev/null || true

@@ -138,7 +138,7 @@ def landmark(smd: smd_lib.Smd, name: str):
 
 
 def check_chain(side: str, prefix: str, palm_y_sign: int, smd: smd_lib.Smd,
-                chain_mesh: str) -> None:
+                chain_mesh: str, canonical: bool = True) -> None:
     print(f"\n-- {side.upper()} chain (mesh '{chain_mesh}', suffix {prefix}) --")
 
     names = [n.name for n in smd.nodes]
@@ -157,25 +157,29 @@ def check_chain(side: str, prefix: str, palm_y_sign: int, smd: smd_lib.Smd,
         return
     check(True, f"{side}: landmark bones present")
 
-    # Fingers point forward: runtime (fingertip - palm) must be +X dominant.
-    finger_dir = rt(sub(tip, palm))
-    ok, detail = dominant_axis(finger_dir, 0, +1)
-    check(ok, f"{side}: fingers point forward (+X)", detail)
+    if canonical:
+        # Fingers point forward: runtime (fingertip - palm) must be +X dominant.
+        finger_dir = rt(sub(tip, palm))
+        ok, detail = dominant_axis(finger_dir, 0, +1)
+        check(ok, f"{side}: fingers point forward (+X)", detail)
 
-    # Thumb points up at runtime: (thumb - palm) must be +Z dominant.
-    thumb_dir = rt(sub(thumb, palm))
-    ok, detail = dominant_axis(thumb_dir, 2, +1)
-    check(ok, f"{side}: thumb points up (+Z)", detail)
+        # Thumb points up at runtime: (thumb - palm) must be +Z dominant.
+        thumb_dir = rt(sub(thumb, palm))
+        ok, detail = dominant_axis(thumb_dir, 2, +1)
+        check(ok, f"{side}: thumb points up (+Z)", detail)
 
-    # Palm faces inward. The thumb sits on the palm side, so the runtime
-    # thumb offset along Y has the same sign as the palm normal.
-    check(palm_y_sign * thumb_dir[1] > SIGN_EPS,
-          f"{side}: palm faces inward (Y sign {'+' if palm_y_sign > 0 else '-'})",
-          f"thumb.y={thumb_dir[1]:.2f}")
+        # Palm faces inward. The thumb sits on the palm side, so the runtime
+        # thumb offset along Y has the same sign as the palm normal.
+        check(palm_y_sign * thumb_dir[1] > SIGN_EPS,
+              f"{side}: palm faces inward (Y sign {'+' if palm_y_sign > 0 else '-'})",
+              f"thumb.y={thumb_dir[1]:.2f}")
 
     # Reach sanity: wrist -> middle fingertip close to the canonical 6.4558.
-    reach = math.dist(wrist, tip)
-    check(5.8 <= reach <= 7.2, f"{side}: wrist->fingertip reach in range",
+    # The model origin is the palm, not the wrist. Measure the reach from the
+    # palm so the gate matches the runtime reference frame. The wrist->palm
+    # offset is reference data in scripts/grip_frame.json, never an origin.
+    reach = math.dist(palm, tip)
+    check(5.8 <= reach <= 7.2, f"{side}: palm->fingertip reach in range",
           f"reach={reach:.3f}")
 
 
@@ -186,6 +190,8 @@ def main() -> int:
         help="path to the compiled v_hand.mdl")
     parser.add_argument("--keep", action="store_true",
                         help="keep the decompiled output for inspection")
+    parser.add_argument("--grip", action="store_true",
+                        help="weapon-space grip asset: skip canonical +X/+Z orientation checks")
     args = parser.parse_args()
 
     if not os.path.isfile(args.model):
@@ -201,7 +207,7 @@ def main() -> int:
             print(f"[FAIL] mdldec failed: {exc}")
             return 1
 
-        qc_path = os.path.join(out_dir, "v_hand.qc")
+        qc_path = os.path.join(out_dir, os.path.splitext(os.path.basename(args.model))[0] + ".qc")
         check(os.path.isfile(qc_path), "decompiled QC produced")
         groups = parse_bodygroups(qc_path)
         check(set(groups.keys()) == {"rhand", "lhand"},
@@ -258,8 +264,8 @@ def main() -> int:
 
         # GoldSrc has +Y to the LEFT, so the right hand (on the -Y side) faces
         # inward toward +Y, and the left hand toward -Y.
-        check_chain("right", "R", +1, right, right_mesh or "hand_r")
-        check_chain("left", "L", -1, left, left_mesh or "hand_l")
+        check_chain("right", "R", +1, right, right_mesh or "hand_r", canonical=not args.grip)
+        check_chain("left", "L", -1, left, left_mesh or "hand_l", canonical=not args.grip)
 
         if args.keep:
             print(f"\nDecompiled output kept at: {out_dir}")

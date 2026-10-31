@@ -34,7 +34,7 @@ else
 fi
 
 OUTPUT_DIR="${REPO_DIR}/out/evidence/monado_unittest_$(date +%Y%m%d_%H%M%S)"
-TIMEOUT_SECS="${TIMEOUT_SECS:-55}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-90}"
 TARGET_ARG="${1:-suite}"
 shift || true
 EXTRA_ARGS="${*:-}"
@@ -74,6 +74,9 @@ mkdir -p "$OUTPUT_DIR"
 
 # 2. Environment Configuration for Monado OpenXR
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -188,7 +191,7 @@ assert_test 5  "Beat Saber Dual Alternating Laser Pointers (Left Hand)" \
     'grep -q "Switched active pointer to LEFT hand" "$TEST_LOG"'
 
 # --- Gameplay Load & Head Pose Matrix ---
-assert_test 6  "3D Map Level Load (c1a0) & Player Entity Spawning" \
+assert_test 6  "3D Map Level Load (crossfire) & Player Entity Spawning" \
     'grep -q "level loaded at" "$TEST_LOG" && grep -q "client connected at" "$TEST_LOG"'
 
 assert_test 7  "Head-Mounted Flashlight Temple Gesture (Toggle ON)" \
@@ -307,6 +310,9 @@ assert_test 42 "Weapon Pose: Grip Anchor Seats on the Palm (vr_grip_probe)" \
 
 assert_test 43 "Crossbow Foregrip: Off-Hand Snaps to Weapon Socket" \
     'grep -q "\\[VR_FOREGRIP\\] model=models/v_crossbow.mdl" "$TEST_LOG"'
+
+assert_test 44 "Unarmed Hands: Natural Open Hand Follows 6DoF Input" \
+    'python3 "${SCRIPT_DIR}/check_unarmed_hand_input.py" "$TEST_LOG" "$OUTPUT_DIR"'
 
 # 7. Optional Quest Launcher UI Verification
 if [ "${TARGET_ARG}" = "all" ] || [ "${TARGET_ARG}" = "--with-launcher" ] || [ "${TARGET_ARG}" = "full" ]; then

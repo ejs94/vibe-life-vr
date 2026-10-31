@@ -1,7 +1,7 @@
 #!/bin/bash
 # Render the VR weapon-hand replacement check under the Monado simulated runtime.
 #
-# Runs the engine on c1a0 with weapon_hand_check.cfg (holds the 9mm handgun and
+# Runs the engine on crossfire with weapon_hand_check.cfg (holds the 9mm handgun and
 # dumps the eye with the weapon's own glove hidden vs. shown) and leaves the eye
 # dumps in out/. The caller decides what the dumps are named.
 #
@@ -18,6 +18,9 @@ MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
 MONADO_BUILD_DIR="${MONADO_DIR}/build-sim"
 
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -37,7 +40,7 @@ sleep 2
 cd "${REPO_DIR}/out"
 rm -f weaponhand_hidden.ppm weaponhand_vanilla.ppm
 timeout 90 ./xash3d -dev 1 -condebug -ref gl_vr \
-    +sv_cheats 1 +map c1a0 +exec weapon_hand_check.cfg \
+    +sv_cheats 1 +map crossfire +exec weapon_hand_check.cfg \
     > "/tmp/opencode/${PREFIX}_engine.log" 2>&1 || true
 
 mv -f weaponhand_hidden.ppm "${PREFIX}_hidden.ppm" 2>/dev/null || true

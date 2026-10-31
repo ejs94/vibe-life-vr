@@ -40,6 +40,9 @@ fi
 log_info "Using Monado build: ${MONADO_BUILD_DIR}"
 
 export XRT_NO_STDIN=true
+unset XRT_WINDOW_PEEK
+unset XRT_DEBUG_GUI
+python3 "${SCRIPT_DIR}/hide_monado_window.py" >/dev/null 2>&1 &
 export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
@@ -115,6 +118,18 @@ else
     record_result "0.2 Standalone Hand Asset Deploy Freshness (out/ matches assets/)" "FAIL"
 fi
 
+# Gate 0.3: Overlay filenames must match the exact HLSDK request strings.
+# On case-sensitive Android/Linux a case mismatch silently falls back to the
+# vanilla viewmodel, which also makes the MMOD grip profile point at the wrong
+# mesh.
+NAME_LOG="${OUTPUT_DIR}/viewmodel_name_check.log"
+if python3 "${REPO_DIR}/scripts/check_viewmodel_names.py" > "$NAME_LOG" 2>&1; then
+    record_result "0.3 Viewmodel Filename Parity with HLSDK Requests" "PASS"
+else
+    log_err "See ${NAME_LOG} for the failing names."
+    record_result "0.3 Viewmodel Filename Parity with HLSDK Requests" "FAIL"
+fi
+
 # Copy regression script to engine out directory so +exec finds it immediately
 cp -f "${REPO_DIR}/scripts/regression_master.cfg" "${REPO_DIR}/out/regression_master.cfg"
 
@@ -155,7 +170,7 @@ fi
 # Check 2: VR CVars Registered and Accessible
 if grep -q "vr_smoothturn" "$MASTER_LOG" && grep -q "vr_lasersight" "$MASTER_LOG" && \
    grep -q "vr_headtorch" "$MASTER_LOG" && grep -q "vr_audio_hrtf" "$MASTER_LOG" && \
-   grep -q "vr_hand_offset_forward" "$MASTER_LOG" && grep -q "vr_finger_curling" "$MASTER_LOG" && \
+   grep -q "vr_hands_always_visible" "$MASTER_LOG" && grep -q "vr_hand_profile" "$MASTER_LOG" && grep -q "vr_finger_curling" "$MASTER_LOG" && \
    grep -q "vr_debug_hand_pose" "$MASTER_LOG"; then
     record_result "1.2 VR Configuration CVars Registration & Defaults" "PASS"
 else
@@ -178,9 +193,9 @@ fi
 
 # Check 5: 3D Map Load & Player Spawn
 if grep -q "level loaded at" "$MASTER_LOG" && grep -q "client connected at" "$MASTER_LOG"; then
-    record_result "1.5 3D Map Level Load (c1a0) & Client Spawning" "PASS"
+    record_result "1.5 3D Map Level Load (crossfire) & Client Spawning" "PASS"
 else
-    record_result "1.5 3D Map Level Load (c1a0) & Client Spawning" "FAIL"
+    record_result "1.5 3D Map Level Load (crossfire) & Client Spawning" "FAIL"
 fi
 
 # Check 6: Head Flashlight Gesture Toggle (HL2:VR style)

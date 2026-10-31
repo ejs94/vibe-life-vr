@@ -1,0 +1,32 @@
+{
+  "reference": "palm",
+  "hand_model": "assets/valve_vr/models/v_hand.mdl",
+  "units": "goldsrc",
+  "axes": {
+    "forward": "+X",
+    "left": "+Y",
+    "up": "+Z",
+    "right_palm_normal": "+Y",
+    "left_palm_normal": "-Y"
+  },
+  "bones": {
+    "right_wrist": "Bip01 R Hand",
+    "right_palm": "Bip01 R Palm",
+    "right_fingertip": "Bip01 R Finger22",
+    "right_thumb_tip": "Bip01 R Finger01",
+    "left_wrist": "Bip01 L Hand",
+    "left_palm": "Bip01 L Palm",
+    "left_fingertip": "Bip01 L Finger22",
+    "left_thumb_tip": "Bip01 L Finger01"
+  },
+  "wrist_to_palm_offset": [0.0, -0.575618, -0.013711],
+  "wrist_to_palm_distance": 0.575781,
+  "reach_wrist_to_fingertip": 6.455801,
+  "reach_palm_to_fingertip": 5.880997,
+  "notes": [
+    "The model origin is the palm; the wrist sits behind the origin.",
+    "wrist_to_palm_offset is reference data for converting a weapon wrist bone (Bip01 R/L Hand) to the palm frame. It is never used as the model origin.",
+    "The runtime visual anchor target is the OpenXR grip pose origin, which must coincide with the hand palm bone within 0.1u.",
+    "Axes follow the GoldSrc hand convention validated by scripts/check_hand_asset.py: fingers +X, right palm inward +Y, left palm inward -Y, thumb +Z."
+  ]
+}

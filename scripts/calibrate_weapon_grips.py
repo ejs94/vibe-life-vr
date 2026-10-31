@@ -2,10 +2,14 @@
 """Procedurally calibrate weapon grip sockets from vr_grip_probe telemetry.
 
 The probe emits the animated grip bone in weapon-local coordinates and a signed
-``err=(x y z)`` vector. For the Valve/M MOD viewmodels the palm anchor sits ten
-units forward of the wrist, so the socket is:
+``err=(x y z)`` vector. The reference frame is selectable:
 
-    grip_offset = [10 - local_x, local_y, -local_z]
+    aim  (legacy): grip_offset = [10 - local_x, local_y, -local_z]
+    palm (current): grip_offset = [-local_x, local_y, -local_z]
+
+The palm mode is the reference used by the grip-pose runtime. The wrist->palm
+offset in ``scripts/grip_frame.json`` is reference data for converting a weapon
+wrist bone to the palm frame; it is never used as the model origin.
 
 This script reads one or more engine logs, picks an idle sample per model, and
 optionally writes the values into ``vr_weapons.json`` without touching the other
@@ -13,7 +17,7 @@ profile fields. It also derives the crossbow foregrip from the ``grip`` landmark
 when ``vr_grip_probe 2`` telemetry is present.
 
 Usage:
-    python3 scripts/calibrate_weapon_grips.py engine.log [--write]
+    python3 scripts/calibrate_weapon_grips.py engine.log --reference palm [--write]
 """
 
 from __future__ import annotations
@@ -76,6 +80,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("logs", nargs="+", type=Path)
     ap.add_argument("--json", type=Path, default=DEFAULT_JSON)
+    ap.add_argument(
+        "--reference",
+        choices=("palm", "aim"),
+        default="palm",
+        help="target frame: palm (grip pose origin) or legacy aim",
+    )
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
@@ -103,7 +113,8 @@ def main():
         if not key:
             missing.append(model)
             continue
-        offset = [round(10.0 - x, 3), round(y, 3), round(-z, 3)]
+        base = 10.0 if args.reference == "aim" else 0.0
+        offset = [round(base - x, 3), round(y, 3), round(-z, 3)]
         weapons[key]["grip_offset"] = offset
         changes.append((key, label, offset))
 
