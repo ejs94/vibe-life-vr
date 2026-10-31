@@ -78,21 +78,33 @@ is not the default presentation.
 ## Asset audit pipeline
 
 1. Decompile the model with `scripts/mdldec.sh` into `out/mmod_import/`.
-2. Audit materials, UVs, normals and topology:
+2. Audit boundary loops, cards, non-manifold edges and physical defects:
+
+   ```sh
+   python3 scripts/audit_holes.py \
+       --model out/mmod_import/decompiled/v_9mmhandgun \
+       --out out/qa/A1/latest
+   ```
+
+   The run writes `glock_holes.json`, `glock_defects.csv`,
+   `glock_loop_sheet.png`, `glock_body_sheet.png` and the baseline score.
+   `asset_verdict` is separate from the A1 tool status.
+
+3. Audit materials, UVs, normals and topology:
 
    ```sh
    python3 scripts/audit_viewmodel_assets.py \
        --decompiled-dir out/mmod_import/decompiled \
-       --out out/qa/A1/latest
+       --out out/qa/A1/latest/asset_audit
    ```
 
-3. Prove the compiler roundtrip before editing:
+4. Prove the compiler roundtrip before editing:
 
    ```sh
    scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
    ```
 
-4. Render a 360-degree geometry sheet:
+5. Render a 360-degree geometry sheet:
 
    ```sh
    python3 scripts/render_mdl_360.py \
@@ -100,7 +112,7 @@ is not the default presentation.
        --out out/qa/A4/latest/<model>_360
    ```
 
-5. Compare the result in-engine with a fixed camera and a labeled sheet.
+6. Compare the result in-engine with a fixed camera and a labeled sheet.
 
 ## Hole repair
 
@@ -110,15 +122,18 @@ or handguard faces that become obvious in VR.
 
 The repair pipeline is:
 
-1. Find welded boundary loops and non-manifold edges with the audit script.
-2. Classify each loop as intentional or accidental. Do not cap a barrel or a
-   magwell.
+1. Find welded boundary loops and non-manifold edges with `audit_holes.py`.
+2. Group them into physical defects and classify each loop as intentional,
+   accidental or uncertain. Do not cap a barrel, magwell or ejection port.
 3. For an accidental hole, duplicate the boundary loop, offset the new loop
    inward along the local normal, and bridge the two loops. This creates a
    visible inner liner without changing the outer silhouette.
-4. Preserve UVs, weights, bones, sequences, events, bodygroups and attachments.
-5. Re-run the roundtrip, audit, 360 render and Monado suite.
-6. Pilot on the Glock, then the crossbow, before batch repair.
+4. For a tear, stitch the sheets that share the non-manifold vertices; do not
+   cap the opening. The Glock pilot has `body_tear_1` and
+   `clip_loop_1_open_side`.
+5. Preserve UVs, weights, bones, sequences, events, bodygroups and attachments.
+6. Re-run the roundtrip, audit, 360 render and Monado suite.
+7. Pilot on the Glock, then the crossbow, before batch repair.
 
 Do not fill a hole by moving existing vertices across the opening. That changes
 the silhouette and usually breaks the UVs.

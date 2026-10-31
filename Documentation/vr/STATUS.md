@@ -31,8 +31,8 @@ current counts and gate freshness.
 
 ### Current task: Glock hole repair
 
-- [ ] `A1` boundary-loop report for the Glock
-- [ ] Classify intentional versus accidental holes
+- [x] `A1` boundary-loop report for the Glock
+- [x] Classify intentional versus accidental holes
 - [ ] Implement the radial liner repair
 - [ ] Pass `A2` MDL roundtrip
 - [ ] Pass `A4` visual comparison with maintainer approval
@@ -47,8 +47,10 @@ current counts and gate freshness.
 | Monado unit suite (`M1`) | 44/44 PASS |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation gate (`D1`) | See `out/qa/D1/latest` |
+| Asset audit (`A1`) | PASS (audit); Glock baseline verdict FAIL |
+| Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Asset repair epic | Not started; top priority |
+| Asset repair epic | A1 baseline complete; Glock repair not started |
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could
@@ -62,17 +64,21 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
    boundary loops that are visible in VR. This is the top asset-repair task.
 2. **Manual reload coverage.** The Glock staged reload is implemented. The
    remaining weapons and the interaction contract still need gates.
-3. **Quest pass is pending.** No Quest result is implied by the Monado or
+3. **A1 classification review is pending.** The audit resolved all loops, but
+   the two accidental defects and the medium-confidence intentional sleeves
+   still need maintainer approval before mesh surgery.
+4. **Quest pass is pending.** No Quest result is implied by the Monado or
    regression results.
 
 ## Next steps
 
-1. Add boundary-loop diagnostics and classify intentional versus accidental
-   holes on the Glock viewmodel.
-2. Implement radial duplication/liner repair in Python while preserving bones,
-   UVs, weights and bodygroups.
-3. Validate the repaired Glock with asset audit, MDL roundtrip, 360-degree
-   renders and the Monado suite before touching the next weapon.
+1. Implement the radial liner for the two confirmed Glock defects:
+   `body_tear_1` (front-top tear; stitch, do not cap) and
+   `clip_loop_1_open_side` (magazine shell open side).
+2. Preserve bones, UVs, weights, bodygroups, attachments, hitboxes and
+   sequences; add no bones and do not bridge across bodygroups.
+3. Validate the repaired Glock with `A2` roundtrip, `A1` re-audit, `A4`
+   visual comparison and `M1`/`R1` before touching the next weapon.
 
 ## Evidence
 

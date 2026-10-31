@@ -53,7 +53,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | ID | Epic | Status | Command | Evidence | Device | Agent |
 |---|---|---|---|---|---|---|
 | `D1` | Docs | active | `python3 scripts/check_docs.py` | `out/qa/D1/latest` | monado | `gate-runner` |
-| `A1` | Assets | active | `python3 scripts/audit_viewmodel_assets.py --decompiled-dir out/mmod_import/decompiled --out out/qa/A1/latest` | `out/qa/A1/latest` | monado | `gate-runner` |
+| `A1` | Assets | active | `python3 scripts/audit_holes.py --model out/mmod_import/decompiled/v_9mmhandgun --out out/qa/A1/latest` | `out/qa/A1/latest` | monado | `gate-runner` |
 | `A2` | Assets | active | `scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl` | `out/qa/A2/latest` | monado | `gate-runner` |
 | `A3` | Assets | active | `python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/A3/latest` | monado | `gate-runner` |
 | `A4` | Assets | active | `./scripts/test_gate0_hands.sh` | `out/qa/A4/latest` | monado | `gate-runner` |
@@ -70,6 +70,10 @@ maintainer approval. Green automated checks do not prove appearance.
 
 ## Pass rules
 
+- `A1` passes when the tool completes, every boundary loop is classified or
+  explicitly `uncertain`, the defect table and review sheets exist, and the
+  input hashes are recorded. The asset verdict is recorded separately as
+  `asset_verdict`; a complete audit may still be `asset_verdict: FAIL`.
 - `M1` passes only when all 44 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 90 seconds.
 - `R1` passes only when all 19 assertions pass.
