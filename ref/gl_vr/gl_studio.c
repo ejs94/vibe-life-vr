@@ -677,9 +677,11 @@ static model_t *R_LoadVrHandModel( qboolean primary )
 	if( s_handModelCache[slot] && s_handModelCache[slot]->type == mod_studio )
 	{
 		static char s_loggedPath[2][64] = { {0}, {0} };
-		if( Q_strcmp( s_loggedPath[slot], path ))
+		static qboolean s_loggedUnarmed[2] = { false, false };
+		if( Q_strcmp( s_loggedPath[slot], path ) || s_loggedUnarmed[slot] != unarmed )
 		{
 			Q_strncpy( s_loggedPath[slot], path, sizeof( s_loggedPath[slot] ));
+			s_loggedUnarmed[slot] = unarmed;
 			gEngfuncs.Con_DPrintf( "[VR_HAND_PROFILE] slot=%s profile=%s unarmed=%d path=%s model=%s\n",
 				primary ? "primary" : "offhand", profile, unarmed ? 1 : 0, path, s_handModelCache[slot]->name );
 		}
