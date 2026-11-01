@@ -97,6 +97,27 @@ roundtrip failure, visible see-through, capped functional opening.
 
 The judge must not see token count or model name. Cost is joined after scoring.
 
+## Round 1 result (2026-10-31)
+
+Both entries failed visual review. The text-only judge could not score the
+images, so its `entry_a` ADVANCE was overridden by the maintainer.
+
+| Entry | Model | Quality | Human | Cost | Wall time | Main failure |
+|---|---|---:|---|---:|---:|---|
+| A — Glock | `minimax-m3.1-flash#high` | 76 | `REWORK` | $0.4051 | 67.4 min | exploded model-space evidence; appearance unverified |
+| B — Magnum | `qwen3.8-flash#xhigh` | 53 | `REWORK` | $0.1458 | 15.9 min | left underlug missing; topology regression |
+
+Entry A spent 3.9x the total tokens and 4.2x the wall time of entry B and still
+failed appearance. The lesson is not "use more tokens"; it is that the task
+needs a canonical Blender render/import harness, reference images, a fixed
+before/after camera, and a vision-capable judge.
+
+Full postmortem: `out/qa/AB/POSTMORTEM.md` (generated evidence, not committed).
+
+**Next:** stop the cheap-model swap round until the harness is fixed. Run one
+capability gate with a strong model on the Glock only. If it fails twice with
+the fixed harness, the source asset or task is the bottleneck.
+
 ## Caveats
 
 - One task per model is an anecdote. The Glock/Magnum swap gives two tasks per
