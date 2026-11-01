@@ -29,16 +29,16 @@ current counts and gate freshness.
 - [x] `A7` Glock manual reload
 - [ ] `Q1` Quest hardware-in-the-loop (maintainer decision)
 
-### Current task: Glock hole repair
+### Current task: native weapon path
 
-- [x] `A1` boundary-loop report for the Glock
-- [x] Classify intentional versus accidental holes
-- [x] Implement the radial liner repair
-- [ ] Pass `A2` MDL roundtrip
-- [ ] Pass `A4` visual comparison with maintainer approval
-- [ ] Pass `M1` and `R1` after the repair
-- [ ] Repeat the pilot on the crossbow
-- [ ] Batch the remaining 13 viewmodels
+- [x] `W0` native route + legacy fallback
+- [ ] `W1` coordinate calibration and human approval
+- [ ] `W2` Glock `socketed` rig
+- [ ] `W2` Glock native mesh and blockout approval
+- [ ] `W3` Glock animations baked and played in engine
+- [ ] `W3` Glock physical interaction
+- [ ] `W4` Magnum replication with no per-weapon code
+- [ ] `W5` Gordon hand asset
 
 ## Current state
 
