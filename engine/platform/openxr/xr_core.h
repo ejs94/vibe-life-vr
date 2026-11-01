@@ -52,6 +52,7 @@ extern EXPORT convar_t *vr_test_head_yaw;
 extern EXPORT convar_t *vr_test_head_roll;
 extern EXPORT convar_t *vr_test_head_drop;
 extern EXPORT convar_t *vr_test_headgesture;
+extern EXPORT convar_t *vr_native_weapons;
 extern EXPORT convar_t *vr_audio_hrtf;
 extern EXPORT convar_t *vr_finger_curling;
 extern EXPORT convar_t *vr_finger_curl_scale;

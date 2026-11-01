@@ -88,6 +88,63 @@ static void V_CalcViewRect( void )
 
 }
 
+#ifdef XASH_OPENXR
+/*
+===============
+V_ResolveNativeViewModel
+
+Optional native-asset route. A legacy viewmodel name is mapped to
+models/native/<basename>; if that model is missing or invalid the legacy model
+is returned unchanged. The route is logged once per legacy model so HIL tests
+can prove both native selection and fallback.
+===============
+*/
+static model_t *V_ResolveNativeViewModel( model_t *legacy )
+{
+	static model_t *s_lastLegacy = NULL;
+	static model_t *s_lastResolved = NULL;
+	static int s_lastEnabled = -1;
+	static char s_lastPath[256] = "";
+
+	if( !legacy || legacy->type != mod_studio )
+		return legacy;
+
+	int enabled = ( vr_native_weapons && vr_native_weapons->value > 0.0f );
+	if( legacy == s_lastLegacy && enabled == s_lastEnabled && s_lastResolved )
+		return s_lastResolved;
+
+	char base[128];
+	char path[256];
+	model_t *resolved = legacy;
+	const char *route = enabled ? "fallback" : "legacy";
+
+	if( enabled )
+	{
+		COM_FileBase( legacy->name, base, sizeof( base ));
+		Q_snprintf( path, sizeof( path ), "models/native/%s.mdl", base );
+		model_t *native = Mod_ForName( path, false, true );
+		if( native && native->type == mod_studio )
+		{
+			resolved = native;
+			route = "native";
+		}
+	}
+	else
+	{
+		Q_strncpy( path, "none", sizeof( path ));
+	}
+
+	Con_DPrintf( "[VR_WEAPON_ROUTE] legacy=%s native=%s route=%s\n",
+		legacy->name, path, route );
+
+	s_lastLegacy = legacy;
+	s_lastResolved = resolved;
+	s_lastEnabled = enabled;
+	Q_strncpy( s_lastPath, path, sizeof( s_lastPath ));
+	return resolved;
+}
+#endif
+
 /*
 ===============
 V_SetupViewModel
@@ -106,6 +163,9 @@ static void V_SetupViewModel( void )
 	view->curstate.number = cl.playernum + 1;
 	view->index = cl.playernum + 1;
 	struct model_s *new_model = CL_ModelHandle( cl.local.viewmodel );
+#ifdef XASH_OPENXR
+	new_model = V_ResolveNativeViewModel( new_model );
+#endif
 	if( view->model != new_model )
 	{
 		memset( view->attachment, 0, sizeof( view->attachment ) );

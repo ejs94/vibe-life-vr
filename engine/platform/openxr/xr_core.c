@@ -65,6 +65,7 @@ EXPORT convar_t *vr_test_camera_distance = NULL;
 EXPORT convar_t *vr_test_camera_fov = NULL;
 EXPORT convar_t *vr_test_camera_aim = NULL;
 EXPORT convar_t *vr_test_camera_target = NULL;
+EXPORT convar_t *vr_native_weapons = NULL;
 EXPORT convar_t *vr_audio_hrtf = NULL;
 EXPORT convar_t *vr_finger_curling = NULL;
 EXPORT convar_t *vr_finger_curl_scale = NULL;
@@ -339,6 +340,7 @@ void XR_RegisterCVars( void )
     vr_test_camera_target = Cvar_Get("vr_test_camera_target", "0", 0, "Fixed comparison camera target: 0=viewmodel grip, 1=primary palm");
     Cvar_Get("vr_test_camera_azimuth", "0", 0, "Fixed comparison camera orbit azimuth in degrees for vr_test_camera 5");
     Cvar_Get("vr_test_camera_elevation", "0", 0, "Fixed comparison camera orbit elevation in degrees for vr_test_camera 5");
+    vr_native_weapons = Cvar_Get("vr_native_weapons", "0", 0, "Resolve native weapon models from models/native/<name>.mdl; fall back to legacy when missing");
     vr_baked_hand_curling = Cvar_Get("vr_baked_hand_curling", "1", 0, "Curling on the baked viewmodel hand: 0=off, 1=current, 2=index finger only");
     vr_thumb_curl_axis = Cvar_Get("vr_thumb_curl_axis", "1", 0, "Standalone thumb curl axis: 0=legacy local Y, 1=thumb-specific local Z toward palm");
     vr_hand_grip_lock = Cvar_Get("vr_hand_grip_lock", "1", 0, "0=off, 1=snap standalone hand position to the viewmodel grip bone, 2=also copy its orientation");
