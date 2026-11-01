@@ -22,6 +22,7 @@ import json
 import math
 import re
 import sys
+sys.dont_write_bytecode = True
 from collections import Counter
 from pathlib import Path
 

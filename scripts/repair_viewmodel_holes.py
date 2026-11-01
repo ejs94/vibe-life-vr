@@ -49,6 +49,7 @@ import re
 import shutil
 import subprocess
 import sys
+sys.dont_write_bytecode = True
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path

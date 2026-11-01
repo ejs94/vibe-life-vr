@@ -61,6 +61,7 @@ import os
 import re
 import subprocess
 import sys
+sys.dont_write_bytecode = True
 from collections import Counter, defaultdict
 from pathlib import Path
 
