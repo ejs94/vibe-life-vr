@@ -83,9 +83,10 @@ maintainer approval. Green automated checks do not prove appearance.
   and compiled MDLs, but not generated evidence.
 - `W0` passes when the native route is selected with the native file present
   and the engine falls back to legacy with the native file removed.
-- `W1` is a human-reviewed calibration gate. It passes only when the muzzle,
-  trigger and top markers land on the expected landmarks and the maintainer
-  confirms `FRONT`/`REAR`. Generated images alone are not a pass.
+- `W1` is a human-reviewed calibration gate. It passed on 2026-11-01 when the
+  maintainer approved the barrel-bore, trigger, rear-sight and hammer markers
+  in `out/qa/W1/latest/calibration_sheet.png`. Generated images alone are not a
+  pass.
 - `M1` passes only when all 44 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 90 seconds.
 - `R1` passes only when all 19 assertions pass.

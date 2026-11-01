@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-01
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
 **Previous checkpoint:** `pre-cleanup-2026-10-31`
@@ -32,7 +32,7 @@ current counts and gate freshness.
 ### Current task: native weapon path
 
 - [x] `W0` native route + legacy fallback
-- [ ] `W1` coordinate calibration and human approval
+- [x] `W1` coordinate calibration and human approval
 - [ ] `W2` Glock `socketed` rig
 - [ ] `W2` Glock native mesh and blockout approval
 - [ ] `W3` Glock animations baked and played in engine
@@ -52,9 +52,9 @@ current counts and gate freshness.
 | Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
 | Visual review (`V1`) | Available: `out/qa/V1/compare_glock/` (non-blocking) |
 | Native route/fallback (`W0`) | PASS: native selected, legacy fallback observed |
-| Coordinate calibration (`W1`) | INCONCLUSIVE: markers align; human sign-off pending |
+| Coordinate calibration (`W1`) | PASS: barrel bore, trigger, rear sight and hammer approved 2026-11-01 |
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Weapon epic | Native path reset; no native Glock/Magnum mesh approved |
+| Weapon epic | W1 approved; native Glock mesh/rig not started |
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could
@@ -64,27 +64,23 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
 
 ## Active blockers
 
-1. **W1 calibration is awaiting human sign-off.** The latest marker sheet
-   places muzzle, trigger and top on the expected landmarks; the maintainer
-   still has to confirm FRONT/REAR.
-2. **Native weapon contract is incomplete.** W0 routing/fallback works, but
-   `socketed` rig, animation baking, state machine and native assets are not
-   implemented.
-3. **Old weapon assets are experimental.** MMOD Glock/Magnum, the A/B entries
+1. **Native weapon contract is incomplete.** W0 routing/fallback works and W1
+   is approved, but the `socketed` rig, animation baking, state machine and
+   native assets are not implemented.
+2. **Old weapon assets are experimental.** MMOD Glock/Magnum, the A/B entries
    and the blockouts are not an approved baseline.
-4. **A2 roundtrip toolchain caveat.** The patched and pristine MMOD Glock both
+3. **A2 roundtrip toolchain caveat.** The patched and pristine MMOD Glock both
    drift by about `1e-6` on the attachment float. A2 needs a documented
    tolerance or a toolchain fix before it is a clean binary gate.
-5. **Quest pass is pending.** No Quest result is implied by the Monado or
+4. **Quest pass is pending.** No Quest result is implied by the Monado or
    regression results.
 
 ## Next steps
 
-1. Approve W1 coordinate calibration: the latest orthographic marker sheet
-   shows muzzle/trigger/top on the expected landmarks.
-2. Only after W1 approval, design the `socketed` Glock rig and start the native
-   mesh blockout.
-3. Keep the legacy route working; do not deploy a native asset until W0/W1/W2
+1. Start W2: design the `socketed` Glock rig and native mesh blockout in the
+   approved local frame (red=barrel bore, blue=trigger, green=rear sight,
+   yellow=hammer).
+2. Keep the legacy route working; do not deploy a native asset until W0/W1/W2
    pass. Resolve the A2 attachment-float tolerance separately.
 
 ## Evidence

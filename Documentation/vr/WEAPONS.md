@@ -8,15 +8,15 @@ available and must not be broken.
 | Stage | Result |
 |---|---|
 | W0 native route + legacy fallback | PASS |
-| W1 coordinate calibration | **INCONCLUSIVE / awaiting human sign-off** |
+| W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | not started |
 | Native Magnum mesh | not started |
 | Gordon hand | not started |
 
 W0 proves the engine can select a native model and fall back to legacy when the
-native file is absent. W1 now places the coloured muzzle/trigger/top markers on
-the expected source landmarks after fixing the camera up-axis; the maintainer
-still has to sign off `FRONT`/`REAR` before native modeling starts.
+native file is absent. W1 passed after the maintainer approved the calibrated
+markers: red is the barrel bore, blue is the trigger, green is the rear sight,
+and yellow is the hammer. The approved frame is now the reference for W2.
 
 ## Content families
 
@@ -80,9 +80,9 @@ top before any modeling starts.
 
 - Never label a camera `front` or `top` from a raw axis alone.
 - Use landmark markers and orthographic views.
-- If the muzzle marker is not on the barrel end, W1 fails.
-- If the trigger marker is not on the trigger guard, W1 fails.
-- No native mesh, UV, skin or animation work before W1 approval.
+- If the muzzle marker is not on the barrel bore, W1 fails.
+- If the trigger marker is not on the trigger blade, W1 fails.
+- W1 is approved; native mesh, UV, skin and animation work may start.
 
 ## Rig and animation (planned, not implemented)
 
@@ -97,8 +97,8 @@ top before any modeling starts.
 ## Order
 
 1. W0 runtime/fallback — passed.
-2. W1 coordinate calibration — awaiting human sign-off.
-3. Native Glock mesh/rig/animation.
+2. W1 coordinate calibration — passed and human-approved.
+3. Native Glock mesh/rig/animation (W2 in progress).
 4. Native Magnum replication with no per-weapon code.
 5. Gordon hand.
 6. Expansions and mods.
