@@ -9,14 +9,20 @@ available and must not be broken.
 |---|---|
 | W0 native route + legacy fallback | PASS |
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
-| Native Glock mesh | not started |
+| Native Glock mesh | **W2 BLOCKED — source-derived attempt rejected 2026-11-01** |
 | Native Magnum mesh | not started |
 | Gordon hand | not started |
 
 W0 proves the engine can select a native model and fall back to legacy when the
 native file is absent. W1 passed after the maintainer approved the calibrated
-markers: red is the barrel bore, blue is the trigger, green is the rear sight,
-and yellow is the hammer. The approved frame is now the reference for W2.
+markers: red is the barrel bore, blue is the trigger contact, green is the rear
+sight, and yellow is the hammer.
+
+Native weapon production is frozen as of 2026-11-01. The W2 source-derived
+blockout reproduced MMOD mesh defects and was rejected by the maintainer. The
+run is archived under `out/qa/W2/`; no native MDL was compiled or deployed. Do
+not resume paid-agent geometry work before a budget/quality decision and a
+clean or human-retopologized base mesh.
 
 ## Content families
 
@@ -84,12 +90,15 @@ top before any modeling starts.
 - If the trigger marker is not on the trigger blade, W1 fails.
 - W1 is approved; native mesh, UV, skin and animation work may start.
 
-## Rig and animation (planned, not implemented)
+## Rig and animation (W2 blockout; animation planned)
 
 - `socketed` rig: weapon parts and sockets, hands separate.
 - Existing hand contract remains 35 bones.
-- Weapon-part bones: slide, trigger, hammer, magazine, slide lock, safety.
-- Sockets: muzzle, primary grip, offhand grip, magwell, ejection.
+- Weapon-part bones: root, slide, trigger, hammer, magazine, slide lock, safety.
+- Sockets: muzzle, primary grip, offhand grip, magwell, ejection, slide rack,
+  trigger contact.
+- The trigger bone head is the mechanical pivot and its tail is the W1 finger
+  contact; those points are not interchangeable.
 - Constraints/IK are authored in Blender and baked into sequences.
 - Runtime GoldSrc has no constraints.
 - State machine: idle, fire, fire_empty, reload, slide_lock, slide_release, mag_eject, mag_insert.

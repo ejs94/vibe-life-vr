@@ -40,6 +40,15 @@ current counts and gate freshness.
 - [ ] `W4` Magnum replication with no per-weapon code
 - [ ] `W5` Gordon hand asset
 
+## Freeze 2026-11-01
+
+Production is paused. `W1` remains PASS, but `W2` is blocked: the
+source-derived Kimi attempt reproduced the MMOD mesh defects and was rejected by
+the maintainer. The run was canceled and archived under `out/qa/W2/`; no native
+MDL was compiled or deployed. Do not resume paid-agent geometry work until the
+quota/cost review is complete. The next attempt must start from a clean or
+human-retopologized base with a fixed budget.
+
 ## Current state
 
 | Item | Result |
@@ -54,7 +63,7 @@ current counts and gate freshness.
 | Native route/fallback (`W0`) | PASS: native selected, legacy fallback observed |
 | Coordinate calibration (`W1`) | PASS: barrel bore, trigger, rear sight and hammer approved 2026-11-01 |
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Weapon epic | W1 approved; native Glock mesh/rig not started |
+| Weapon epic | **FROZEN 2026-11-01**: W1 PASS; W2 blocked by budget/quality review |
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could
@@ -64,9 +73,9 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
 
 ## Active blockers
 
-1. **Native weapon contract is incomplete.** W0 routing/fallback works and W1
-   is approved, but the `socketed` rig, animation baking, state machine and
-   native assets are not implemented.
+1. **Native weapon production is frozen.** W0/W1 are valid, but the W2
+   source-derived blockout inherited MMOD defects and was rejected. Resume only
+   after a budget/quality decision; do not use paid agents for geometry loops.
 2. **Old weapon assets are experimental.** MMOD Glock/Magnum, the A/B entries
    and the blockouts are not an approved baseline.
 3. **A2 roundtrip toolchain caveat.** The patched and pristine MMOD Glock both
@@ -77,11 +86,11 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
 
 ## Next steps
 
-1. Start W2: design the `socketed` Glock rig and native mesh blockout in the
-   approved local frame (red=barrel bore, blue=trigger, green=rear sight,
-   yellow=hammer).
-2. Keep the legacy route working; do not deploy a native asset until W0/W1/W2
-   pass. Resolve the A2 attachment-float tolerance separately.
+1. No active implementation while the weapon epic is frozen.
+2. On resume, choose a clean/human-retopologized base and a fixed attempt
+   budget before touching W2. Keep the legacy route working; do not deploy a
+   native asset until W0/W1/W2 pass. Resolve the A2 attachment-float tolerance
+   separately.
 
 ## Evidence
 

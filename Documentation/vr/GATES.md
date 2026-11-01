@@ -67,6 +67,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
 | `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |
+| `W2` | Weapons | blocked | — | `out/qa/W2/latest` | monado | human |
 | `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/compare_glock` | monado | human |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
@@ -87,6 +88,12 @@ maintainer approval. Green automated checks do not prove appearance.
   maintainer approved the barrel-bore, trigger, rear-sight and hammer markers
   in `out/qa/W1/latest/calibration_sheet.png`. Generated images alone are not a
   pass.
+- `W2` is blocked as of 2026-11-01. The source-derived attempt reproduced MMOD
+  mesh defects and was rejected; its run is archived under `out/qa/W2/`. Do not
+  resume paid-agent geometry work before a budget/quality decision and a clean
+  or human-retopologized base mesh. A future W2 must show SIDE, MUZZLE, TOP and
+  3/4 views with distinct trigger contact and pivot markers; numeric checks do
+  not prove appearance.
 - `M1` passes only when all 44 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 90 seconds.
 - `R1` passes only when all 19 assertions pass.
