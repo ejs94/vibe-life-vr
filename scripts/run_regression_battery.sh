@@ -40,6 +40,7 @@ fi
 
 log_info "Using Monado build: ${MONADO_BUILD_DIR}"
 
+export PYTHONDONTWRITEBYTECODE=1
 export XRT_NO_STDIN=true
 unset XRT_WINDOW_PEEK
 unset XRT_DEBUG_GUI

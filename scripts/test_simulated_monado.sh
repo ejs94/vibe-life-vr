@@ -83,6 +83,7 @@ log_info "Using Monado build: ${MONADO_BUILD_DIR}"
 mkdir -p "$OUTPUT_DIR"
 
 # 2. Environment Configuration for Monado OpenXR
+export PYTHONDONTWRITEBYTECODE=1
 export XRT_NO_STDIN=true
 unset XRT_WINDOW_PEEK
 unset XRT_DEBUG_GUI

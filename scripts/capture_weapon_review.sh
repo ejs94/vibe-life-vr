@@ -57,6 +57,7 @@ if [ ! -x "${MONADO_BUILD_DIR}/src/xrt/targets/service/monado-service" ]; then
 fi
 
 mkdir -p "$BACKUP_DIR" "$REVIEW_DIR/frames"
+export PYTHONDONTWRITEBYTECODE=1
 export XRT_NO_STDIN=true
 unset XRT_WINDOW_PEEK
 unset XRT_DEBUG_GUI
@@ -94,6 +95,7 @@ restore_models() {
 }
 cleanup() {
     pkill -9 -x monado-service 2>/dev/null || true
+    rm -f "${REPO_DIR}/out/vr_eye0.ppm"
     restore_models
 }
 trap cleanup EXIT

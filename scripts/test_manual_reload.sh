@@ -62,6 +62,7 @@ done
 mkdir -p "${EVIDENCE_DIR}"
 cp -f "${SCRIPT_DIR}/manual_reload_test.cfg" "${OUT_VALVE}/manual_reload_test.cfg"
 
+export PYTHONDONTWRITEBYTECODE=1
 export XRT_NO_STDIN=true
 unset XRT_WINDOW_PEEK
 unset XRT_DEBUG_GUI
@@ -82,6 +83,7 @@ sleep 2
 cleanup() {
     kill -TERM "${MONADO_PID}" 2>/dev/null || true
     pkill -9 -x monado-service 2>/dev/null || true
+    rm -f "${REPO_DIR}/out/vr_eye0.ppm"
     python3 "${QA_SCRIPT}" finish \
         --run "$EVIDENCE_DIR" \
         --exit-code "$QA_EXIT" \
