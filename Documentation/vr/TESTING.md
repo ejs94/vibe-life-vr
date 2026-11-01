@@ -114,9 +114,10 @@ blender --background --factory-startup \
     --body glock_reference
 ```
 
-The harness writes `front.png`, `rear.png`, `right.png`, `left.png`,
+The harness writes `muzzle.png`, `rear.png`, `right.png`, `left.png`,
 `top.png`, `bottom.png`, `quarter.png`, `turntable_frames/`, and
-`render_manifest.json`. It is review tooling, not a model editor.
+`render_manifest.json`. `muzzle.png` is the close-up front view. It is review
+tooling, not a model editor.
 
 ## Weapon visual review (non-blocking)
 

@@ -121,9 +121,21 @@ coordinate space from the raw SMD body, so the patch is not a valid assembled
 pistol. Topology counters improved while the model was physically wrong. Entry
 A is not salvageable as-is.
 
-**Next:** stop the cheap-model swap round until the harness is fixed. Run one
-capability gate (`G0`) with a strong model on the Glock only. If it fails twice
-with the fixed harness, the source asset or task is the bottleneck.
+**G0 capability test (2026-10-31):** `deepseek-v4-pro#high` added barrel,
+recoil spring and a slide/frame bridge in raw SMD space. It respected the
+coordinate-space rule, preserved the rig, and compiled cleanly: 294→744 body
+triangles, structure check pass, 0 new boundary/non-manifold edges, 17 min,
+$0.3511. But the muzzle close-up shows a large circular barrel/spring ring
+filling the rectangular slide opening; it does not read as a Glock front.
+
+Conclusion: a stronger model can follow the harness and keep raw space, but it
+still cannot model the intended Glock silhouette from the MMOD shell without a
+reference-driven target. Do not run more LLM attempts on this source. The next
+decision is a better 3D source or a human-authored front-end part.
+
+**Next:** stop model iterations on the MMOD Glock. Either move to a better 3D
+source or author the front-end part directly with a reference image. Another
+blind LLM attempt on this shell is not justified.
 
 ## Caveats
 

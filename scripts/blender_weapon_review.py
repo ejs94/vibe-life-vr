@@ -419,14 +419,21 @@ def main() -> int:
     max_dim = max(size.x, size.y, size.z)
     radius = max(0.18, max_dim * 2.4)
 
+    # The raw viewmodel axes are X = left/right, Y = up/down, Z = forward/back.
+    # The harness maps raw X to Blender Y, raw Y to Blender -X and raw Z to
+    # Blender Z, so the semantic views are chosen in that mapped space.
+    muzzle_target = center + Vector((0.0, 0.0, size.z * 0.45))
+    muzzle_radius = max(0.06, max(size.x, size.y) * 0.55)
+    rear_target = center - Vector((0.0, 0.0, size.z * 0.45))
+    rear_radius = max(0.06, max(size.x, size.y) * 0.55)
     views = [
-        ("front", Vector((0.0, 1.0, 0.12))),
-        ("rear", Vector((0.0, -1.0, 0.12))),
-        ("right", Vector((1.0, 0.0, 0.12))),
-        ("left", Vector((-1.0, 0.0, 0.12))),
-        ("top", Vector((0.0, 0.05, 1.0))),
-        ("bottom", Vector((0.0, 0.05, -1.0))),
-        ("quarter", Vector((0.8, 0.9, 0.45))),
+        ("muzzle", Vector((0.0, 0.0, 1.0)), muzzle_target, muzzle_radius),
+        ("rear", Vector((0.0, 0.0, -1.0)), rear_target, rear_radius),
+        ("right", Vector((0.0, 1.0, 0.12)), center, radius),
+        ("left", Vector((0.0, -1.0, 0.12)), center, radius),
+        ("top", Vector((-1.0, 0.0, 0.12)), center, radius),
+        ("bottom", Vector((1.0, 0.0, 0.12)), center, radius),
+        ("quarter", Vector((0.8, 0.9, 0.45)), center, radius),
     ]
     manifest = {
         "label": parsed.label,
@@ -436,12 +443,12 @@ def main() -> int:
         "bounds_max": list(maximum),
         "views": {},
     }
-    for name, direction in views:
-        render_view(scene, camera, out_dir, name, center, radius, direction)
+    for name, direction, target, view_radius in views:
+        render_view(scene, camera, out_dir, name, target, view_radius, direction)
         manifest["views"][name] = {
             "camera": list(camera.location),
-            "target": list(center),
-            "radius": radius,
+            "target": list(target),
+            "radius": view_radius,
         }
 
     frame_dir = out_dir / "turntable_frames"
