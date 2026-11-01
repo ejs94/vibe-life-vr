@@ -8,15 +8,15 @@ available and must not be broken.
 | Stage | Result |
 |---|---|
 | W0 native route + legacy fallback | PASS |
-| W1 coordinate calibration | **INCONCLUSIVE / REWORK** |
+| W1 coordinate calibration | **INCONCLUSIVE / awaiting human sign-off** |
 | Native Glock mesh | not started |
 | Native Magnum mesh | not started |
 | Gordon hand | not started |
 
 W0 proves the engine can select a native model and fall back to legacy when the
-native file is absent. W1 currently produces a calibration sheet whose markers
-do not align with the expected muzzle/trigger/top landmarks; do not model a
-native weapon until W1 is approved.
+native file is absent. W1 now places the coloured muzzle/trigger/top markers on
+the expected source landmarks after fixing the camera up-axis; the maintainer
+still has to sign off `FRONT`/`REAR` before native modeling starts.
 
 ## Content families
 
@@ -97,7 +97,7 @@ top before any modeling starts.
 ## Order
 
 1. W0 runtime/fallback — passed.
-2. W1 coordinate calibration — current blocker.
+2. W1 coordinate calibration — awaiting human sign-off.
 3. Native Glock mesh/rig/animation.
 4. Native Magnum replication with no per-weapon code.
 5. Gordon hand.

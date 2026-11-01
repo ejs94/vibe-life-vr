@@ -41,11 +41,11 @@ def marker(name, raw_position, color):
     return obj
 
 
-def ortho_camera(camera, center, direction, scale):
+def ortho_camera(camera, center, direction, scale, up_axis="X"):
     camera.data.type = "ORTHO"
     camera.data.ortho_scale = scale
     camera.location = center + direction.normalized() * 1.0
-    camera.rotation_euler = (center - camera.location).to_track_quat("-Z", "Y").to_euler()
+    camera.rotation_euler = (center - camera.location).to_track_quat("-Z", up_axis).to_euler()
 
 
 def main() -> int:
@@ -60,9 +60,12 @@ def main() -> int:
         raise SystemExit("source body missing")
 
     landmarks = {
-        "muzzle": ((-8.024, -1.567, 35.55), (1.0, 0.05, 0.05)),
-        "trigger": ((-8.05, -3.95, 27.70), (0.05, 0.15, 1.0)),
-        "top": ((-8.00, 2.90, 31.00), (0.05, 1.0, 0.20)),
+        # Raw SMD space. Negative Y is visually up in the decompiled viewmodel;
+        # positive Y is down. Markers sit just outside the shell so they are
+        # visible in the orthographic side view.
+        "muzzle": ((-8.00, -1.50, 35.70), (1.0, 0.05, 0.05)),
+        "trigger": ((-8.00, 2.40, 28.60), (0.05, 0.15, 1.0)),
+        "top": ((-8.00, -4.90, 31.00), (0.05, 1.0, 0.20)),
     }
     objects = [body]
     marker_data = {}
@@ -81,13 +84,13 @@ def main() -> int:
     scale = max_dim * 1.25
 
     views = [
-        ("side", Vector((0.0, 1.0, 0.0)), center, scale),
-        ("muzzle", Vector((0.0, 0.0, 1.0)), center + Vector((0.0, 0.0, size.z * 0.45)), max(0.08, max(size.x, size.y) * 1.8)),
-        ("top", Vector((-1.0, 0.0, 0.0)), center, scale),
+        ("side", Vector((0.0, 1.0, 0.0)), center, scale, "X"),
+        ("muzzle", Vector((0.0, 0.0, 1.0)), center + Vector((0.0, 0.0, size.z * 0.45)), max(0.08, max(size.x, size.y) * 1.8), "X"),
+        ("top", Vector((-1.0, 0.0, 0.0)), center, scale, "Z"),
     ]
     view_data = {}
-    for name, direction, target, ortho_scale in views:
-        ortho_camera(camera, target, direction, ortho_scale)
+    for name, direction, target, ortho_scale, up_axis in views:
+        ortho_camera(camera, target, direction, ortho_scale, up_axis)
         path = out_dir / f"{name}.png"
         scene.render.filepath = str(path)
         bpy.ops.render.render(write_still=True)

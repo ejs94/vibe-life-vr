@@ -362,14 +362,14 @@ def model_bounds(objects):
     return minimum, maximum
 
 
-def look_at(camera, target: Vector):
-    camera.rotation_euler = (target - camera.location).to_track_quat("-Z", "Y").to_euler()
+def look_at(camera, target: Vector, up_axis: str = "Y"):
+    camera.rotation_euler = (target - camera.location).to_track_quat("-Z", up_axis).to_euler()
 
 
-def render_view(scene, camera, out_dir: Path, name: str, center: Vector, radius: float, direction: Vector):
+def render_view(scene, camera, out_dir: Path, name: str, center: Vector, radius: float, direction: Vector, up_axis: str = "Y"):
     direction = direction.normalized()
     camera.location = center + direction * radius
-    look_at(camera, center)
+    look_at(camera, center, up_axis)
     path = out_dir / f"{name}.png"
     scene.render.filepath = str(path)
     bpy.ops.render.render(write_still=True)
@@ -427,13 +427,13 @@ def main() -> int:
     rear_target = center - Vector((0.0, 0.0, size.z * 0.45))
     rear_radius = max(0.06, max(size.x, size.y) * 0.55)
     views = [
-        ("muzzle", Vector((0.0, 0.0, 1.0)), muzzle_target, muzzle_radius),
-        ("rear", Vector((0.0, 0.0, -1.0)), rear_target, rear_radius),
-        ("right", Vector((0.0, 1.0, 0.12)), center, radius),
-        ("left", Vector((0.0, -1.0, 0.12)), center, radius),
-        ("top", Vector((-1.0, 0.0, 0.12)), center, radius),
-        ("bottom", Vector((1.0, 0.0, 0.12)), center, radius),
-        ("quarter", Vector((0.8, 0.9, 0.45)), center, radius),
+        ("muzzle", Vector((0.0, 0.0, 1.0)), muzzle_target, muzzle_radius, "X"),
+        ("rear", Vector((0.0, 0.0, -1.0)), rear_target, rear_radius, "X"),
+        ("right", Vector((0.0, 1.0, 0.12)), center, radius, "X"),
+        ("left", Vector((0.0, -1.0, 0.12)), center, radius, "X"),
+        ("top", Vector((-1.0, 0.0, 0.12)), center, radius, "Z"),
+        ("bottom", Vector((1.0, 0.0, 0.12)), center, radius, "Z"),
+        ("quarter", Vector((0.8, 0.9, 0.45)), center, radius, "X"),
     ]
     manifest = {
         "label": parsed.label,
@@ -443,8 +443,8 @@ def main() -> int:
         "bounds_max": list(maximum),
         "views": {},
     }
-    for name, direction, target, view_radius in views:
-        render_view(scene, camera, out_dir, name, target, view_radius, direction)
+    for name, direction, target, view_radius, up_axis in views:
+        render_view(scene, camera, out_dir, name, target, view_radius, direction, up_axis)
         manifest["views"][name] = {
             "camera": list(camera.location),
             "target": list(target),
