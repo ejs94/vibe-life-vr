@@ -50,9 +50,9 @@ Prefix any shell command that mutates `$PATH` (for example an inline
 - `android/` - Horizon OS launcher, Gradle packaging, and the standalone APK.
 - `scripts/` - build, deploy, HIL, regression, and hand/asset pipelines.
 - `Documentation/vr/` - canonical documentation: `STATUS.md`, `ROADMAP.md`,
-  `GATES.md`, `TESTING.md`, `ASSETS.md`, `UPSTREAM.md`, `DECISIONS.md`,
-  `MODEL_BENCHMARKS.md`, and `reference/`. Upstream documentation outside
-  `Documentation/vr/` is read-only.
+  `GATES.md`, `TESTING.md`, `ASSETS.md`, `WEAPONS.md`, `UPSTREAM.md`,
+  `DECISIONS.md`, `MODEL_BENCHMARKS.md`, and `reference/`. Upstream
+  documentation outside `Documentation/vr/` is read-only.
 
 ## 5. Build
 

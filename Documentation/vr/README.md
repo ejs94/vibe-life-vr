@@ -13,6 +13,7 @@ to do next.
 | [`GATES.md`](GATES.md) | You are running or reviewing a gate |
 | [`TESTING.md`](TESTING.md) | You need build, Monado, regression or Quest commands |
 | [`ASSETS.md`](ASSETS.md) | You are changing a viewmodel, hand or weapon profile |
+| [`WEAPONS.md`](WEAPONS.md) | You are working on native weapon routing, coordinates or rigs |
 | [`UPSTREAM.md`](UPSTREAM.md) | You are adopting an upstream change |
 | [`DECISIONS.md`](DECISIONS.md) | You need the reason behind an architectural rule |
 | [`MODEL_BENCHMARKS.md`](MODEL_BENCHMARKS.md) | You are measuring LLM quality, cost and rework |

@@ -65,6 +65,8 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
+| `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
+| `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |
 | `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/compare_glock` | monado | human |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
@@ -79,6 +81,11 @@ maintainer approval. Green automated checks do not prove appearance.
 - `H1` passes when no review image, audit directory, score file or evidence
   manifest exists outside `out/qa`. Working sets may keep source SMDs, textures
   and compiled MDLs, but not generated evidence.
+- `W0` passes when the native route is selected with the native file present
+  and the engine falls back to legacy with the native file removed.
+- `W1` is a human-reviewed calibration gate. It passes only when the muzzle,
+  trigger and top markers land on the expected landmarks and the maintainer
+  confirms `FRONT`/`REAR`. Generated images alone are not a pass.
 - `M1` passes only when all 44 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 90 seconds.
 - `R1` passes only when all 19 assertions pass.

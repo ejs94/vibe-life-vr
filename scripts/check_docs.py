@@ -17,6 +17,7 @@ REQUIRED = [
     DOC_ROOT / "GATES.md",
     DOC_ROOT / "TESTING.md",
     DOC_ROOT / "ASSETS.md",
+    DOC_ROOT / "WEAPONS.md",
     DOC_ROOT / "UPSTREAM.md",
     DOC_ROOT / "DECISIONS.md",
     DOC_ROOT / "MODEL_BENCHMARKS.md",

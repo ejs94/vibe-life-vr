@@ -51,8 +51,10 @@ current counts and gate freshness.
 | Asset audit (`A1`) | PASS (audit); Glock baseline verdict FAIL |
 | Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
 | Visual review (`V1`) | Available: `out/qa/V1/compare_glock/` (non-blocking) |
+| Native route/fallback (`W0`) | PASS: native selected, legacy fallback observed |
+| Coordinate calibration (`W1`) | INCONCLUSIVE: markers do not align; human review pending |
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Asset repair epic | A1 baseline complete; Glock repair implemented, A2/A4 pending |
+| Weapon epic | Native path reset; no native Glock/Magnum mesh approved |
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could
@@ -62,30 +64,28 @@ be cut off after the viewmodel telemetry grew. A clean run must finish the
 
 ## Active blockers
 
-1. **Holed viewmodel meshes.** Several 1998-era weapon meshes have open
-   boundary loops that are visible in VR. This is the top asset-repair task.
-2. **Manual reload coverage.** The Glock staged reload is implemented. The
-   remaining weapons and the interaction contract still need gates.
-3. **A1 classification review is pending.** The audit resolved all loops, but
-   the two accidental defects and the medium-confidence intentional sleeves
-   still need maintainer approval before deployment.
-4. **A2 roundtrip toolchain caveat.** The patched Glock and the pristine MMOD
-   Glock both drift by about `1e-6` on the attachment float
-   (`4.249999` vs `4.250001`). This is compiler drift, not a repair regression;
-   A2 needs a documented tolerance or a toolchain fix before it can be a clean
-   binary gate.
+1. **W1 calibration is not approved.** The marker sheet does not place muzzle,
+   trigger and top where expected. No native mesh work can start until this is
+   fixed.
+2. **Native weapon contract is incomplete.** W0 routing/fallback works, but
+   `socketed` rig, animation baking, state machine and native assets are not
+   implemented.
+3. **Old weapon assets are experimental.** MMOD Glock/Magnum, the A/B entries
+   and the blockouts are not an approved baseline.
+4. **A2 roundtrip toolchain caveat.** The patched and pristine MMOD Glock both
+   drift by about `1e-6` on the attachment float. A2 needs a documented
+   tolerance or a toolchain fix before it is a clean binary gate.
 5. **Quest pass is pending.** No Quest result is implied by the Monado or
    regression results.
 
 ## Next steps
 
-1. Review `out/qa/V1/compare_glock/` and
-   `out/viewmodel_work/glock_repair/repair_sheet.png`; the repair closes the
-   clip side and dissolves the front-top feather.
-2. Resolve the `A2` attachment-float tolerance, then re-run the patched audit
-   and the in-engine visual review.
-3. Approve the Glock before touching the crossbow. `A4` human approval remains
-   the final visual gate.
+1. Fix W1 coordinate calibration: the coloured muzzle/trigger/top markers must
+   land on the expected source landmarks in orthographic views.
+2. Only after W1 approval, design the `socketed` Glock rig and start the native
+   mesh blockout.
+3. Keep the legacy route working; do not deploy a native asset until W0/W1/W2
+   pass. Resolve the A2 attachment-float tolerance separately.
 
 ## Evidence
 
