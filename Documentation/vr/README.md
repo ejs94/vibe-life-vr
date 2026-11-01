@@ -15,6 +15,7 @@ to do next.
 | [`ASSETS.md`](ASSETS.md) | You are changing a viewmodel, hand or weapon profile |
 | [`UPSTREAM.md`](UPSTREAM.md) | You are adopting an upstream change |
 | [`DECISIONS.md`](DECISIONS.md) | You need the reason behind an architectural rule |
+| [`MODEL_BENCHMARKS.md`](MODEL_BENCHMARKS.md) | You are measuring LLM quality, cost and rework |
 | [`reference/MOD_COMPATIBILITY.md`](reference/MOD_COMPATIBILITY.md) | You are targeting a GoldSrc mod |
 | [`reference/MODDER_GUIDE.md`](reference/MODDER_GUIDE.md) | You are integrating a mod or asset pack |
 

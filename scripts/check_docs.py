@@ -19,6 +19,7 @@ REQUIRED = [
     DOC_ROOT / "ASSETS.md",
     DOC_ROOT / "UPSTREAM.md",
     DOC_ROOT / "DECISIONS.md",
+    DOC_ROOT / "MODEL_BENCHMARKS.md",
     DOC_ROOT / "reference" / "MOD_COMPATIBILITY.md",
     DOC_ROOT / "reference" / "MODDER_GUIDE.md",
 ]
