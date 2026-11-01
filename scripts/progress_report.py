@@ -123,6 +123,7 @@ def main() -> int:
         "Gates: "
         f"{counts.get('PASS', 0)} PASS, "
         f"{counts.get('FAIL', 0)} FAIL, "
+        f"{counts.get('INCONCLUSIVE', 0)} INCONCLUSIVE, "
         f"{counts.get('STALE', 0)} STALE, "
         f"{counts.get('PENDING', 0)} PENDING"
     )
@@ -144,8 +145,10 @@ def main() -> int:
 
     if not states:
         print("No gate evidence found under out/qa.")
-    elif any(manifest.get("commit") != head or manifest.get("dirty") for manifest in manifests.values()):
-        print("Warning: at least one gate manifest is stale for HEAD.")
+    else:
+        stale_active = [gate for gate in active_gates if states.get(gate) == "STALE"]
+        if stale_active:
+            print("Warning: stale active gates: " + ", ".join(stale_active))
 
     if args.strict and (counts.get("FAIL", 0) or counts.get("STALE", 0)):
         return 1

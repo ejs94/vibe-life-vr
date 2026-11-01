@@ -85,6 +85,7 @@ Read it before running or reviewing a gate. The common local gates are:
 ./scripts/test_simulated_monado.sh      # M1: 44-assertion Monado suite
 ./scripts/run_regression_battery.sh     # R1: 19-assertion regression battery
 python3 scripts/check_docs.py           # D1: docs, links and path rules
+python3 scripts/check_evidence_hygiene.py  # H1: evidence stays under out/qa
 python3 scripts/progress_report.py      # current gate and task completion marker
 python3 scripts/verify_grip_pose_math.py
 python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl

@@ -47,6 +47,7 @@ current counts and gate freshness.
 | Monado unit suite (`M1`) | 44/44 PASS |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation gate (`D1`) | See `out/qa/D1/latest` |
+| Evidence hygiene (`H1`) | See `out/qa/H1/latest` |
 | Asset audit (`A1`) | PASS (audit); Glock baseline verdict FAIL |
 | Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
 | Visual review (`V1`) | Available: `out/qa/V1/compare_glock/` (non-blocking) |
