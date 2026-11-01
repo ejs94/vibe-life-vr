@@ -114,9 +114,16 @@ before/after camera, and a vision-capable judge.
 
 Full postmortem: `out/qa/AB/POSTMORTEM.md` (generated evidence, not committed).
 
+**Phase 0 neutral render (2026-10-31):** the canonical harness rendered the
+pristine Glock body correctly, but the entry A patch showed a large blue/black
+plate and a detached bridge/spring. The new geometry was written in a different
+coordinate space from the raw SMD body, so the patch is not a valid assembled
+pistol. Topology counters improved while the model was physically wrong. Entry
+A is not salvageable as-is.
+
 **Next:** stop the cheap-model swap round until the harness is fixed. Run one
-capability gate with a strong model on the Glock only. If it fails twice with
-the fixed harness, the source asset or task is the bottleneck.
+capability gate (`G0`) with a strong model on the Glock only. If it fails twice
+with the fixed harness, the source asset or task is the bottleneck.
 
 ## Caveats
 

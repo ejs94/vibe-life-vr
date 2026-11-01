@@ -99,6 +99,25 @@ Visual evidence is a labeled comparison sheet from a fixed camera. A green
 automated gate does not prove appearance. The maintainer approves or rejects
 the sheet before an asset is deployed.
 
+## Canonical Blender weapon harness
+
+Use this for A/B modeling and human review. It imports the main body in raw
+decompile model space, removes the authored helper box, loads BMP textures, and
+renders fixed views plus a turntable:
+
+```sh
+blender --background --factory-startup \
+    --python scripts/blender_weapon_review.py -- \
+    --qc out/ab/entry_a/patched/v_9mmhandgun.qc \
+    --out out/qa/AB/neutral/entry_a_patched \
+    --label entry_a_patched \
+    --body glock_reference
+```
+
+The harness writes `front.png`, `rear.png`, `right.png`, `left.png`,
+`top.png`, `bottom.png`, `quarter.png`, `turntable_frames/`, and
+`render_manifest.json`. It is review tooling, not a model editor.
+
 ## Weapon visual review (non-blocking)
 
 This is a human review aid, not a gate. It does not decide PASS/FAIL and does
