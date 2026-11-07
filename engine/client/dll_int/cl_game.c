@@ -829,6 +829,14 @@ static void CL_DrawCrosshair( void )
 	if( !clgame.ds.pCrosshair || !cl_crosshair.value )
 		return;
 
+#ifdef XASH_OPENXR
+	// The flat-screen crosshair is a screen-space sprite: in VR it is drawn in
+	// both eyes at the same pixel and follows the head, which reads as a double
+	// image. The 3D laser sight is the VR aiming reference.
+	if( XR_IsActive() && ( !vr_crosshair || vr_crosshair->value <= 0.0f ))
+		return;
+#endif
+
 	// any camera on or client is died
 	if( cl.local.health <= 0 || cl.viewentity != ( cl.playernum + 1 ))
 		return;

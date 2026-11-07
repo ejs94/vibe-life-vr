@@ -16,6 +16,33 @@
 
 xr_input_state_t g_xrInputState = {0};
 
+/*
+=============
+XR_TestParseOffset
+
+Parses a "x y z" cvar value used by the headless hand-motion tests. Tokens are
+in metres on the GoldSrc hand axes (forward, left, up).
+=============
+*/
+static void XR_TestParseOffset( const char *text, vec3_t out )
+{
+    out[0] = out[1] = out[2] = 0.0f;
+    if( !text || !text[0] )
+        return;
+
+    const char *p = text;
+    for( int i = 0; i < 3; i++ )
+    {
+        char *end = NULL;
+        float value = strtof( p, &end );
+        if( end == p )
+            break;
+        out[i] = value;
+        p = end;
+    }
+}
+
+
 static XrActionSet g_actionSet = XR_NULL_HANDLE;
 static XrAction g_actionAttack = XR_NULL_HANDLE;
 static XrAction g_actionAttack2 = XR_NULL_HANDLE;
@@ -1408,6 +1435,63 @@ static qboolean XR_GetGripPoseTransform( int hand, vec3_t out_origin, vec3_t out
     return true;
 }
 
+/*
+=============
+XR_GetPrimaryAimPose
+
+Raw aim pose in GoldSrc space (no weapon adjust). The viewmodel and the laser
+must follow the pose the player points with; the grip pose is only where the
+palm sits.
+=============
+*/
+qboolean XR_GetPrimaryAimPose( vec3_t out_origin, vec3_t out_angles )
+{
+    if( !g_xrSessionRunning )
+        return false;
+
+    // Headless harness: the simulated pose is the aim pose too.
+    if( vr_test_hands && vr_test_hands->value > 0.0f )
+    {
+        vec3_t offset = { 0.0f, 0.0f, 0.0f };
+        XR_TestParseOffset( vr_test_hand_offset ? vr_test_hand_offset->string : NULL, offset );
+
+        if( out_origin )
+        {
+            out_origin[0] = 0.22f + offset[0];
+            out_origin[1] = -0.06f + offset[1];
+            out_origin[2] = -0.08f + offset[2];
+        }
+        if( out_angles )
+        {
+            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+            out_angles[2] = vr_test_hand_roll ? vr_test_hand_roll->value : 0.0f;
+        }
+        return true;
+    }
+
+    qboolean left = ( vr_lefthanded && vr_lefthanded->value > 0.0f );
+    const XrPosef *pose = left ? &g_xrInputState.leftHandPose : &g_xrInputState.rightHandPose;
+    qboolean active = left ? g_xrInputState.leftHandActive : g_xrInputState.rightHandActive;
+    if( !active )
+        return false;
+
+    if( out_origin )
+    {
+        float rel_x = pose->position.x - g_xrViews[0].pose.position.x;
+        float rel_y = pose->position.y - g_xrViews[0].pose.position.y;
+        float rel_z = pose->position.z - g_xrViews[0].pose.position.z;
+        out_origin[0] = -rel_z;
+        out_origin[1] = -rel_x;
+        out_origin[2] =  rel_y;
+    }
+
+    if( out_angles )
+        XR_QuatToEuler( &pose->orientation, out_angles );
+
+    return true;
+}
+
 qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles )
 {
     int hand = ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? VR_HAND_LEFT : VR_HAND_RIGHT;
@@ -1581,10 +1665,11 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
             //    muzzle position follows the visual (grip) pose; the firing
             //    direction above still follows the aim pose.
             vec3_t pose_origin, pose_angles;
-            vec3_t gripOrigin, gripAngles;
-            if( XR_GetPrimaryGripTransform( gripOrigin, gripAngles ))
+            vec3_t gripOrigin, gripAngles, aimOrigin, aimAngles;
+            if( XR_GetPrimaryGripTransform( gripOrigin, gripAngles ) &&
+                XR_GetPrimaryAimPose( aimOrigin, aimAngles ))
             {
-                XR_GetWeaponPose( wpn, gripOrigin, gripAngles, turn_yaw, refState.vieworg, scale,
+                XR_GetWeaponPose( wpn, gripOrigin, aimAngles, turn_yaw, refState.vieworg, scale,
                     pose_origin, pose_angles );
             }
             else
@@ -1746,32 +1831,6 @@ static void XR_ApplyTwoHandStabilizer( const XrPosef *primaryPose, const XrPosef
     else
     {
         XR_QuatToEuler( &primaryPose->orientation, out_angles );
-    }
-}
-
-/*
-=============
-XR_TestParseOffset
-
-Parses a "x y z" cvar value used by the headless hand-motion tests. Tokens are
-in metres on the GoldSrc hand axes (forward, left, up).
-=============
-*/
-static void XR_TestParseOffset( const char *text, vec3_t out )
-{
-    out[0] = out[1] = out[2] = 0.0f;
-    if( !text || !text[0] )
-        return;
-
-    const char *p = text;
-    for( int i = 0; i < 3; i++ )
-    {
-        char *end = NULL;
-        float value = strtof( p, &end );
-        if( end == p )
-            break;
-        out[i] = value;
-        p = end;
     }
 }
 

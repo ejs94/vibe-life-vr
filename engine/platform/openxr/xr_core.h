@@ -22,6 +22,7 @@ extern EXPORT convar_t *vr_smoothturn;
 extern EXPORT convar_t *vr_snap_angle;
 extern EXPORT convar_t *vr_walkdirection;
 extern EXPORT convar_t *vr_lasersight;
+extern EXPORT convar_t *vr_crosshair;
 extern EXPORT convar_t *vr_headtorch;
 extern EXPORT convar_t *vr_lefthanded;
 extern EXPORT convar_t *vr_lefthanded_mirror_grip;

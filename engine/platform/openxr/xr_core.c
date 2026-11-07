@@ -32,6 +32,7 @@ EXPORT convar_t *vr_smoothturn = NULL;
 EXPORT convar_t *vr_snap_angle = NULL;
 EXPORT convar_t *vr_walkdirection = NULL;
 EXPORT convar_t *vr_lasersight = NULL;
+EXPORT convar_t *vr_crosshair = NULL;
 EXPORT convar_t *vr_headtorch = NULL;
 EXPORT convar_t *vr_lefthanded = NULL;
 EXPORT convar_t *vr_lefthanded_mirror_grip = NULL;
@@ -305,6 +306,7 @@ void XR_RegisterCVars( void )
     vr_snap_angle = Cvar_Get("vr_snap_angle", "45", FCVAR_ARCHIVE, "Snap turn angle");
     vr_walkdirection = Cvar_Get("vr_walkdirection", "0", FCVAR_ARCHIVE, "0 = HMD direction, 1 = Controller orientation");
     vr_lasersight = Cvar_Get("vr_lasersight", "1", FCVAR_ARCHIVE, "Enable 3D weapon laser sight");
+    vr_crosshair = Cvar_Get("vr_crosshair", "0", FCVAR_ARCHIVE, "Draw the flat-screen crosshair in VR (head-locked per eye; off by default)");
     vr_headtorch = Cvar_Get("vr_headtorch", "1", FCVAR_ARCHIVE, "Head-mounted flashlight following view direction (HL2:VR style)");
     vr_lefthanded = Cvar_Get("vr_lefthanded", "0", FCVAR_ARCHIVE, "1 = Left-handed primary weapon (jump/reload move to X/Y)");
     vr_lefthanded_mirror_grip = Cvar_Get("vr_lefthanded_mirror_grip", "1", FCVAR_ARCHIVE, "1 = Mirror the lateral weapon grip offset when left-handed");

@@ -80,6 +80,7 @@ EXPORT float XR_GetPlayerTurnYaw( void );
 
 EXPORT qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles );
+EXPORT qboolean XR_GetPrimaryAimPose( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetSecondaryGripTransform( vec3_t out_origin, vec3_t out_angles );
 EXPORT qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity );
 EXPORT qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles );
@@ -115,6 +116,7 @@ static inline float XR_GetPlayerTurnYaw( void ) { return 0.0f; }
 
 static inline qboolean XR_GetPrimaryHandTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetPrimaryGripTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
+static inline qboolean XR_GetPrimaryAimPose( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetSecondaryGripTransform( vec3_t out_origin, vec3_t out_angles ) { return false; }
 static inline qboolean XR_GetPrimaryHandVelocity( vec3_t out_velocity ) { return false; }
 static inline qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_aim_angles ) { return false; }

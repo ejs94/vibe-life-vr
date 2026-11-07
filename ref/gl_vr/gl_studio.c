@@ -1082,16 +1082,19 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 #ifdef XASH_OPENXR
 	if( e == tr.viewent && XR_IsActive() )
 	{
-		vec3_t handOrigin, handAngles;
-		// The visual weapon follows the grip/palm pose. The aim pose remains
-		// authoritative for the laser and the firing line.
-		if( XR_GetPrimaryGripTransform( handOrigin, handAngles ))
+		vec3_t handOrigin, handAngles, aimOrigin, aimAngles;
+		// The weapon follows the aim pose: that is the pose the laser and the
+		// authoritative firing line use. The grip pose only supplies the palm
+		// position. Using the grip orientation here made every gun point along
+		// the controller handle (up) on real hardware.
+		if( XR_GetPrimaryGripTransform( handOrigin, handAngles ) &&
+		    XR_GetPrimaryAimPose( aimOrigin, aimAngles ))
 		{
 			float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 			float turn_yaw = XR_GetPlayerTurnYaw();
 
 			const char *wpn = ( e->model && e->model->name[0] ) ? e->model->name : "";
-			XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, RI.rvp.vieworigin, scale, origin, angles );
+			XR_GetWeaponPose( wpn, handOrigin, aimAngles, turn_yaw, RI.rvp.vieworigin, scale, origin, angles );
 
 			// Cache raw physical 6DoF hand pose for calibration debug visualizer
 			// (world hand position + aim angles, before grip offsets)
@@ -1184,10 +1187,11 @@ static void R_StudioSetUpTransform( cl_entity_t *e )
 				if( vr_foregrip && vr_foregrip->value > 0.0f && wpn[0] &&
 				    XR_GetWeaponForegrip( wpn, fg_off, fg_rot ))
 				{
-					vec3_t ph_origin, ph_angles, wpn_origin, wpn_angles;
-					if( XR_GetPrimaryGripTransform( ph_origin, ph_angles ))
+					vec3_t ph_origin, ph_angles, aim_o, aim_a, wpn_origin, wpn_angles;
+					if( XR_GetPrimaryGripTransform( ph_origin, ph_angles ) &&
+					    XR_GetPrimaryAimPose( aim_o, aim_a ))
 					{
-						XR_GetWeaponPose( wpn, ph_origin, ph_angles, turn_yaw, RI.rvp.vieworigin, scale,
+						XR_GetWeaponPose( wpn, ph_origin, aim_a, turn_yaw, RI.rvp.vieworigin, scale,
 							wpn_origin, wpn_angles );
 
 						vec3_t fg_fwd, fg_rt, fg_up;
@@ -1928,6 +1932,9 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 	if( !XR_GetPrimaryGripTransform( handOrigin, handAngles ))
 		return;
 
+	vec3_t aimOrigin, aimAngles;
+	qboolean have_aim = XR_GetPrimaryAimPose( aimOrigin, aimAngles );
+
 	float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
 	float turn_yaw = XR_GetPlayerTurnYaw();
 	float yaw_rad = DEG2RAD( turn_yaw );
@@ -1967,9 +1974,18 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 	}
 
 	vec3_t palmAngles, palmFwd;
-	palmAngles[0] = handAngles[0];
-	palmAngles[1] = anglemod( handAngles[1] + turn_yaw );
-	palmAngles[2] = handAngles[2];
+	if( have_aim )
+	{
+		palmAngles[0] = aimAngles[0];
+		palmAngles[1] = anglemod( aimAngles[1] + turn_yaw );
+		palmAngles[2] = aimAngles[2];
+	}
+	else
+	{
+		palmAngles[0] = handAngles[0];
+		palmAngles[1] = anglemod( handAngles[1] + turn_yaw );
+		palmAngles[2] = handAngles[2];
+	}
 	AngleVectors( palmAngles, palmFwd, NULL, NULL );
 
 	vec3_t axis;
