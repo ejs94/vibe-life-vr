@@ -259,6 +259,16 @@ qboolean XR_GetWeaponPose( const char *model_name, const vec3_t handOrigin,
 
     if( has_grip_rot )
     {
+        // The left hand is the mirrored chain, so the local grip rotation has
+        // to be mirrored across the aim axis (pitch stays, yaw and roll flip).
+        // Without this the pistol sits across the palm instead of in the grip.
+        if( vr_lefthanded && vr_lefthanded->value > 0.0f &&
+            ( !vr_lefthanded_mirror_grip || vr_lefthanded_mirror_grip->value > 0.0f ))
+        {
+            w_grip_rot[1] = -w_grip_rot[1];
+            w_grip_rot[2] = -w_grip_rot[2];
+        }
+
         // True local socket rotation: weapon orientation follows the palm.
         // The aim angles used for ballistics are computed separately in
         // XR_GetPrimaryHandMuzzleTransform and are not affected here.

@@ -110,6 +110,21 @@ python3 scripts/check_vr_coordinates.py <engine.log>   # sanity
 The visual sheet is the authority for the final judgement; the numbers only
 make the residual objective.
 
+### Left-handed hold
+
+The left hand is the mirrored chain of the same two-hand model, so the local
+grip rotation is mirrored across the aim axis: `grip_rot` keeps its pitch and
+negates yaw and roll when `vr_lefthanded 1` and `vr_lefthanded_mirror_grip 1`.
+Without that, the pistol sat across the palm instead of in the grip. The
+lateral part of `grip_offset` is already handled by the global mirror.
+
+Verification is visual and comparative: `out/qa/W2/hand_ab/` holds the same
+capture in both modes, side by side (`ab_compare_lat.png`, `ab_compare_top.png`).
+The top view must show the slide top facing up in both panels, otherwise the
+mirror rolled the weapon. Three judges reviewed the pair on 2026-11-07:
+two passed it (4/5) and one raised a roll defect that the top composite
+disproves; the composite is the record.
+
 ## Aim direction (measured, rejected)
 
 Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
