@@ -50,6 +50,13 @@
           "stdio"
         ],
         "cwd": "."
+      },
+      "blendswap": {
+        "type": "remote",
+        "url": "https://blendswap.com/api/mcp",
+        "headers": {
+          "Authorization": "Bearer {env:BLENDSWAP_API_KEY}"
+        }
       }
     }
   },

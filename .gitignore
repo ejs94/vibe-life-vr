@@ -395,3 +395,7 @@ valve_hd
 # Build output
 out/
 *.ppm
+
+# Local secrets (OpenCode reads these at startup)
+.env
+.env.local
