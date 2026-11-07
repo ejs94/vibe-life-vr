@@ -710,6 +710,86 @@ void XR_QuatToEuler( const XrQuaternionf *q, vec3_t out_angles )
     out_angles[2] = -roll * (180.0f / (float)M_PI);
 }
 
+/*
+====================
+XR_QuatToGoldSrcAngles
+
+Converts a controller quaternion from OpenXR axes to GoldSrc angles using the
+same basis change as the position path (goldsrc = (-z, -x, y)). Feeding the raw
+OpenXR Euler angles to a GoldSrc viewmodel rotates the imported models by a
+fixed amount, which is what the per-weapon grip_rot values were masking.
+
+The reference ports do the equivalent: Lambda1VR builds the basis vectors and
+maps them (TBXR_Common.c, QuatToYawPitchRoll) and Half-Life: VR does the same
+in VRHelper.cpp (GetHLAnglesFromVRMatrix).
+====================
+*/
+void XR_QuatToGoldSrcAngles( const XrQuaternionf *q, vec3_t out_angles )
+{
+    float x = q->x, y = q->y, z = q->z, w = q->w;
+    float r00 = 1.0f - 2.0f * (y * y + z * z), r01 = 2.0f * (x * y - z * w), r02 = 2.0f * (x * z + y * w);
+    float r10 = 2.0f * (x * y + z * w), r11 = 1.0f - 2.0f * (x * x + z * z), r12 = 2.0f * (y * z - x * w);
+    float r20 = 2.0f * (x * z - y * w), r21 = 2.0f * (y * z + x * w), r22 = 1.0f - 2.0f * (x * x + y * y);
+
+    // R_gs = M * R * M^T with M = [[0,0,-1],[-1,0,0],[0,1,0]].
+    float g00 =  r21, g01 = -r22, g02 =  r20;
+    float g10 =  r01, g11 = -r02, g12 =  r00;
+    float g20 = -r11, g21 =  r12, g22 = -r10;
+
+    matrix3x4 m;
+    // forward = R_gs * (1,0,0), right = R_gs * (0,-1,0), up = R_gs * (0,0,1).
+    m[0][0] =  g00; m[1][0] =  g10; m[2][0] =  g20;
+    m[0][1] = -g01; m[1][1] = -g11; m[2][1] = -g21;
+    m[0][2] =  g02; m[1][2] =  g12; m[2][2] =  g22;
+    m[0][3] = m[1][3] = m[2][3] = 0.0f;
+
+    Matrix3x4_AnglesFromMatrix( m, out_angles );
+}
+
+/*
+====================
+XR_TestHandConversion
+
+Debug/regression probe: builds a controller quaternion in OpenXR axes from the
+three intrinsics and prints what each conversion produces. Used by the Monado
+suite to prove that an OpenXR pitch maps to the GoldSrc pitch axis and a yaw to
+the GoldSrc yaw axis.
+====================
+*/
+void XR_TestHandConversion( float pitch_deg, float yaw_deg, float roll_deg )
+{
+    float hp = DEG2RAD( pitch_deg ) * 0.5f;
+    float hy = DEG2RAD( yaw_deg ) * 0.5f;
+    float hr = DEG2RAD( roll_deg ) * 0.5f;
+
+    XrQuaternionf qy = { 0.0f, sinf( hy ), 0.0f, cosf( hy ) };
+    XrQuaternionf qp = { sinf( hp ), 0.0f, 0.0f, cosf( hp ) };
+    XrQuaternionf qr = { 0.0f, 0.0f, sinf( hr ), cosf( hr ) };
+
+    // q = qy * qp * qr (OpenXR intrinsic yaw-pitch-roll)
+    XrQuaternionf t = {
+        qy.w * qp.x + qy.x * qp.w + qy.y * qp.z - qy.z * qp.y,
+        qy.w * qp.y - qy.x * qp.z + qy.y * qp.w + qy.z * qp.x,
+        qy.w * qp.z + qy.x * qp.y - qy.y * qp.x + qy.z * qp.w,
+        qy.w * qp.w - qy.x * qp.x - qy.y * qp.y - qy.z * qp.z,
+    };
+    XrQuaternionf q = {
+        t.w * qr.x + t.x * qr.w + t.y * qr.z - t.z * qr.y,
+        t.w * qr.y - t.x * qr.z + t.y * qr.w + t.z * qr.x,
+        t.w * qr.z + t.x * qr.y - t.y * qr.x + t.z * qr.w,
+        t.w * qr.w - t.x * qr.x - t.y * qr.y - t.z * qr.z,
+    };
+
+    vec3_t legacy, modern, fwd, up;
+    XR_QuatToEuler( &q, legacy );
+    XR_QuatToGoldSrcAngles( &q, modern );
+    AngleVectors( modern, fwd, NULL, up );
+
+    Con_Printf( "^5[VR_CONV] openxr=(%.1f %.1f %.1f) legacy=(%.1f %.1f %.1f) modern=(%.1f %.1f %.1f) fwd=(%.3f %.3f %.3f)\n",
+        pitch_deg, yaw_deg, roll_deg, legacy[0], legacy[1], legacy[2],
+        modern[0], modern[1], modern[2], fwd[0], fwd[1], fwd[2] );
+}
+
 void XR_GetHeadOrientation( vec3_t out_angles )
 {
     if (!g_xrSessionRunning || !g_xrSwapchainsReady)

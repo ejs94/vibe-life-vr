@@ -70,67 +70,40 @@ attempt are recorded in [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
 
 ## Grip alignment for native models
 
-The Half-Life: VR viewmodels are authored for that mod's own controller pose, so
-the legacy `grip_offset`/`pitch_adjust` numbers (tuned on the MMOD meshes) left
-every imported weapon pointing about 46 degrees down and 8 degrees left of the
-hand. The weapon was in the glove but the barrel did not follow the aim.
+The imported Half-Life: VR viewmodels are authored around that mod's own hand
+bone, and their flat-screen idle pose tilts the whole model about 46 degrees
+down. The translation anchor seated the grip on the palm but kept the tilt, so
+the barrel did not follow the hand.
 
-Fix: measure the model's barrel in the hand frame and cancel it with `grip_rot`
-(a true local rotation, already supported by `XR_GetWeaponPose`). The barrel is
-`normalize(muzzle_pos_world - grip_palm_world)`; `vr_grip_probe 1` logs the palm
-(`[VR_ANCHOR]`) and `[VR_GRIP] src=muzzle` logs the muzzle, so the residual is
-`asin(-barrel.z)` for pitch and `atan2(barrel.y, barrel.x)` for yaw.
+Fix: the renderer rotates the **native** viewmodel around the palm after seating
+it, so the barrel (`muzzle_pos - grip bone`) points along the controller grip
+pose (`ref/gl_vr/gl_studio.c`, `R_VR_RotateViewmodelToPalm`). It is gated by
+`vr_anchor_rotation` (default 1) and skipped for weapons whose profile has no
+muzzle (`muzzle_attachment -1`: melee and toss). The model is re-seated after
+the rotation.
 
-Measured and committed values (degrees, GoldSrc pitch/yaw):
+Measured after the fix, with no per-weapon data:
 
-| Model | `grip_rot` | Residual (barrel vs hand) |
-|---|---|---|
-| `v_9mmhandgun` | `-52.5 -5.8 0` | 0.5 deg |
-| `v_357` | `-59.9 -3.3 0` | 0.7 deg (shot check) |
-| `v_9mmAR` | `-56.8 -4.8 0` | 0.0 deg |
-| `v_shotgun` | `-49.4 1.6 0` | 2.7 deg (pellet spread) |
-| `v_gauss` | `-47.4 -2.6 0` | 3.7 deg (tracer starts inside the cap) |
-| `v_egon` | `-67.8 -5.4 0` | 0.2 deg |
-| `v_crossbow` | `-25.1 -5.1 0` | 0.6 deg |
-| other native weapons | `-52.5 -5.8 0` | visual check only |
+| Check | Result |
+|---|---|
+| barrel vs hand, 9 gun models | 0.0 deg |
+| shot start vs muzzle | 0.05-0.07 units |
+| shot vs barrel | 0.01-0.18 deg (shotgun spread excluded) |
 
-The shot-origin probe (`scripts/aim_shot_evidence.sh`) confirms that a shot
-starts at the muzzle attachment (0.06-0.10 units for the pistols) and follows
-the visible barrel within 0.8 degrees.
-
-With the barrel aligned, `pitch_adjust` is `0` for the nine guns. Before, the
-shot was calibrated 2-5 degrees away from a misoriented barrel; now the bullet
-follows the barrel that the player sees. Toss and melee weapons keep their old
-adjustment because their "muzzle" bone is not a barrel axis.
-
-Re-run the measurement after any change to a model, a `grip_offset` or the
-weapon pose math:
-
-```sh
-# equip a weapon with vr_grip_probe 1 and a fixed hand pose, then
-python3 scripts/check_vr_coordinates.py <engine.log>   # sanity
-./scripts/weapon_visual_sweep.sh                        # visual sheet
-```
-
-The visual sheet is the authority for the final judgement; the numbers only
-make the residual objective.
+The earlier per-weapon `grip_rot` values were removed; they compensated one
+pose and drifted at others. The hand-angle conversion was also checked: the
+legacy Euler conversion maps OpenXR pitch/yaw/roll to the GoldSrc axes
+correctly, so it was not the cause (see `M1` assertion 48 and
+`scripts/check_hand_conversion.py`).
 
 ### Left-handed hold
 
-The left hand is the mirrored chain of the same two-hand model, so the local
-grip rotation is mirrored across the aim axis: `grip_rot` keeps its pitch and
-negates yaw and roll when `vr_lefthanded 1` and `vr_lefthanded_mirror_grip 1`.
-Without that, the pistol sat across the palm instead of in the grip. The
-lateral part of `grip_offset` is already handled by the global mirror.
+`vr_lefthanded 1` now mirrors the whole viewmodel through the same renderer
+path as `cl_righthand`, so the baked right hand becomes a left hand, and the
+barrel rotation runs against the left grip pose. The A/B capture in
+`out/qa/W2/hand_ab/` shows the two modes side by side.
 
-Verification is visual and comparative: `out/qa/W2/hand_ab/` holds the same
-capture in both modes, side by side (`ab_compare_lat.png`, `ab_compare_top.png`).
-The top view must show the slide top facing up in both panels, otherwise the
-mirror rolled the weapon. Three judges reviewed the pair on 2026-11-07:
-two passed it (4/5) and one raised a roll defect that the top composite
-disproves; the composite is the record.
-
-## Aim direction (measured, rejected)
+## Aim direction (measured, rejected)## Aim direction (measured, rejected)
 
 Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
 model-derived alternatives were measured on 2026-11-06 and rejected:

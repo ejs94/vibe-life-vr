@@ -148,6 +148,8 @@ EXPORT void XR_GetHeadOrientation( vec3_t out_angles );
 EXPORT void XR_GetEyePosition( int eye, vec3_t out_origin );
 EXPORT void XR_GetEyeFrustum( int eye, float nearZ, float farZ, float *left, float *right, float *bottom, float *top );
 EXPORT void XR_QuatToEuler( const XrQuaternionf *q, vec3_t out_angles );
+EXPORT void XR_QuatToGoldSrcAngles( const XrQuaternionf *q, vec3_t out_angles );
+EXPORT void XR_TestHandConversion( float pitch_deg, float yaw_deg, float roll_deg );
 EXPORT void XR_ResetHeadOriginCalibration( void );
 EXPORT qboolean XR_GetHeadCenterTransform( vec3_t out_origin_offset, vec3_t out_angles );
 EXPORT qboolean XR_GetHeadCenterTransformWithBasis( vec3_t out_origin_offset, vec3_t out_forward, vec3_t out_right, vec3_t out_up );

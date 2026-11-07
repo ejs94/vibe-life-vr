@@ -134,6 +134,21 @@ EXPORT vr_debug_impact_t g_vrDebugImpacts[MAX_VR_DEBUG_IMPACTS];
 EXPORT int g_vrNumDebugImpacts = 0;
 EXPORT int g_vrTotalShotsFired = 0;
 
+/*
+====================
+XR_TestHandConversion_f
+
+vr_test_hand_conversion <openxr_pitch> <openxr_yaw> <openxr_roll>
+====================
+*/
+static void XR_TestHandConversion_f( void )
+{
+    float pitch = ( Cmd_Argc() > 1 ) ? Q_atof( Cmd_Argv( 1 )) : 0.0f;
+    float yaw   = ( Cmd_Argc() > 2 ) ? Q_atof( Cmd_Argv( 2 )) : 0.0f;
+    float roll  = ( Cmd_Argc() > 3 ) ? Q_atof( Cmd_Argv( 3 )) : 0.0f;
+    XR_TestHandConversion( pitch, yaw, roll );
+}
+
 static void XR_RecordImpact_f( void )
 {
     if( Cmd_Argc() >= 7 )
@@ -355,6 +370,7 @@ void XR_RegisterCVars( void )
     Cvar_Get("vr_test_camera_azimuth", "0", 0, "Fixed comparison camera orbit azimuth in degrees for vr_test_camera 5");
     Cvar_Get("vr_test_camera_elevation", "0", 0, "Fixed comparison camera orbit elevation in degrees for vr_test_camera 5");
     vr_native_weapons = Cvar_Get("vr_native_weapons", "0", 0, "Resolve native weapon models from models/native/<name>.mdl; fall back to legacy when missing");
+    Cvar_Get("vr_anchor_rotation", "1", FCVAR_ARCHIVE, "Rotate native viewmodels so the grip bone matches the controller palm orientation");
     vr_baked_hand_curling = Cvar_Get("vr_baked_hand_curling", "1", 0, "Curling on the baked viewmodel hand: 0=off, 1=current, 2=index finger only");
     vr_thumb_curl_axis = Cvar_Get("vr_thumb_curl_axis", "1", 0, "Standalone thumb curl axis: 0=legacy local Y, 1=thumb-specific local Z toward palm");
     vr_hand_grip_lock = Cvar_Get("vr_hand_grip_lock", "1", 0, "0=off, 1=snap standalone hand position to the viewmodel grip bone, 2=also copy its orientation");
@@ -391,6 +407,8 @@ void XR_RegisterCVars( void )
     vr_menu_tab = Cvar_Get("vr_menu_tab", "0", 0, "Active tab in VR menu (0=Locomotion, 1=Weapons, 2=Immersion, 3=VR Debug)");
 
     Cmd_AddCommand("vr_record_impact", XR_RecordImpact_f, "Record a bullet impact for VR 3D visual debug alignment");
+
+    Cmd_AddCommand("vr_test_hand_conversion", XR_TestHandConversion_f, "Print the legacy and GoldSrc hand conversion for an OpenXR rotation");
     Cmd_AddCommand("vr_clear_impacts", XR_ClearImpacts_f, "Clear all active 3D bullet impact debug markers");
 }
 

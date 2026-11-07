@@ -721,6 +721,12 @@ static qboolean R_AllowFlipViewModel( cl_entity_t *e )
 			return true;
 	}
 
+	// VR left-handed mode mirrors the whole viewmodel so the baked right hand
+	// becomes a left hand. Without it the gun sits in the left controller while
+	// the model still shows a right hand.
+	if( e == tr.viewent && vr_lefthanded && vr_lefthanded->value > 0.0f )
+		return true;
+
 	return false;
 }
 
@@ -1860,6 +1866,199 @@ static void R_VR_AnchorViewmodelToGrip( cl_entity_t *e )
 
 /*
 ====================
+R_VR_RotateViewmodelToPalm
+
+Native viewmodels are authored around the mod's own hand bone. The flat-screen
+idle pose still tilts the whole model (about 46 degrees down in the shipped SD
+set), and the translation anchor cannot remove that. This rotates the model
+around the palm so the grip bone orientation matches the controller grip pose,
+which is what the reference mods get from their own model matrix.
+
+Position stays on the palm: the rotation pivots on it.
+====================
+*/
+static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
+{
+	static cvar_t *vr_anchor_rotation = NULL;
+	if( !vr_anchor_rotation ) vr_anchor_rotation = gEngfuncs.pfnGetCvarPointer( "vr_anchor_rotation" );
+
+	if( !e || e != tr.viewent || !XR_IsActive() || !m_pStudioHeader )
+		return;
+	if( !vr_anchor_rotation || vr_anchor_rotation->value <= 0.0f )
+		return;
+	if( !e->model || Q_strnicmp( e->model->name, "models/native/", 14 ))
+		return;
+
+	// Toss and melee weapons have no barrel: keep their authored pose.
+	{
+		int attachment = -1;
+		vec3_t fallback = { 0.0f, 18.0f, 0.0f };
+		XR_GetWeaponMuzzleParams( e->model->name, &attachment, fallback );
+		if( attachment < 0 )
+			return;
+	}
+
+	mstudiobone_t *pbones = (mstudiobone_t *)((byte *)m_pStudioHeader + m_pStudioHeader->boneindex);
+	if( !pbones || m_pStudioHeader->numbones <= 0 )
+		return;
+
+	static const char *right_bones[] = {
+		"Bip01 R Hand", "Xbow biped R Hand", "Bone09", "Bip01 L Hand", "grip"
+	};
+	static const char *left_bones[] = {
+		"Bip01 L Hand", "Xbow biped L Hand", "Bone09", "Bip01 R Hand", "grip"
+	};
+	const char **candidates = ( vr_lefthanded && vr_lefthanded->value > 0.0f ) ? left_bones : right_bones;
+	int grip = -1;
+	for( size_t b = 0; b < 5 && grip < 0; b++ )
+	{
+		for( int i = 0; i < m_pStudioHeader->numbones; i++ )
+		{
+			if( !Q_strcmp( pbones[i].name, candidates[b] ))
+			{
+				grip = i;
+				break;
+			}
+		}
+	}
+	if( grip < 0 )
+		return;
+
+	vec3_t handOrigin, handAngles;
+	if( !XR_GetPrimaryGripTransform( handOrigin, handAngles ))
+		return;
+
+	float scale = ( vr_worldscale && vr_worldscale->value > 0.0f ) ? vr_worldscale->value : 40.0f;
+	float turn_yaw = XR_GetPlayerTurnYaw();
+	float yaw_rad = DEG2RAD( turn_yaw );
+	float cy = cosf( yaw_rad );
+	float sy = sinf( yaw_rad );
+
+	vec3_t palm;
+	palm[0] = RI.rvp.vieworigin[0] + ( handOrigin[0] * cy - handOrigin[1] * sy ) * scale;
+	palm[1] = RI.rvp.vieworigin[1] + ( handOrigin[0] * sy + handOrigin[1] * cy ) * scale;
+	palm[2] = RI.rvp.vieworigin[2] + handOrigin[2] * scale;
+
+	matrix3x4 *bt = g_studio.bonestransform;
+
+	// Muzzle bone and barrel axis.
+	int muzzle = -1;
+	for( int i = 0; i < m_pStudioHeader->numbones && muzzle < 0; i++ )
+	{
+		if( !Q_strcmp( pbones[i].name, "muzzle_pos" ))
+			muzzle = i;
+	}
+	if( muzzle < 0 )
+		return;
+
+	// Barrel axis from the grip to the muzzle bone. This matches the visible
+	// bore for every gun in the shipped set; the muzzle bone of the shotgun
+	// and crossbow sits slightly above the bore, which is a known cosmetic
+	// residual rather than a pose error.
+	vec3_t barrel;
+	barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
+	barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
+	barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+	{
+		float barrel_len = VectorLength( barrel );
+		if( barrel_len < 1.0f )
+			return;
+		VectorScale( barrel, 1.0f / barrel_len, barrel );
+	}
+
+	vec3_t palmAngles, palmFwd;
+	palmAngles[0] = handAngles[0];
+	palmAngles[1] = anglemod( handAngles[1] + turn_yaw );
+	palmAngles[2] = handAngles[2];
+	AngleVectors( palmAngles, palmFwd, NULL, NULL );
+
+	vec3_t axis;
+	float dot = DotProduct( barrel, palmFwd );
+	float angle = RAD2DEG( acosf( fmaxf( -1.0f, fminf( 1.0f, dot ))));
+	CrossProduct( barrel, palmFwd, axis );
+	{
+		float axis_len = VectorLength( axis );
+		if( axis_len < 1e-4f )
+			return;
+		VectorScale( axis, 1.0f / axis_len, axis );
+	}
+
+	// Skip tiny corrections to avoid jitter.
+	if( angle < 1.0f )
+		return;
+
+	float c = cosf( DEG2RAD( angle ) );
+	float s = sinf( DEG2RAD( angle ) );
+	float t = 1.0f - c;
+	float x = axis[0], y = axis[1], z = axis[2];
+	float d[3][3];
+	d[0][0] = t*x*x + c;   d[0][1] = t*x*y - s*z; d[0][2] = t*x*z + s*y;
+	d[1][0] = t*x*y + s*z; d[1][1] = t*y*y + c;   d[1][2] = t*y*z - s*x;
+	d[2][0] = t*x*z - s*y; d[2][1] = t*y*z + s*x; d[2][2] = t*z*z + c;
+
+	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
+	{
+		qboolean zeroed = true;
+		for( int r = 0; r < 3 && zeroed; r++ )
+		{
+			for( int c = 0; c < 3; c++ )
+			{
+				if( bt[i][r][c] != 0.0f )
+				{
+					zeroed = false;
+					break;
+				}
+			}
+		}
+		if( zeroed )
+			continue;
+
+		float old[3][3], oldt[3];
+		for( int r = 0; r < 3; r++ )
+		{
+			oldt[r] = bt[i][r][3];
+			for( int c = 0; c < 3; c++ )
+				old[r][c] = bt[i][r][c];
+		}
+
+		for( int r = 0; r < 3; r++ )
+		{
+			for( int c = 0; c < 3; c++ )
+				bt[i][r][c] = d[r][0] * old[0][c] + d[r][1] * old[1][c] + d[r][2] * old[2][c];
+			bt[i][r][3] = palm[r] +
+				d[r][0] * ( oldt[0] - palm[0] ) +
+				d[r][1] * ( oldt[1] - palm[1] ) +
+				d[r][2] * ( oldt[2] - palm[2] );
+
+			g_studio.lighttransform[i][r][0] = bt[i][r][0];
+			g_studio.lighttransform[i][r][1] = bt[i][r][1];
+			g_studio.lighttransform[i][r][2] = bt[i][r][2];
+			g_studio.lighttransform[i][r][3] = bt[i][r][3];
+		}
+	}
+
+	// Keep the entity rotation matrix coherent with the rotated bones.
+	{
+		float old[3][3];
+		for( int r = 0; r < 3; r++ )
+			for( int c = 0; c < 3; c++ )
+				old[r][c] = g_studio.rotationmatrix[r][c];
+		for( int r = 0; r < 3; r++ )
+			for( int c = 0; c < 3; c++ )
+				g_studio.rotationmatrix[r][c] = d[r][0] * old[0][c] + d[r][1] * old[1][c] + d[r][2] * old[2][c];
+	}
+
+	static const char *s_lastAlignedModel = NULL;
+	if( s_lastAlignedModel != e->model->name )
+	{
+		s_lastAlignedModel = e->model->name;
+		gEngfuncs.Con_DPrintf( "[VR_ALIGN] model=%s grip=%s angle=%.1fdeg\n",
+			e->model->name, pbones[grip].name, angle );
+	}
+}
+
+/*
+====================
 StudioSetupBones
 
 ====================
@@ -2259,6 +2458,10 @@ static void R_StudioSetupBones( cl_entity_t *e )
 #ifdef XASH_OPENXR
 	// Final visual lock: the animated grip bone follows the physical palm even
 	// while the viewmodel plays fire/reload/holster translations.
+	R_VR_AnchorViewmodelToGrip( e );
+	R_VR_RotateViewmodelToPalm( e );
+	// Re-seat after the rotation: the pivot is the palm, but keep the grip
+	// exact for models whose hand bone is not exactly on the pivot.
 	R_VR_AnchorViewmodelToGrip( e );
 #endif
 }

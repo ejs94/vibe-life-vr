@@ -206,3 +206,22 @@ Consequences:
   documented in [`WEAPONS.md`](WEAPONS.md#grip-alignment-for-native-models).
 - The visual sweep (`scripts/weapon_visual_sweep.sh`) is the review artefact;
   the numeric residual only tells you the measurement converged.
+
+## D-016: Barrel alignment is a renderer rotation, not per-weapon data
+
+**Status:** accepted 2026-11-07
+
+D-015 stored a measured `grip_rot` per weapon. That fixed one pose and drifted
+at others, because the tilt comes from the flat-screen idle animation, not from
+a constant model offset. The renderer now rotates native viewmodels around the
+palm so `muzzle_pos - grip bone` follows the controller grip pose
+(`R_VR_RotateViewmodelToPalm`), and the per-weapon `grip_rot` values were
+removed. The same rotation is skipped for weapons without a muzzle.
+
+Left-handed mode mirrors the whole viewmodel through the existing
+`cl_righthand` flip path, so the baked hand is a left hand and the barrel
+rotation runs against the left grip.
+
+The hand-angle conversion hypothesis was tested and rejected: the legacy
+converter already maps OpenXR pitch/yaw/roll to the GoldSrc axes, which is now
+guarded by an `M1` assertion.
