@@ -178,3 +178,31 @@ Consequences:
   than per-weapon pitch calibration once that change lands.
 - Black Mesa is Source-engine content packed in VPK, so it is reference only
   and never a direct source for these models.
+
+## D-015: Native weapons use a measured local grip rotation
+
+**Status:** accepted 2026-11-07
+
+The imported Half-Life: VR viewmodels were authored for that mod's controller
+pose. Reusing the MMOD `grip_offset`/`pitch_adjust` left every weapon pointing
+about 46 degrees down and 8 degrees left of the hand: the barrel did not follow
+the aim, even though the model itself was correct.
+
+Decision:
+
+- Each native weapon profile carries a `grip_rot` measured from its own barrel
+  (`muzzle_pos` bone minus the palm/grip bone), applied as a true local rotation
+  by `XR_GetWeaponPose`. Measured residuals after the fix are 0.0-0.6 degrees.
+- `pitch_adjust` is `0` for the nine gun profiles. The bullet now follows the
+  barrel the player sees instead of compensating for a misoriented model.
+- Toss and melee weapons keep their old adjustment; their `muzzle_pos` bone is
+  not a barrel axis.
+- The authoritative firing line is unchanged in code: this is data, and `M1`
+  test 18 plus `R1` prove the ballistics and the VR pose did not regress.
+
+Consequences:
+
+- A model or pose-math change requires re-measuring `grip_rot`. The procedure is
+  documented in [`WEAPONS.md`](WEAPONS.md#grip-alignment-for-native-models).
+- The visual sweep (`scripts/weapon_visual_sweep.sh`) is the review artefact;
+  the numeric residual only tells you the measurement converged.

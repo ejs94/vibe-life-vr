@@ -68,6 +68,48 @@ opening and magazine-release work done in the `out/w2_work/bsvr_glock/` sessions
 is not part of the shipped asset; its measurements and the brief for a future
 attempt are recorded in [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
 
+## Grip alignment for native models
+
+The Half-Life: VR viewmodels are authored for that mod's own controller pose, so
+the legacy `grip_offset`/`pitch_adjust` numbers (tuned on the MMOD meshes) left
+every imported weapon pointing about 46 degrees down and 8 degrees left of the
+hand. The weapon was in the glove but the barrel did not follow the aim.
+
+Fix: measure the model's barrel in the hand frame and cancel it with `grip_rot`
+(a true local rotation, already supported by `XR_GetWeaponPose`). The barrel is
+`normalize(muzzle_pos_world - grip_palm_world)`; `vr_grip_probe 1` logs the palm
+(`[VR_ANCHOR]`) and `[VR_GRIP] src=muzzle` logs the muzzle, so the residual is
+`asin(-barrel.z)` for pitch and `atan2(barrel.y, barrel.x)` for yaw.
+
+Measured and committed values (degrees, GoldSrc pitch/yaw):
+
+| Model | `grip_rot` | Residual after fix |
+|---|---|---|
+| `v_9mmhandgun` | `-52.5 -5.8 0` | 0.5 deg |
+| `v_9mmAR` | `-56.8 -4.8 0` | 0.0 deg |
+| `v_shotgun` | `-49.4 -0.7 0` | 0.0 deg |
+| `v_gauss` | `-50.3 0.5 0` | 0.0 deg |
+| `v_egon` | `-67.8 -5.4 0` | 0.2 deg |
+| `v_crossbow` | `-25.1 -5.1 0` | 0.6 deg |
+| other native weapons | `-52.5 -5.8 0` | visual check only |
+
+With the barrel aligned, `pitch_adjust` is `0` for the nine guns. Before, the
+shot was calibrated 2-5 degrees away from a misoriented barrel; now the bullet
+follows the barrel that the player sees. Toss and melee weapons keep their old
+adjustment because their "muzzle" bone is not a barrel axis.
+
+Re-run the measurement after any change to a model, a `grip_offset` or the
+weapon pose math:
+
+```sh
+# equip a weapon with vr_grip_probe 1 and a fixed hand pose, then
+python3 scripts/check_vr_coordinates.py <engine.log>   # sanity
+./scripts/weapon_visual_sweep.sh                        # visual sheet
+```
+
+The visual sheet is the authority for the final judgement; the numbers only
+make the residual objective.
+
 ## Aim direction (measured, rejected)
 
 Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
