@@ -83,7 +83,7 @@ The single gate registry is [`Documentation/vr/GATES.md`](Documentation/vr/GATES
 Read it before running or reviewing a gate. The common local gates are:
 
 ```sh
-./scripts/test_simulated_monado.sh      # M1: 44-assertion Monado suite
+./scripts/test_simulated_monado.sh      # M1: 47-assertion Monado suite
 ./scripts/run_regression_battery.sh     # R1: 19-assertion regression battery
 python3 scripts/check_docs.py           # D1: docs, links and path rules
 python3 scripts/check_evidence_hygiene.py  # H1: evidence stays under out/qa
@@ -105,7 +105,7 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 - Do not commit `out/`, `build/`, `android/app/.cxx/`, `graphify-out/`, or
   generated native libraries.
 - `test_simulated_monado.sh` auto-detects `build-sim`, honors
-  `MONADO_BUILD_DIR`, and defaults to a 90-second engine timeout.
+  `MONADO_BUILD_DIR`, and defaults to a 120-second engine timeout.
 - `check_grip_seat.py` and `check_grip_pose.py` take an engine log containing
   `[VR_GRIP_BONE]` and `[VR_GRIP]` lines.
 - A Quest pass requires a non-black `vr_eye0.png` (or `quest screenshot`), the

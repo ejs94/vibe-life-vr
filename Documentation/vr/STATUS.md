@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-11-06
+**Last updated:** 2026-11-07
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
 **Previous checkpoint:** `pre-cleanup-2026-10-31`
@@ -24,7 +24,7 @@ current counts and gate freshness.
 ### Validation
 
 - [x] `D1` documentation gate
-- [x] `M1` Monado 44/44
+- [x] `M1` Monado 47/47
 - [x] `R1` regression 19/19
 - [x] `A7` Glock manual reload
 - [ ] `Q1` Quest hardware-in-the-loop (maintainer decision)
@@ -68,7 +68,8 @@ new geometry.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | 44/44 PASS |
+| Monado unit suite (`M1`) | 47/47 PASS |
+| Hand motion and coordinate contracts (`M1` 45-47) | PASS: 6DoF translation, independent offhand, weapon follow, no space mixups |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation gate (`D1`) | See `out/qa/D1/latest` |
 | Evidence hygiene (`H1`) | See `out/qa/H1/latest` |

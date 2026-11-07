@@ -157,6 +157,17 @@ def main() -> int:
             continue
 
         anchors = [item["name"].lower() for item in native["attachments"]]
+        anchor_bones = [item["bone"] for item in native["attachments"]]
+        if anchor_bones[0] == anchor_bones[1]:
+            failures.append(
+                f"{name}: muzzle_pos and muzzle_pos2 share bone {anchor_bones[0]}"
+            )
+        if set(anchor_bones[:2]) & set(anchor_bones[2:]):
+            failures.append(
+                f"{name}: muzzle anchors share a bone with a HUD anchor ({anchor_bones})"
+            )
+        if any(bone < 0 or bone >= len(native["bones"]) for bone in anchor_bones):
+            failures.append(f"{name}: attachment bone index out of range ({anchor_bones})")
         if anchors[:2] != ["muzzle_pos", "muzzle_pos2"] or not (
             anchors[2].startswith("hud") and anchors[3].startswith("hud")
         ):

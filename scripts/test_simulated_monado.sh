@@ -33,7 +33,7 @@ else
     MONADO_DIR="$(cd "${REPO_DIR}/../monado" && pwd)"
 fi
 
-TIMEOUT_SECS="${TIMEOUT_SECS:-90}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 TARGET_ARG="${1:-suite}"
 shift || true
 EXTRA_ARGS="${*:-}"
@@ -316,6 +316,15 @@ assert_test 43 "Crossbow Foregrip: Off-Hand Snaps to Weapon Socket" \
 
 assert_test 44 "Unarmed Hands: Natural Open Hand Follows 6DoF Input" \
     'python3 "${SCRIPT_DIR}/check_unarmed_hand_input.py" "$TEST_LOG" "$OUTPUT_DIR"'
+
+assert_test 45 "Hand Motion: Translation, Independent Offhand and Weapon Follow" \
+    'python3 "${SCRIPT_DIR}/check_hand_motion.py" "$TEST_LOG" "$OUTPUT_DIR"'
+
+assert_test 46 "Native Assets: Attachment Bones and Coordinate Contract" \
+    'python3 "${SCRIPT_DIR}/check_native_weapon_assets.py"'
+
+assert_test 47 "VR Coordinates: No Space Mixups or Collapsed Transforms" \
+    'python3 "${SCRIPT_DIR}/check_vr_coordinates.py" "$TEST_LOG"'
 
 # 7. Optional Quest Launcher UI Verification
 if [ "${TARGET_ARG}" = "all" ] || [ "${TARGET_ARG}" = "--with-launcher" ] || [ "${TARGET_ARG}" = "full" ]; then

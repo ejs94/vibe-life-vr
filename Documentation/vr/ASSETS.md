@@ -75,6 +75,18 @@ Hand profiles:
 | `vr_finger_curling` | `1` | procedural finger curl |
 | `vr_thumb_curl_axis` | `1` | thumb-specific local Z axis |
 | `vr_baked_hand_curling` | `1` | `0` off, `1` current, `2` index only |
+| `vr_debug_hand_pose` | `0` | `1` hand telemetry once per second, `2` every frame (motion tests) |
+
+Headless hand-motion probes (Monado only, never shipped on by default):
+
+| Cvar | Default | Meaning |
+|---|---|---|
+| `vr_test_hands` | `0` | simulate controller poses without hardware |
+| `vr_test_hand_offset` | `0 0 0` | primary hand translation in metres (forward, left, up) |
+| `vr_test_offhand_offset` | `0 0 0` | offhand translation in metres |
+| `vr_test_hand_pitch` / `_yaw` / `_roll` | `0` | primary hand angles in degrees |
+| `vr_test_offhand_pose` | `0` | `1` drives the offhand with its own angles |
+| `vr_test_offhand_pitch` / `_yaw` / `_roll` | `0` | offhand angles in degrees |
 | `vr_test_finger_curl` | `0` | headless curl amount `0..1` |
 
 Use `vr_hide_arms 2` only as a debug view. It strips an authored baked hand and

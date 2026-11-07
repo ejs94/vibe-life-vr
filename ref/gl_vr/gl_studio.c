@@ -1799,6 +1799,23 @@ static void R_VR_AnchorViewmodelToGrip( cl_entity_t *e )
 	vec3_t delta;
 	VectorSubtract( palm, actual, delta );
 
+	// Probe before the early-out: a perfectly seated weapon has a near-zero
+	// delta and would otherwise stop reporting, which made the motion test
+	// unable to prove that the viewmodel follows the palm.
+	static cvar_t *vr_grip_probe = NULL;
+	if( !vr_grip_probe ) vr_grip_probe = gEngfuncs.pfnGetCvarPointer( "vr_grip_probe" );
+	if( vr_grip_probe && vr_grip_probe->value > 0.0f )
+	{
+		static float s_lastAnchorLog = -10.0f;
+		if( g_studio.time - s_lastAnchorLog >= 1.0f )
+		{
+			s_lastAnchorLog = g_studio.time;
+			gEngfuncs.Con_Printf( "^5[VR_ANCHOR] bone=%s delta=(%.3f %.3f %.3f) palm=(%.3f %.3f %.3f)\n",
+				pbones[grip].name, delta[0], delta[1], delta[2],
+				palm[0], palm[1], palm[2] );
+		}
+	}
+
 	if( VectorLength( delta ) < 0.001f )
 		return;
 
@@ -1839,19 +1856,6 @@ static void R_VR_AnchorViewmodelToGrip( cl_entity_t *e )
 	e->origin[1] += delta[1];
 	e->origin[2] += delta[2];
 
-	static cvar_t *vr_grip_probe = NULL;
-	if( !vr_grip_probe ) vr_grip_probe = gEngfuncs.pfnGetCvarPointer( "vr_grip_probe" );
-	if( vr_grip_probe && vr_grip_probe->value > 0.0f )
-	{
-		static float s_lastAnchorLog = -10.0f;
-		if( g_studio.time - s_lastAnchorLog >= 1.0f )
-		{
-			s_lastAnchorLog = g_studio.time;
-			gEngfuncs.Con_Printf( "^5[VR_ANCHOR] bone=%s delta=(%.3f %.3f %.3f) palm=(%.3f %.3f %.3f)\n",
-				pbones[grip].name, delta[0], delta[1], delta[2],
-				palm[0], palm[1], palm[2] );
-		}
-	}
 }
 
 /*
@@ -4782,9 +4786,13 @@ static void R_VR_DebugHandPose( cl_entity_t *ent, model_t *model )
 		return;
 
 	// Throttle to one line per second per entity to keep the log compact.
+	// `vr_debug_hand_pose 2` disables the throttle for the hand-motion test,
+	// which needs per-frame samples to prove tracking.
+	qboolean fast_probe = ( vr_debug_hand_pose && vr_debug_hand_pose->value >= 2.0f );
+
 	static float s_last[2] = { -10.0f, -10.0f };
 	int slot = ( ent == &s_primaryHandEnt ) ? 0 : 1;
-	if( g_studio.time - s_last[slot] < 1.0f )
+	if( !fast_probe && g_studio.time - s_last[slot] < 1.0f )
 		return;
 	s_last[slot] = g_studio.time;
 

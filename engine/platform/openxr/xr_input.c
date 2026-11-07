@@ -1749,6 +1749,32 @@ static void XR_ApplyTwoHandStabilizer( const XrPosef *primaryPose, const XrPosef
     }
 }
 
+/*
+=============
+XR_TestParseOffset
+
+Parses a "x y z" cvar value used by the headless hand-motion tests. Tokens are
+in metres on the GoldSrc hand axes (forward, left, up).
+=============
+*/
+static void XR_TestParseOffset( const char *text, vec3_t out )
+{
+    out[0] = out[1] = out[2] = 0.0f;
+    if( !text || !text[0] )
+        return;
+
+    const char *p = text;
+    for( int i = 0; i < 3; i++ )
+    {
+        char *end = NULL;
+        float value = strtof( p, &end );
+        if( end == p )
+            break;
+        out[i] = value;
+        p = end;
+    }
+}
+
 qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
 {
     if (!g_xrSessionRunning) return false;
@@ -1756,18 +1782,21 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
     // Simulated hand pose override for testing and validation
     if (vr_test_hands && vr_test_hands->value > 0.0f)
     {
+        vec3_t offset = { 0.0f, 0.0f, 0.0f };
+        XR_TestParseOffset( vr_test_hand_offset ? vr_test_hand_offset->string : NULL, offset );
+
         if (out_origin)
         {
-            out_origin[0] = 0.22f;   // 22cm forward
-            out_origin[1] = -0.06f;  // 6cm right (GoldSrc coordinates)
-            out_origin[2] = -0.08f;  // 8cm below eyes
+            out_origin[0] = 0.22f + offset[0];   // 22cm forward
+            out_origin[1] = -0.06f + offset[1];  // 6cm right (GoldSrc coordinates)
+            out_origin[2] = -0.08f + offset[2];  // 8cm below eyes
         }
 
         if (out_angles)
         {
             out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
             out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-            out_angles[2] = 0.0f;
+            out_angles[2] = vr_test_hand_roll ? vr_test_hand_roll->value : 0.0f;
 
             if (!s_rawHandPose)
             {
@@ -1846,18 +1875,31 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
     // Simulated hand pose override for testing and validation
     if (vr_test_hands && vr_test_hands->value > 0.0f)
     {
+        vec3_t offset = { 0.0f, 0.0f, 0.0f };
+        qboolean independent = ( vr_test_offhand_pose && vr_test_offhand_pose->value > 0.0f );
+        XR_TestParseOffset( vr_test_offhand_offset ? vr_test_offhand_offset->string : NULL, offset );
+
         if (out_origin)
         {
-            out_origin[0] = 0.22f;
-            out_origin[1] = 0.06f;   // 6cm to the left
-            out_origin[2] = -0.08f;
+            out_origin[0] = 0.22f + offset[0];
+            out_origin[1] = 0.06f + offset[1];   // 6cm to the left
+            out_origin[2] = -0.08f + offset[2];
         }
 
         if (out_angles)
         {
-            out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
-            out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
-            out_angles[2] = 0.0f;
+            if (independent)
+            {
+                out_angles[0] = vr_test_offhand_pitch ? vr_test_offhand_pitch->value : 0.0f;
+                out_angles[1] = vr_test_offhand_yaw ? vr_test_offhand_yaw->value : 0.0f;
+                out_angles[2] = vr_test_offhand_roll ? vr_test_offhand_roll->value : 0.0f;
+            }
+            else
+            {
+                out_angles[0] = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
+                out_angles[1] = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
+                out_angles[2] = vr_test_hand_roll ? vr_test_hand_roll->value : 0.0f;
+            }
 
             if (!s_rawHandPose)
             {

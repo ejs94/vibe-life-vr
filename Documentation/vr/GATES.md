@@ -94,7 +94,7 @@ maintainer approval. Green automated checks do not prove appearance.
   or human-retopologized base mesh. A future W2 must show SIDE, MUZZLE, TOP and
   3/4 views with distinct trigger contact and pivot markers; numeric checks do
   not prove appearance.
-- `M1` passes only when all 44 assertions pass and the run is not cut off by
+- `M1` passes only when all 47 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 90 seconds.
 - `R1` passes only when all 19 assertions pass.
 - `A2` passes only when bones, sequences, events, bodygroups and attachments

@@ -31,16 +31,48 @@ A stale APK is the most common false negative in hardware testing.
 ./scripts/test_simulated_monado.sh
 ```
 
-The suite runs 44 assertions and writes to `out/qa/M1/runs/<timestamp>/`. The
-default engine timeout is 90 seconds. If the unarmed-hand phase is cut off,
+The suite runs 47 assertions and writes to `out/qa/M1/runs/<timestamp>/`. The
+default engine timeout is 120 seconds. If the unarmed-hand phase is cut off,
 raise it explicitly:
 
 ```sh
 TIMEOUT_SECS=120 ./scripts/test_simulated_monado.sh
 ```
 
-A pass requires all 44 assertions and the two unarmed captures
+A pass requires all 47 assertions and the two unarmed captures
 `unit_23_unarmed_rest.png` and `unit_24_unarmed_moved.png`.
+
+Two of the assertions exist because the suite used to pass while the headset
+misbehaved:
+
+- `check_hand_motion.py` drives the simulated controllers through a 6DoF sweep
+  and compares the measured palm with `vr_worldscale * commanded offset`, the
+  forward/up frame with the commanded angles, the offhand with its own offset,
+  and the anchored weapon with the moving palm. It also requires the two motion
+  captures to differ.
+- `check_vr_coordinates.py` walks the whole log and rejects non-finite values,
+  transforms collapsed to `(0,0,0)`, hands that leave the grip origin, and
+  muzzle/viewmodel pairs that disagree on their world position by more than one
+  gun length (the classic view-space vs world-space mixup).
+
+## Coordinate test bed
+
+```sh
+python3 scripts/build_testbed_map.py
+```
+
+Builds `out/valve_vr/maps/testbed_scale.bsp` (requires `VHLT_DIR` or the
+`~/JACK/halflife` tools). The room has a 1 m floor grid, so a distance is
+readable by counting cells, plus:
+
+- RGB axes at the origin: red `+X`, green `+Y`, blue `+Z`, two metres long;
+- a 1 m reference cube behind the axes;
+- 1.0 m, 1.7 m (eye height) and 2.0 m bars on the north wall;
+- distance posts at 1/2/5/10/20 m and a 1.8 m height pole near the old spawn.
+
+`scripts/gate_testbed_hands.cfg` captures the fixed-camera hand evidence in
+that room. Use it when a change affects scale, grip seating or coordinates and
+the numeric checks alone are not convincing.
 
 ## Regression battery (`R1`)
 

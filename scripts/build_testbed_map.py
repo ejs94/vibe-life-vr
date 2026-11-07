@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Build the fixed-camera VR hand test bed in GoldSrc format.
 
-The map is deliberately plain: one open room, a one-metre floor grid,
-distance posts at 1/2/5/10/20 m, and height bars at 1/2/3 m. Lighting is
-explicit (no light_environment) so captures are repeatable.
+The map is deliberately plain: one open room, a one-metre floor grid, RGB
+coordinate axes at the origin, a one-metre reference cube, 1.0/1.7/2.0 m bars
+on the north wall, distance posts at 1/2/5/10/20 m and a 1.8 m height pole.
+Lighting is explicit (no light_environment) so captures are repeatable.
 
 Requires VHLT. Set VHLT_DIR to the directory containing hlcsg/ hlbsp/
 hlvis/ hlrad, or keep the tools in the local JACK tree.
@@ -30,7 +31,11 @@ def vhlt_dir() -> Path:
     env = os.environ.get("VHLT_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    # repo -> vibe-code-vr-port -> Documentos -> home, then JACK/halflife.
+    # The tools live in the user's home JACK tree. Keep the old path as a
+    # fallback for checkouts nested under a Documents folder.
+    home_tools = Path.home() / "JACK" / "halflife"
+    if (home_tools / "hlcsg").is_file():
+        return home_tools
     return REPO_DIR.parents[2] / "JACK" / "halflife"
 
 
@@ -60,6 +65,19 @@ def brush(mins, maxs, texture="+0~WHITE") -> str:
         )
     lines.append("}")
     return "\n".join(lines)
+
+
+def colored_brush(mins, maxs, color: str, rendermode: int = 1) -> str:
+    """A func_wall tinted with a solid color, used for the coordinate axes."""
+    return "\n".join([
+        "{",
+        '"classname" "func_wall"',
+        f'"rendercolor" "{color}"',
+        f'"rendermode" "{rendermode}"',
+        '"renderamt" "255"',
+        brush(mins, maxs, "+0~WHITE"),
+        "}",
+    ])
 
 
 def entity(classname: str, origin=None, extra=None) -> str:
@@ -112,10 +130,32 @@ def make_map() -> str:
     # Human-height reference pole (1.8 m) near spawn.
     brushes.append(brush((-4.0, -210.0, 0.0), (4.0, -202.0, 1.8 * UNIT_PER_M)))
 
+    # Coordinate frame at the origin: +X red, +Y green, +Z blue. Each arm is
+    # two metres long, so a glance at the floor gives the axis and the scale.
+    axes = [
+        colored_brush((0.0, -2.0, 0.5), (2.0 * UNIT_PER_M, 2.0, 2.5), "255 40 40"),
+        colored_brush((-2.0, 0.0, 0.5), (2.0, 2.0 * UNIT_PER_M, 2.5), "40 255 40"),
+        colored_brush((-2.0, -2.0, 0.0), (2.0, 2.0, 2.0 * UNIT_PER_M), "60 120 255"),
+    ]
+
+    # One-metre reference cube, a 1.70 m eye-height bar and a 2 m bar. The
+    # colours are deliberately distinct from the axes.
+    axes.append(colored_brush((1.2 * UNIT_PER_M, 1.2 * UNIT_PER_M, 0.0),
+                              (2.2 * UNIT_PER_M, 2.2 * UNIT_PER_M, UNIT_PER_M),
+                              "220 220 220"))
+    # Height bars on the north wall: 1.0 m (waist), 1.7 m (eye), 2.0 m.
+    for metres, color in ((1.0, "255 200 40"), (1.7, "255 120 40"), (2.0, "255 40 40")):
+        axes.append(colored_brush((-260.0, HALF - 8.0, metres * UNIT_PER_M - 2.0),
+                                  (260.0, HALF - 2.0, metres * UNIT_PER_M + 2.0),
+                                  color))
+    extra_entities = list(axes)
+
     parts = [entity("worldspawn", extra={"mapversion": "220", "wad": "halflife.wad",
-                                         "message": "VR test bed: 1 m grid"})]
+                                         "message": "VR test bed: 1 m grid, RGB axes"})]
     # Insert brushes into the worldspawn entity before closing it.
     parts[0] = parts[0].rstrip()[:-1] + "\n" + "\n".join(brushes) + "\n}"
+
+    parts.extend(extra_entities)
 
     # Fixed, explicit lighting. No light_environment.
     for x in (-600.0, 0.0, 600.0):
@@ -124,8 +164,10 @@ def make_map() -> str:
                                 {"_light": "255 255 255 500", "_fade": "0"}))
     # Spawn behind the first distance post so it does not fill the unarmed
     # first-person view; the +X ruler is still straight ahead.
-    parts.append(entity("info_player_start", (-200.0, 0.0, 40.0), {"angles": "0 0 0"}))
-    parts.append(entity("info_player_deathmatch", (-200.0, 0.0, 40.0), {"angles": "0 0 0"}))
+    # Spawn two metres from the origin, facing the RGB axes at 45 degrees so the
+    # frame, the 1 m cube and the height bars are all in the first view.
+    parts.append(entity("info_player_start", (-140.0, -140.0, 40.0), {"angles": "45 0 0"}))
+    parts.append(entity("info_player_deathmatch", (-140.0, -140.0, 40.0), {"angles": "45 0 0"}))
     return "\n\n".join(parts) + "\n"
 
 
