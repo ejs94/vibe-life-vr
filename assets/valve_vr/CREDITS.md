@@ -85,3 +85,40 @@ The textured idle-pose audit is the next gate for this asset set.
 also ships `v_9mmAR.mdl` because the HLSDK requests that exact case
 (`3rdparty/hlsdk-portable/dlls/mp5.cpp`); on case-sensitive Android/Linux the
 lowercase file alone would be ignored and the vanilla viewmodel would load.
+
+## Blue Shift VR — Glock viewmodel derivative (W2 base)
+
+* **Mod:** Half-Life: VR Mod — Blue Shift, "Blue Shift VR".
+* **Author / maintainer:** Dmitry Shaburov (`DmitryShaburov`), built on
+  Max Makes Mods' Half-Life: VR Mod VR code and the TWHL "Blue Shift Updated"
+  SDK. Full contributor list in the mod's `README.md`.
+* **Source:** <https://github.com/DmitryShaburov/Blue-Shift-VR>
+* **Reference copy in this workspace:**
+  `xash3d-vr-ports/Blue-Shift-VR/installer/payload/models/v_9mmhandgun.mdl`
+  (decompiled working copy: `out/w2_work/bsvr_glock/`, not committed).
+* **Lineage:** the mesh is a modified derivative of the MMOD Reanimated Pack
+  Glock credited above, not original work by this project.
+* **Used for:** the `W2` native Glock base only. The mod's Magnum and crossbow
+  score below the MMOD sources on the project's own topology audit and are not
+  used.
+* **Changes made / planned:** the mesh is imported as authored; this project
+  fixes the residual accidental loops, T-junction cracks and non-manifold edges,
+  adds the six interaction sockets the physical reload needs, and replaces the
+  baked scientist hands with the HEV hands. Tracked in
+  [`Documentation/vr/WEAPONS.md`](../../Documentation/vr/WEAPONS.md#w2-base-blue-shift-vr-derivative).
+* **Permission:** the maintainer will confirm with the author before release.
+  Preserve this block and the source URL in every redistribution.
+
+## Half-Life: VR Mod (SD) — native Glock base
+
+* **Mod:** Half-Life: VR Mod by Max Makes Mods.
+* **Source:** <https://github.com/maxmakesmods/Half-Life-VR>
+* **Reference copy in this workspace:** `xash3d-vr-ports/Half-Life-VR/art/models/SD/v_9mmhandgun.mdl`
+* **Shipped as:** `models/native/v_9mmhandgun.mdl` (W2 native base).
+* **Lineage:** MMOD Reanimated Pack Glock, reworked by Max Makes Mods.
+* **Why this one:** it ships the Gordon/HEV glove hands, four model-authored
+  anchors (`muzzle_pos`, `muzzle_pos2`, `hud_pos`, `hud_pos2`) and ten animation
+  sequences, which is exactly the contract the native route consumes.
+* **Changes made by this project:** none to the MDL. Only the per-weapon JSON
+  profile was corrected (ejection and magwell sockets disabled because
+  attachments 2 and 3 are HUD anchors on this model).

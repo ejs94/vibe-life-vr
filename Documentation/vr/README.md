@@ -19,6 +19,9 @@ to do next.
 | [`MODEL_BENCHMARKS.md`](MODEL_BENCHMARKS.md) | You are measuring LLM quality, cost and rework |
 | [`reference/MOD_COMPATIBILITY.md`](reference/MOD_COMPATIBILITY.md) | You are targeting a GoldSrc mod |
 | [`reference/MODDER_GUIDE.md`](reference/MODDER_GUIDE.md) | You are integrating a mod or asset pack |
+| [`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) | You need design input from the two GoldSrc VR mods under `xash3d-vr-ports/` |
+| [`reference/BOX3D.md`](reference/BOX3D.md) | You are evaluating or integrating the Box3D physics dependency |
+| [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md) | You are resuming the paused Glock guard/trigger modelling work |
 
 ## Architecture in one screen
 

@@ -47,16 +47,21 @@ Adopt upstream changes with a surgical cherry-pick and a maturity window:
 `test-pick` creates a temporary branch, applies the cherry-pick, builds, and
 runs the Monado suite. If the result is not green, it discards the sandbox.
 
-## Current state (2026-10-31)
+## Current state (2026-11-06)
 
 | Item | Value |
 |---|---|
 | Branch | `feature/openxr-vr` |
 | Upstream remote | `upstream/master` |
 | Merge base | `51353ff8d65e58300eeb2bd014867673f1f367c6` |
-| Commits ahead of upstream | 80 |
-| Commits behind upstream | 0 |
+| Upstream tip | `e9b94dc1` (2026-11-06) |
+| Commits ahead of upstream | 104 |
+| Commits behind upstream | 88 |
 | Upstream docs | untouched |
+
+The 104/88 counts are `git rev-list --count` in both directions and include no
+merge commits. The 88 upstream commits are recent, so they enter the maturity
+window before any cherry-pick; nothing from them is adopted yet.
 
 The HLSDK integration is a local fork of `3rdparty/hlsdk-portable`. Its commits
 are not pushed to the FWGS upstream. Keep submodule changes in separate commits

@@ -100,3 +100,81 @@ it has a row. Gate agents are read-only, read `GATES.md`, run the listed
 command, write evidence under `out/qa/<id>/`, and return `PASS`, `FAIL` or
 `INCONCLUSIVE`. They do not edit code, docs or assets, and they do not decide
 the device mode.
+
+## D-012: Box3D is the physics dependency
+
+**Status:** accepted (dependency choice only; nothing is integrated yet)
+
+Any rigid-body or geometric-query work adopts Box3D rather than
+reactphysics3d. Box3D is portable C17, single-threaded by default, has a
+runtime length-unit setting so the integration can stay in engine units, ships
+hashed and versioned cooked mesh data for per-map caches, and provides a
+deterministic record/replay path that can back a CI gate. reactphysics3d, used
+by the reference mods, is C++ and was chosen there for a C++ codebase.
+
+Scope: this decides the library, not the schedule. The roadmap still defers
+physics work, and adoption is staged as described in
+[`reference/BOX3D.md`](reference/BOX3D.md). No Box3D code is linked until the
+staged plan reaches S0.
+
+## D-013: Weapon base is a synthesis, not a replacement
+
+**Status:** accepted; the Glock base choice is superseded by D-014. The lineage
+analysis and the per-asset rule remain valid.
+
+The native weapon path learns from the working community VR mods instead of
+starting from the raw decompile. For the Glock, `W2` starts from the Blue Shift
+VR derivative of the same MMOD mesh: it keeps the source silhouette, fixes the
+authored winding, removes the helper camera faces, models the magazine interior
+and adds the four model-authored anchors (`muzzle_pos`, `muzzle_pos2`,
+`hud_pos`, `hud_pos2`). On the project's own `A1` metric that asset scores
+30.00/35 where the raw MMOD decompile scores 9.67/35.
+
+Scope and limits:
+
+- This is Glock-only. The same mod's Magnum and crossbow score 3.33/35 and
+  3.00/35 on that metric, below the MMOD sources, so those keep MMOD as the
+  base. Adoption is per asset, never per mod.
+- The adopted mesh is a starting point. The remaining accidental loops,
+  non-manifold edges and zero-area T-junctions are fixed by hand, and the six
+  interaction sockets the physical reload needs are authored by us.
+- Credit is mandatory: the derivative must be recorded in
+  `assets/valve_vr/CREDITS.md` with its source URL and both the Blue Shift VR
+  and MMOD lineage.
+- The anchor consumer is not decided by this entry. Whether the native route
+  reads model anchors or `vr_weapons.json` offsets is a separate decision, and
+  `XR_GetWeaponPose()` remains the single pose source either way.
+
+## D-014: Ship the complete Half-Life: VR SD viewmodel instead of sculpting
+
+**Status:** accepted 2026-11-06
+
+The Glock detail work (trigger, guard opening, magazine release) was stopped
+after four trigger generations and three guard attempts produced artefacts. The
+guard of the source mesh is a near-solid block with a 0.3-unit slot, so every
+patch traded one defect for another. Sculpting a 485-triangle GoldSrc viewmodel
+blind costs more than adopting a finished one from the same lineage.
+
+Decision:
+
+- The shipped native Glock is Half-Life: VR's `art/models/SD/v_9mmhandgun.mdl`,
+  copied unmodified to `models/native/`. It brings the HEV glove hands, three
+  bodies, ten sequences and the four anchors.
+- The rest of that mod's SD viewmodel set is the preferred source for the
+  arsenal, because it shares one 34-bone rig and the same anchor layout. The
+  Blue Shift VR set shares the rig too but ships scientist hands, so it is a
+  per-asset fallback, not a base.
+- Rejections are recorded, not deleted: the measurements and the brief for a
+  future modelling attempt live in
+  [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
+- No asset is modified by this project without a comparison sheet and the
+  maintainer's approval. Copying a complete asset is not a modification.
+
+Consequences:
+
+- `ejection_attachment` and `magwell_attachment` are `-1` for models whose
+  attachments 2 and 3 are HUD anchors.
+- Aim direction follows the model anchors (`muzzle_pos2 - muzzle_pos`) rather
+  than per-weapon pitch calibration once that change lands.
+- Black Mesa is Source-engine content packed in VPK, so it is reference only
+  and never a direct source for these models.

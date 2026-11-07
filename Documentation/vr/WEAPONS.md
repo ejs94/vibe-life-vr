@@ -9,7 +9,7 @@ available and must not be broken.
 |---|---|
 | W0 native route + legacy fallback | PASS |
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
-| Native Glock mesh | **W2 BLOCKED — source-derived attempt rejected 2026-11-01** |
+| Native Glock mesh | **W2 SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native Magnum mesh | not started |
 | Gordon hand | not started |
 
@@ -18,11 +18,54 @@ native file is absent. W1 passed after the maintainer approved the calibrated
 markers: red is the barrel bore, blue is the trigger contact, green is the rear
 sight, and yellow is the hammer.
 
-Native weapon production is frozen as of 2026-11-01. The W2 source-derived
-blockout reproduced MMOD mesh defects and was rejected by the maintainer. The
-run is archived under `out/qa/W2/`; no native MDL was compiled or deployed. Do
-not resume paid-agent geometry work before a budget/quality decision and a
-clean or human-retopologized base mesh.
+Native weapon production was frozen on 2026-11-01 after the source-derived
+blockout reproduced MMOD mesh defects. It was reopened on 2026-11-06 and
+resolved the same day by adopting a complete third-party asset instead of
+sculpting one; see [`STATUS.md`](STATUS.md#native-base-adopted-2026-11-06).
+
+## Shipped base: Half-Life: VR (SD)
+
+The native Glock is `assets/valve_vr/models/native/v_9mmhandgun.mdl`, taken
+unmodified from Half-Life: VR's `art/models/SD/v_9mmhandgun.mdl`. It is a
+complete GoldSrc MDL with three bodies (gun, magazine, Gordon/HEV glove hands),
+the silencer bodygroup, four anchor attachments and ten sequences.
+
+| Property | Value |
+|---|---|
+| Bodies | `glock_reference`, `clip_reference`, `v_9mmhandgun_v_glock_hands_reference` |
+| Attachments | 0 `muzzle_pos`, 1 `muzzle_pos2`, 2 `hud_pos`, 3 `hud_pos2` |
+| Sequences | `idle1..3`, `shoot`, `shoot_empty`, `reload`, `reload_noshot`, `draw`, `holster`, `add_silencer` |
+| Hands | Gordon gloves (`gordon_glove.bmp`, `gordon_sleeve.bmp`) |
+| Provenance | Half-Life: VR Mod, Max Makes Mods; see `assets/valve_vr/CREDITS.md` |
+
+The sequence table matches the legacy MMOD Glock name-for-name and in the same
+order, so the indices the game DLL sends keep their meaning. Attachment 2 and 3
+are HUD anchors on this MDL, therefore `ejection_attachment` and
+`magwell_attachment` are `-1` in the profile instead of 2 and 3.
+
+Verified in-engine on 2026-11-06:
+
+```text
+[VR_WEAPON_ROUTE] legacy=models/v_9mmhandgun.mdl native=models/native/v_9mmhandgun.mdl route=native
+[VM_DBG_CHANGE] viewmodel changed to: 'models/native/v_9mmhandgun.mdl'
+```
+
+### Bases measured and rejected
+
+Both alternatives come from the same MMOD lineage and were measured with the
+project's `A1` audit at the same settings:
+
+| Asset | Triangles (body) | Boundary edges | Non-manifold | Winding | `A1` score |
+|---|---:|---:|---:|---:|---:|
+| MMOD decompile | 294 | 63 | 3 | 4 | 9.67/35 |
+| Blue Shift VR derivative | 473 | 57 | 9 | 0 | 30.00/35 |
+| Half-Life: VR SD (shipped) | 485 | — | — | — | adopted unmodified |
+
+The Blue Shift VR derivative is cleaner than the MMOD decompile but ships
+scientist hands, which do not match this mod. The sculpted trigger, guard
+opening and magazine-release work done in the `out/w2_work/bsvr_glock/` sessions
+is not part of the shipped asset; its measurements and the brief for a future
+attempt are recorded in [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
 
 ## Content families
 
@@ -90,24 +133,26 @@ top before any modeling starts.
 - If the trigger marker is not on the trigger blade, W1 fails.
 - W1 is approved; native mesh, UV, skin and animation work may start.
 
-## Rig and animation (W2 blockout; animation planned)
+## Rig and animation
 
-- `socketed` rig: weapon parts and sockets, hands separate.
-- Existing hand contract remains 35 bones.
-- Weapon-part bones: root, slide, trigger, hammer, magazine, slide lock, safety.
-- Sockets: muzzle, primary grip, offhand grip, magwell, ejection, slide rack,
-  trigger contact.
-- The trigger bone head is the mechanical pivot and its tail is the W1 finger
-  contact; those points are not interchangeable.
-- Constraints/IK are authored in Blender and baked into sequences.
-- Runtime GoldSrc has no constraints.
-- State machine: idle, fire, fire_empty, reload, slide_lock, slide_release, mag_eject, mag_insert.
+- The shipped asset is `legacy_skinned`, not `socketed`: the parts follow the
+  baked rig and no interaction sockets exist yet.
+- Weapon bones on the Glock: 34, including `Bip01 R Hand`, `muzzle_pos`,
+  `muzzle_pos2`, `hud_pos`, `hud_pos2`, `Box02` and `BoxGun`.
+- Sequences come from the asset: idle, fire, fire_empty, reload, reload_noshot,
+  draw, holster and silencer attach. The VR renderer freezes idle/draw/holster
+  where the flat-screen motion would fight 6DoF (`ref/gl_vr/gl_studio.c`), and
+  the physical reload drives the staged interaction.
+- Do not add bones to a viewmodel. Append attachments at the end of the table.
+- The six interaction sockets (primary grip, offhand grip, magwell, ejection,
+  slide rack, trigger contact) remain a modelling task and are blocked.
 
 ## Order
 
 1. W0 runtime/fallback — passed.
 2. W1 coordinate calibration — passed and human-approved.
-3. Native Glock mesh/rig/animation (W2 in progress).
-4. Native Magnum replication with no per-weapon code.
-5. Gordon hand.
-6. Expansions and mods.
+3. Native arsenal adoption — Glock shipped; the remaining viewmodels are next.
+4. Aim direction from `muzzle_pos2`, then per-weapon pose verification.
+5. HEV glove for both hands.
+6. Interaction and reload reuse.
+7. Expansions and mods.
