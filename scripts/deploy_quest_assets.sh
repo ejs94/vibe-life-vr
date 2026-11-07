@@ -65,6 +65,17 @@ for mdl in "${MODELS[@]}"; do
     log_ok "Pushed ${base}"
 done
 
+# Native weapon path: the engine resolves models/native/<name>.mdl first.
+NATIVE_MODELS=( "${REPO_DIR}/assets/valve_vr/models/native"/*.mdl )
+if [ ${#NATIVE_MODELS[@]} -gt 0 ]; then
+    adb shell "mkdir -p '${REMOTE_DIR}/native'"
+    for mdl in "${NATIVE_MODELS[@]}"; do
+        base="$(basename "${mdl}")"
+        adb push "${mdl}" "${REMOTE_DIR}/native/${base}" >/dev/null
+        log_ok "Pushed native/${base}"
+    done
+fi
+
 if [ -f "$PROFILES" ]; then
     adb push "$PROFILES" "${REMOTE_DIR}/vr_weapons.json" >/dev/null
     log_ok "Pushed vr_weapons.json"

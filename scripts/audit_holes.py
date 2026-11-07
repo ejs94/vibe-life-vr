@@ -996,7 +996,11 @@ def classify_loops(loops: list[dict], extra_bodies: dict | None = None) -> None:
             reason = ("rim at the low end of the body: base/floor of the shell, filled by a "
                       "separate body in game")
         elif (coverage == 0 and planarity >= 0.9
+              and item.get("ref_volume") is not None
               and item["area"] > 0.02 * item["ref_volume"]):
+            # ref_volume is only present for bodies whose reference shell envelope
+            # was measured; without it the "large planar loop" test cannot run, so
+            # fall through to the uncertain branch instead of raising.
             label, confident = "accidental", "low"
             reason = ("large planar loop with nothing behind it; consistent with a missing "
                       "face but a designed panel gap was not excluded")
