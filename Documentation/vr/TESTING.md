@@ -74,6 +74,26 @@ readable by counting cells, plus:
 that room. Use it when a change affects scale, grip seating or coordinates and
 the numeric checks alone are not convincing.
 
+## Weapon visual sweep
+
+```sh
+./scripts/weapon_visual_sweep.sh
+```
+
+Loads `testbed_scale`, equips each of the 14 native viewmodels in turn and
+captures right-lateral, front and left-lateral views with a fixed camera
+(distance 26, FOV 50). The scale bar and the 1 m floor grid stay in frame.
+Output goes to `out/qa/V1/weapons_<timestamp>/`:
+
+- `w_<model>_right|front|left.png`, 42 captures;
+- `contact_sheet.png`, one row per weapon with a label column;
+- `engine.log` with the native-route lines.
+
+`scripts/check_weapon_captures.py` rejects missing, black or empty frames, and
+`scripts/make_weapon_contact_sheet.py` builds the labelled sheet. This is a
+visual review helper, not a gate: a human still judges the result, but the run
+proves the route was native and every cell contains a rendered weapon.
+
 ## Regression battery (`R1`)
 
 ```sh

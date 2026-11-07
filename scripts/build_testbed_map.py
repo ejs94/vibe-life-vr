@@ -143,6 +143,16 @@ def make_map() -> str:
     axes.append(colored_brush((1.2 * UNIT_PER_M, 1.2 * UNIT_PER_M, 0.0),
                               (2.2 * UNIT_PER_M, 2.2 * UNIT_PER_M, UNIT_PER_M),
                               "220 220 220"))
+    # Hand-height scale bar: four 5 cm segments (alternating red/white) 60 cm
+    # in front of the spawn. Small enough to sit beside a weapon in a zoomed
+    # comparison camera, big enough to read after the render.
+    for index in range(4):
+        y0 = -4.0 + index * 2.0
+        color = "255 40 40" if index % 2 == 0 else "240 240 240"
+        axes.append(colored_brush((-96.0, y0, 48.0), (-94.0, y0 + 2.0, 50.0), color))
+    axes.append(colored_brush((-97.0, -6.0, 48.0), (-95.0, -5.0, 50.0), "40 255 40"))
+    axes.append(colored_brush((-97.0, 5.0, 48.0), (-95.0, 6.0, 50.0), "40 255 40"))
+
     # Height bars on the north wall: 1.0 m (waist), 1.7 m (eye), 2.0 m.
     for metres, color in ((1.0, "255 200 40"), (1.7, "255 120 40"), (2.0, "255 40 40")):
         axes.append(colored_brush((-260.0, HALF - 8.0, metres * UNIT_PER_M - 2.0),
@@ -164,10 +174,11 @@ def make_map() -> str:
                                 {"_light": "255 255 255 500", "_fade": "0"}))
     # Spawn behind the first distance post so it does not fill the unarmed
     # first-person view; the +X ruler is still straight ahead.
-    # Spawn two metres from the origin, facing the RGB axes at 45 degrees so the
-    # frame, the 1 m cube and the height bars are all in the first view.
-    parts.append(entity("info_player_start", (-140.0, -140.0, 40.0), {"angles": "45 0 0"}))
-    parts.append(entity("info_player_deathmatch", (-140.0, -140.0, 40.0), {"angles": "45 0 0"}))
+    # Spawn three metres from the origin, facing +X. The RGB axes sit ahead and
+    # the hand-height scale bar sits one metre in front of the player, so every
+    # fixed-camera weapon capture has a 10 cm reference in the same frame.
+    parts.append(entity("info_player_start", (-120.0, 0.0, 40.0), {"angles": "0 0 0"}))
+    parts.append(entity("info_player_deathmatch", (-120.0, 0.0, 40.0), {"angles": "0 0 0"}))
     return "\n\n".join(parts) + "\n"
 
 
