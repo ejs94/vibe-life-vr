@@ -28,6 +28,9 @@ HLSDK_DIRS = [
     REPO_DIR / "3rdparty" / "hlsdk-portable" / "cl_dll",
 ]
 OVERLAY_DIR = REPO_DIR / "assets" / "valve_vr" / "models"
+# The native route resolves models/native/<legacy-basename>.mdl, so a native
+# file is subject to the same exact-case rule as the overlay it replaces.
+OVERLAY_DIRS = [OVERLAY_DIR, OVERLAY_DIR / "native"]
 
 MODEL_RE = re.compile(r"models/v_[A-Za-z0-9_]+\.mdl", re.I)
 
@@ -52,22 +55,29 @@ def main() -> int:
         print("[FAIL] no HLSDK viewmodel requests found")
         return 1
 
-    bundled = {path.name for path in OVERLAY_DIR.glob("*.mdl")}
+    bundled_by_dir = {
+        directory: {path.name for path in directory.glob("*.mdl")}
+        for directory in OVERLAY_DIRS
+        if directory.is_dir()
+    }
+    bundled = set().union(*bundled_by_dir.values()) if bundled_by_dir else set()
     requested_lower = {name.lower(): name for name in requested}
 
     failures: list[str] = []
     warnings: list[str] = []
 
-    for name in sorted(bundled):
-        if name in requested:
-            continue
-        canonical = requested_lower.get(name.lower())
-        if canonical:
-            failures.append(
-                f"{name}: case mismatch; the HLSDK requests {canonical}"
-            )
-        else:
-            warnings.append(f"{name}: bundled but not requested by the HLSDK")
+    for directory, names in bundled_by_dir.items():
+        folder = directory.relative_to(REPO_DIR).as_posix()
+        for name in sorted(names):
+            if name in requested:
+                continue
+            canonical = requested_lower.get(name.lower())
+            if canonical:
+                failures.append(
+                    f"{folder}/{name}: case mismatch; the HLSDK requests {canonical}"
+                )
+            else:
+                warnings.append(f"{folder}/{name}: bundled but not requested by the HLSDK")
 
     for name in sorted(requested):
         if name not in bundled:

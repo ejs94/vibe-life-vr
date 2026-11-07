@@ -10,8 +10,9 @@ available and must not be broken.
 | W0 native route + legacy fallback | PASS |
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | **W2 SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
-| Native Magnum mesh | not started |
-| Gordon hand | not started |
+| Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
+| Aim direction from `muzzle_pos2` | not started |
+| HEV glove on both hands | not started |
 
 W0 proves the engine can select a native model and fall back to legacy when the
 native file is absent. W1 passed after the maintainer approved the calibrated
@@ -107,8 +108,27 @@ If the model is missing or invalid, it uses the legacy model and logs:
 [VR_WEAPON_ROUTE] legacy=... native=... route=native|fallback|legacy
 ```
 
-The W0 test copies an existing MDL to the native path, verifies `route=native`,
-removes it, and verifies `route=fallback`. No asset is deployed.
+The shipped default lives in `assets/valve_vr/vr_defaults.cfg`
+(`vr_native_weapons 1`), which `autoexec.cfg` loads with `exec vr_defaults.cfg`.
+The cvar itself is not archived, so `config.cfg` cannot silently override it.
+Both install paths write that line: `scripts/setup_out_gamedir.sh` for the
+desktop build and `scripts/deploy_quest_assets.sh` for Quest.
+
+Rules for a native asset:
+
+- The file name must equal the legacy basename exactly. Android and Linux are
+  case-sensitive, so `v_9mmar.mdl` does not satisfy a request for
+  `models/v_9mmAR.mdl`.
+- Attachments must be `muzzle_pos`, `muzzle_pos2`, `hud_pos`, `hud_pos2` in that
+  order, because the profile and the aim code index them by number.
+- The sequence table must keep the legacy role at each index, because the game
+  DLL sends indices, not names. A rename such as `reload` to `reload_vanilla`
+  is safe; reordering is not.
+- `ejection_attachment` and `magwell_attachment` stay `-1` when attachments 2
+  and 3 are HUD anchors.
+
+`python3 scripts/check_native_weapon_assets.py` verifies all of the above
+statically. It is a contract check, not a gate.
 
 ## Coordinate spaces
 

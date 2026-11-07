@@ -46,6 +46,7 @@ is_local_name() {
     case "$1" in
         models|saves|save|downloads|custom|logs|config.cfg|config.cfg.bak|\
         opengl.cfg|opengl.cfg.bak|video.cfg|video.cfg.bak|*.log|.xash_id|\
+        autoexec.cfg|vr_defaults.cfg|\
         voice_ban.dt|*.dt) return 0 ;;
         *) return 1 ;;
     esac
@@ -87,6 +88,67 @@ for mdl in "${REPO_DIR}/assets/valve_vr/models"/*.mdl; do
     rm -f "${OUT_VALVE}/models/${base}"
     cp -f "${mdl}" "${OUT_VALVE}/models/${base}"
 done
+
+# 6b. Native route assets: models/native/<legacy-basename>.mdl.
+NATIVE_DIR="${OUT_VALVE}/models/native"
+if [ -d "${REPO_DIR}/assets/valve_vr/models/native" ]; then
+    mkdir -p "${NATIVE_DIR}"
+    for mdl in "${REPO_DIR}/assets/valve_vr/models/native"/*.mdl; do
+        cp -f "${mdl}" "${NATIVE_DIR}/$(basename "${mdl}")"
+    done
+fi
+
+# 7. Versioned VR defaults. autoexec.cfg is normally a symlink into the Steam
+#    install, so copy it to a local file before appending; never write through
+#    the symlink.
+DEFAULTS="${REPO_DIR}/assets/valve_vr/vr_defaults.cfg"
+if [ -f "${DEFAULTS}" ]; then
+    cp -f "${DEFAULTS}" "${OUT_VALVE}/vr_defaults.cfg"
+    AUTOEXEC="${OUT_VALVE}/autoexec.cfg"
+    if [ -L "${AUTOEXEC}" ]; then
+        cp -Lf "${AUTOEXEC}" "${AUTOEXEC}.local"
+        rm -f "${AUTOEXEC}"
+        mv -f "${AUTOEXEC}.local" "${AUTOEXEC}"
+    fi
+    touch "${AUTOEXEC}"
+    if ! grep -q '^exec vr_defaults.cfg' "${AUTOEXEC}"; then
+        {
+            echo ""
+            echo "// Vibe-Life VR defaults"
+            echo "exec vr_defaults.cfg"
+        } >> "${AUTOEXEC}"
+    fi
+fi
+
+# 8. Mirror the overlay into the secondary gamedir when it exists. The client
+#    searches valve_vr before valve in the dev tree, so a stale copy there
+#    silently wins over everything installed above.
+VALVE_VR="$(dirname "${OUT_VALVE}")/valve_vr"
+if [ -d "${VALVE_VR}/models" ]; then
+    for mdl in "${REPO_DIR}/assets/valve_vr/models"/*.mdl; do
+        cp -f "${mdl}" "${VALVE_VR}/models/$(basename "${mdl}")"
+    done
+    if [ -d "${REPO_DIR}/assets/valve_vr/models/native" ]; then
+        mkdir -p "${VALVE_VR}/models/native"
+        for mdl in "${REPO_DIR}/assets/valve_vr/models/native"/*.mdl; do
+            cp -f "${mdl}" "${VALVE_VR}/models/native/$(basename "${mdl}")"
+        done
+    fi
+    if [ -f "${PROFILES}" ]; then
+        cp -f "${PROFILES}" "${VALVE_VR}/models/vr_weapons.json"
+    fi
+    if [ -f "${REPO_DIR}/assets/valve_vr/vr_defaults.cfg" ]; then
+        cp -f "${REPO_DIR}/assets/valve_vr/vr_defaults.cfg" "${VALVE_VR}/vr_defaults.cfg"
+        touch "${VALVE_VR}/autoexec.cfg"
+        if ! grep -q '^exec vr_defaults.cfg' "${VALVE_VR}/autoexec.cfg"; then
+            {
+                echo ""
+                echo "// Vibe-Life VR defaults"
+                echo "exec vr_defaults.cfg"
+            } >> "${VALVE_VR}/autoexec.cfg"
+        fi
+    fi
+fi
 
 echo "out/valve ready (real dir, read-only symlinks to ${STEAM_VALVE})"
 echo "  top-level symlinks: $(find "${OUT_VALVE}" -maxdepth 1 -type l | wc -l)"

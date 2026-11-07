@@ -81,6 +81,21 @@ if [ -f "$PROFILES" ]; then
     log_ok "Pushed vr_weapons.json"
 fi
 
+# Versioned VR defaults. autoexec.cfg is the reliable place for cvars that are
+# not archived in config.cfg, so append the loader line once and leave the rest
+# of the user's file untouched.
+DEFAULTS="${REPO_DIR}/assets/valve_vr/vr_defaults.cfg"
+REMOTE_GAMEDIR="${BASEDIR}/${GAMEDIR}"
+if [ -f "$DEFAULTS" ]; then
+    adb push "$DEFAULTS" "${REMOTE_GAMEDIR}/vr_defaults.cfg" >/dev/null
+    log_ok "Pushed vr_defaults.cfg"
+    adb shell "touch '${REMOTE_GAMEDIR}/autoexec.cfg'"
+    if ! adb shell "grep -q '^exec vr_defaults.cfg' '${REMOTE_GAMEDIR}/autoexec.cfg'"; then
+        adb shell "printf '\n// Vibe-Life VR defaults\nexec vr_defaults.cfg\n' >> '${REMOTE_GAMEDIR}/autoexec.cfg'"
+        log_ok "autoexec.cfg now loads vr_defaults.cfg"
+    fi
+fi
+
 # Verify every model matches the repository byte for byte.
 for mdl in "${MODELS[@]}"; do
     base="$(basename "${mdl}")"
@@ -92,3 +107,15 @@ for mdl in "${MODELS[@]}"; do
     fi
 done
 log_ok "All ${#MODELS[@]} viewmodels match the repository (sha256 verified)"
+
+# Native models must match too, otherwise the route silently falls back.
+for mdl in "${NATIVE_MODELS[@]}"; do
+    base="$(basename "${mdl}")"
+    LOCAL_SHA="$(sha256sum "${mdl}" | awk '{print $1}')"
+    REMOTE_SHA="$(adb shell "sha256sum '${REMOTE_DIR}/native/${base}'" | awk '{print $1}')"
+    if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+        log_err "Deployed native/${base} does not match the repository asset."
+        exit 1
+    fi
+done
+log_ok "All ${#NATIVE_MODELS[@]} native viewmodels match the repository (sha256 verified)"

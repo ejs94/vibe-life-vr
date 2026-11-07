@@ -8,7 +8,13 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MONADO_DIR="$(cd "${REPO_DIR}/../openxr-tooling/monado" && pwd)"
 MONADO_BUILD_DIR="${MONADO_BUILD_DIR:-${MONADO_DIR}/build-sim}"
 MODEL="v_9mmhandgun"
-NATIVE_DIR="${REPO_DIR}/out/valve_vr/models/native"
+# The client searches more than one gamedir in the dev tree, so the fallback
+# leg has to hide the model in every place it can resolve it.
+NATIVE_DIRS=(
+    "${REPO_DIR}/out/valve_vr/models/native"
+    "${REPO_DIR}/out/valve/models/native"
+)
+NATIVE_DIR="${NATIVE_DIRS[0]}"
 NATIVE_MDL="${NATIVE_DIR}/${MODEL}.mdl"
 SOURCE_MDL="${REPO_DIR}/assets/valve_vr/models/${MODEL}.mdl"
 CFG="native_weapon_test.cfg"
@@ -21,20 +27,38 @@ log_info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_ok()   { echo -e "\033[1;32m[PASS]\033[0m $*"; }
 log_err()  { echo -e "\033[1;31m[FAIL]\033[0m $*" >&2; }
 
+# Hide the native model without deleting a deployed asset.
+HIDDEN=()
+hide_native() {
+    for dir in "${NATIVE_DIRS[@]}"; do
+        if [ -f "${dir}/${MODEL}.mdl" ] && [ ! -f "${dir}/${MODEL}.mdl.w0hold" ]; then
+            mv "${dir}/${MODEL}.mdl" "${dir}/${MODEL}.mdl.w0hold"
+            HIDDEN+=( "${dir}/${MODEL}.mdl" )
+        fi
+    done
+}
+
+restore_native() {
+    for path in "${HIDDEN[@]:-}"; do
+        [ -n "$path" ] || continue
+        if [ -f "${path}.w0hold" ]; then
+            mv "${path}.w0hold" "$path"
+        fi
+    done
+    HIDDEN=()
+}
+
 cleanup() {
     pkill -9 -x monado-service 2>/dev/null || true
-    rm -rf "${NATIVE_DIR}"
+    restore_native
 }
+
 trap cleanup EXIT
 
-if [ ! -f "$SOURCE_MDL" ]; then
-    log_err "missing source model: $SOURCE_MDL"
-    python3 "$QA_SCRIPT" finish --run "$RUN_DIR" --exit-code 1 --status FAIL --device monado --note "missing placeholder source" >/dev/null || true
-    exit 1
-fi
-
 mkdir -p "${NATIVE_DIR}"
-cp -f "$SOURCE_MDL" "$NATIVE_MDL"
+if [ ! -f "$NATIVE_MDL" ]; then
+    cp -f "$SOURCE_MDL" "$NATIVE_MDL"
+fi
 
 export PYTHONDONTWRITEBYTECODE=1
 export XRT_NO_STDIN=true
@@ -82,9 +106,10 @@ run_once() {
 set +e
 run_once native "${RUN_DIR}/native.log"
 NATIVE_RC=$?
-rm -f "$NATIVE_MDL"
+hide_native
 run_once fallback "${RUN_DIR}/fallback.log"
 FALLBACK_RC=$?
+restore_native
 set -e
 
 NATIVE_ROUTE=no
@@ -96,6 +121,7 @@ cat > "${RUN_DIR}/README.md" <<EOF
 # W0 — native weapon route and legacy fallback
 
 - Native placeholder: \`out/valve_vr/models/native/${MODEL}.mdl\` (copy of the legacy asset; existence is the only test variable).
+- The fallback leg hides the model in every searched gamedir and restores it afterwards.
 - Native run exit: ${NATIVE_RC}; route found: ${NATIVE_ROUTE}.
 - Fallback run exit: ${FALLBACK_RC}; route found: ${FALLBACK_ROUTE}.
 - Logs: \`native.log\`, \`fallback.log\`.

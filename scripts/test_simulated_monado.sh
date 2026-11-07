@@ -312,7 +312,7 @@ assert_test 42 "Weapon Pose: Grip Anchor Seats on the Palm (vr_grip_probe)" \
     '"${SCRIPT_DIR}/check_grip_seat.py" "$TEST_LOG"'
 
 assert_test 43 "Crossbow Foregrip: Off-Hand Snaps to Weapon Socket" \
-    'grep -q "\\[VR_FOREGRIP\\] model=models/v_crossbow.mdl" "$TEST_LOG"'
+    'grep -qE "\\[VR_FOREGRIP\\] model=(models/native/)?v_crossbow\\.mdl" "$TEST_LOG"'
 
 assert_test 44 "Unarmed Hands: Natural Open Hand Follows 6DoF Input" \
     'python3 "${SCRIPT_DIR}/check_unarmed_hand_input.py" "$TEST_LOG" "$OUTPUT_DIR"'
