@@ -68,6 +68,29 @@ opening and magazine-release work done in the `out/w2_work/bsvr_glock/` sessions
 is not part of the shipped asset; its measurements and the brief for a future
 attempt are recorded in [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
 
+## Aim direction (measured, rejected)
+
+Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
+model-derived alternatives were measured on 2026-11-06 and rejected:
+
+| Candidate axis | Angle from the hand forward |
+|---|---:|
+| `muzzle_pos2 - muzzle_pos` | 66.5 deg |
+| muzzle world position minus the weapon pose origin | 42.0 deg |
+
+Neither is a barrel axis in the hand frame, so using them would have thrown the
+shot away from where the player is aiming. The measurement was taken with
+`vr_test_hand_pitch -5 -10` on `models/native/v_9mmhandgun.mdl` and a `+attack`
+event, which is the only path that calls `XR_GetPrimaryHandMuzzleTransform`.
+
+The 42-degree pose delta also means the native models do not yet sit in the palm
+the way the legacy offsets expect: the profile `grip_offset` values were tuned
+for the MMOD meshes. Re-check the model-derived aim **after** the per-weapon grip
+pose is verified against a capture; the axis is only meaningful once the weapon
+visually points where the hand points.
+
+The code change was reverted. Do not reintroduce it without that capture.
+
 ## Content families
 
 ```json
