@@ -74,6 +74,27 @@ readable by counting cells, plus:
 that room. Use it when a change affects scale, grip seating or coordinates and
 the numeric checks alone are not convincing.
 
+## Shot origin evidence
+
+```sh
+./scripts/aim_shot_evidence.sh
+```
+
+Fires one shot per hitscan gun at the test-bed board and records, per weapon:
+
+- `start -> muzzle`: distance between where the shot starts and the visible
+  muzzle attachment (must be ~0, proving the bullet leaves the barrel tip and
+  not the eye or the hand);
+- `vs barrel`: angle between the shot and the visible barrel axis
+  (`palm -> muzzle`), which must stay under 2 degrees or the shot looks crooked;
+- `axis`: perpendicular offset of the shot start from the barrel line.
+
+Output: `out/qa/V1/shots_<timestamp>/` with `shot_origin.txt`, the engine log
+and one capture per weapon. The shotgun uses an 8-degree tolerance because its
+first impact is a pellet, and the gauss allows 3.5 units because its tracer
+starts inside the muzzle cap. Projectile and beam weapons are out of scope: they
+do not report an impact on the first frame.
+
 ## Weapon visual sweep
 
 ```sh

@@ -51,7 +51,7 @@
         "fire_amplitude": 1.0,
         "fire_duration_ms": 100
       },
-      "grip_rot": [-52.5, -5.8, 0.0]
+      "grip_rot": [-59.9, -3.3, 0.0]
     },
     "v_9mmAR.mdl": {
       "name": "MP5 / 9mm Assault Rifle",
@@ -91,7 +91,7 @@
         "pump_amplitude": 0.5,
         "pump_duration_ms": 40
       },
-      "grip_rot": [-49.4, -0.7, 0.0]
+      "grip_rot": [-49.4, 1.6, 0.0]
     },
     "v_crossbow.mdl": {
       "name": "Crossbow",
@@ -134,7 +134,7 @@
       "two_handed": true,
       "two_hand_min_dist": 0.2,
       "two_hand_max_dist": 0.55,
-      "grip_rot": [-50.3, 0.5, 0.0]
+      "grip_rot": [-47.4, -2.6, 0.0]
     },
     "v_egon.mdl": {
       "name": "Gluon Gun / Egon",

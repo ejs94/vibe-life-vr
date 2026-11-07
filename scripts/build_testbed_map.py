@@ -153,6 +153,20 @@ def make_map() -> str:
     axes.append(colored_brush((-97.0, -6.0, 48.0), (-95.0, -5.0, 50.0), "40 255 40"))
     axes.append(colored_brush((-97.0, 5.0, 48.0), (-95.0, 6.0, 50.0), "40 255 40"))
 
+    # Shot-placement board on the +X wall: 10 cm grid plus coloured rings
+    # centred on the hand-height firing line. Used by the shot-origin check.
+    board_x = 300.0
+    axes.append(colored_brush((board_x - 2.0, -140.0, 0.0), (board_x, 140.0, 240.0), "40 40 40"))
+    for i in range(-14, 15):
+        y = i * 10.0
+        if y == 0:
+            continue
+        axes.append(colored_brush((board_x - 2.2, y - 0.4, 0.0), (board_x - 2.0, y + 0.4, 240.0),
+                                  "90 90 90"))
+    for ring, color in ((60.0, "200 200 200"), (30.0, "220 60 60"), (10.0, "240 240 240")):
+        axes.append(colored_brush((board_x - 2.4, -ring, 48.0 - ring),
+                                  (board_x - 2.0, ring, 48.0 + ring), color))
+
     # Height bars on the north wall: 1.0 m (waist), 1.7 m (eye), 2.0 m.
     for metres, color in ((1.0, "255 200 40"), (1.7, "255 120 40"), (2.0, "255 40 40")):
         axes.append(colored_brush((-260.0, HALF - 8.0, metres * UNIT_PER_M - 2.0),
