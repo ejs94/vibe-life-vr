@@ -83,15 +83,20 @@ Fix: measure the model's barrel in the hand frame and cancel it with `grip_rot`
 
 Measured and committed values (degrees, GoldSrc pitch/yaw):
 
-| Model | `grip_rot` | Residual after fix |
+| Model | `grip_rot` | Residual (barrel vs hand) |
 |---|---|---|
 | `v_9mmhandgun` | `-52.5 -5.8 0` | 0.5 deg |
+| `v_357` | `-59.9 -3.3 0` | 0.7 deg (shot check) |
 | `v_9mmAR` | `-56.8 -4.8 0` | 0.0 deg |
-| `v_shotgun` | `-49.4 -0.7 0` | 0.0 deg |
-| `v_gauss` | `-50.3 0.5 0` | 0.0 deg |
+| `v_shotgun` | `-49.4 1.6 0` | 2.7 deg (pellet spread) |
+| `v_gauss` | `-47.4 -2.6 0` | 3.7 deg (tracer starts inside the cap) |
 | `v_egon` | `-67.8 -5.4 0` | 0.2 deg |
 | `v_crossbow` | `-25.1 -5.1 0` | 0.6 deg |
 | other native weapons | `-52.5 -5.8 0` | visual check only |
+
+The shot-origin probe (`scripts/aim_shot_evidence.sh`) confirms that a shot
+starts at the muzzle attachment (0.06-0.10 units for the pistols) and follows
+the visible barrel within 0.8 degrees.
 
 With the barrel aligned, `pitch_adjust` is `0` for the nine guns. Before, the
 shot was calibrated 2-5 degrees away from a misoriented barrel; now the bullet
