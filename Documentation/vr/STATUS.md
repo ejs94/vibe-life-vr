@@ -38,7 +38,7 @@ current counts and gate freshness.
 - [ ] `W2` Glock guard/trigger detail (paused, needs modelling)
 - [ ] `W3` Glock physical interaction (sockets are a modelling task)
 - [ ] `W4` full arsenal behind the native route
-- [ ] `W5` HEV glove on both hands
+- [x] `W5` HEV glove on both hands (one two-hand model, mirrored left chain)
 - [ ] `W6` Magnum replication with no per-weapon code
 
 ## Native base adopted 2026-11-06

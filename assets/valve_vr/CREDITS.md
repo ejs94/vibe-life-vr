@@ -3,15 +3,26 @@
 The VR asset overlay bundles the following community work. Keep this file in
 sync whenever a bundled asset changes.
 
-## models/v_hand.mdl — generated blocky glove
+## models/v_hand.mdl — HEV glove, two hands
 
-* **Author:** generated in-project by `scripts/build_block_hand.py`.
-* **Geometry:** low-poly boxes on the 35-bone hand contract (`rhand` / `lhand`
-  bodygroups, `Bip01 R/L Hand`, `Palm`, `Finger0..42`).
-* **Purpose:** unambiguous hand presence for unarmed and free-offhand states.
-  It is not a detailed glove and is never used to replace a baked weapon hand.
-* The previous detailed reference glove was retired from the active project.
-  No third-party hand mesh is shipped as `v_hand.mdl`.
+* **Source:** Half-Life: VR Mod by Max Makes Mods,
+  `art/models/v_hand_hevsuit.mdl` (single right hand, `gordon_glove.bmp`,
+  `gordon_glove_Chrome.bmp`, `gordon_sleeve.bmp`).
+* **Source URL:** <https://github.com/maxmakesmods/Half-Life-VR>
+* **Reference copy in this workspace:**
+  `xash3d-vr-ports/Half-Life-VR/art/models/v_hand_hevsuit.mdl`
+* **Bundled as:** `models/v_hand.mdl`.
+* **Changes made by this project:** the biped torso was dropped, a palm
+  landmark bone was added, the third thumb joint was merged into the second,
+  the hand was scaled to the canonical 6.4558-unit reach, and the left hand was
+  mirrored from the right. Geometry and textures are otherwise unchanged.
+  Rebuilt by `scripts/build_hev_twohand_mdl.py`.
+* **Why:** it is the HEV glove that matches the gloves baked into the adopted
+  Half-Life: VR weapon viewmodels, and it exists for both hands.
+* The previous in-project block glove (built from the Rimrook pair by
+  `scripts/build_twohand_mdl.py`) is retired as `v_hand.mdl`; keep that script
+  only for reference. No third-party mesh other than the Half-Life: VR glove is
+  shipped as `v_hand.mdl`.
 
 ## Half-Life MMOD — Reanimated Pack
 

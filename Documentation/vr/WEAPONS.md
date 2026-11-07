@@ -12,7 +12,7 @@ available and must not be broken.
 | Native Glock mesh | **W2 SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
 | Aim direction from `muzzle_pos2` | not started |
-| HEV glove on both hands | not started |
+| HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the
 native file is absent. W1 passed after the maintainer approved the calibrated
