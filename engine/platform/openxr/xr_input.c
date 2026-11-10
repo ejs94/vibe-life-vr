@@ -1631,6 +1631,16 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
     float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
     float turn_yaw = XR_GetPlayerTurnYaw();
 
+    // The firing line must match the rendered barrel, which follows the raw aim
+    // pose (XR_GetPrimaryAimPose). XR_GetPrimaryHandTransform applies the
+    // two-hand stabilizer, which blends the angle toward the off-hand grip
+    // line; using it here made two-handed shots diverge from the visible
+    // barrel. Read the aim pose explicitly and let XR_GetWeaponPitchAdjust own
+    // the per-weapon calibration exactly once.
+    vec3_t fireOrigin, fireAngles;
+    if( XR_GetPrimaryAimPose( fireOrigin, fireAngles ))
+        VectorCopy( fireAngles, handAngles );
+
     vec3_t local_angles;
     local_angles[0] = handAngles[0];
     local_angles[1] = anglemod( handAngles[1] + turn_yaw );

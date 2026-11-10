@@ -11,7 +11,7 @@ available and must not be broken.
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | **SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
-| Aim direction from `muzzle_pos2` | **BLOCKED** — see the shot-vector handoff in [`STATUS.md`](STATUS.md#handoff-why-the-shot-vector-is-wrong) |
+| Aim direction | **FIXED 2026-11-10** — firing line reads the aim pose; two-hand HIL check pending |
 | HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the

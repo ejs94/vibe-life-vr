@@ -304,3 +304,35 @@ Decision:
   directory of per-file symlinks, then copies the testbed in. It never writes
   into the Steam install.
 
+## D-023: The firing line follows the aim pose, not the stabilized hand
+
+**Status:** accepted 2026-11-10
+
+The muzzle path and the renderer disagreed about which controller pose defines
+the barrel. `XR_GetPrimaryHandMuzzleTransform` read
+`XR_GetPrimaryHandTransform`, which runs `XR_ApplyTwoHandStabilizer` and blends
+the angle toward the primary-to-off-hand grip line whenever two hands are
+engaged. The renderer reads the raw `XR_GetPrimaryAimPose`. With two hands on a
+pistol, the bullet therefore left along the off-hand line while the visible
+barrel pointed along the aim ray.
+
+Decision:
+
+- The muzzle path reads `XR_GetPrimaryAimPose` for `out_aim_angles` and keeps
+  the per-weapon `pitch_adjust` application in one place
+  (`engine/platform/openxr/xr_input.c`).
+- The two-hand stabilizer keeps owning the palm/weapon pose; it no longer
+  changes the firing direction.
+- The renderer, the laser and the authoritative firing line now share one
+  orientation source: the aim pose.
+
+Consequences:
+
+- `aim_shot_evidence.sh` passes with the shotgun spread down from 2.41 to 0.60
+  degrees; `M1` 49/49, `R1` 19/19 and `W0` pass.
+- The simulated harness cannot engage the stabilizer because the simulated
+  primary and off-hand poses are identical, so a headset check with two hands
+  is still required before claiming the visual fix.
+- A model-anchor direction (`muzzle_pos2 - muzzle_pos`) is still rejected until
+  the renderer is proven to align the visible bore to that same anchor.
+

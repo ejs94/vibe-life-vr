@@ -40,7 +40,7 @@ current counts and gate freshness.
 - [x] Native Glock adopted (Half-Life: VR SD, unmodified)
 - [x] Native arsenal (15 viewmodels) routed
 - [x] HEV glove on both hands (`v_hand.mdl`)
-- [ ] Shot direction follows the visible barrel
+- [x] Shot direction follows the visible barrel (aim-pose fix; HIL validation pending)
 - [ ] Hand matches the OpenVR 31-bone skeleton
 - [ ] Manual reload driven by 6DoF hands
 
@@ -63,9 +63,14 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Active blockers
 
-1. **The shot direction does not follow the visible barrel.** The firing line is
-   built from controller angles plus per-weapon numeric calibration, while the
-   rendered barrel is rotated by the renderer. See the handoff below.
+1. **Shot direction: fixed in code, HIL validation pending.** The firing line
+   read `XR_GetPrimaryHandTransform`, which applies `XR_ApplyTwoHandStabilizer`
+   and blends the angle toward the off-hand grip line, while the renderer reads
+   the raw aim pose. Two-handed shots therefore diverged from the visible
+   barrel. The muzzle path now reads `XR_GetPrimaryAimPose` (2026-11-10);
+   `aim_shot_evidence.sh`, `M1`, `R1` and `W0` pass. The simulated harness
+   cannot engage the stabilizer (primary and off-hand poses are identical), so
+   a headset check with two hands is still required. See the handoff below.
 2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
    (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
    The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
@@ -75,10 +80,10 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Next steps
 
-1. Make `muzzle_pos2 - muzzle_pos` the direction source, with the numeric
-   fallback only for weapons without anchors. Fix the circular shot-origin test
-   and prove the right-handed result is unchanged
-   (`scripts/verify_grip_pose_math.py`).
+1. Validate the aim-pose firing line on a real headset with two hands engaged,
+   and fix the circular shot-origin test (it forces zero angles and overwrites
+   the logged start). A model-anchor direction (`muzzle_pos2 - muzzle_pos`)
+   remains an option only after that.
 2. Map the existing hand rig onto the OpenVR 31-bone enum without replacing the
    MDL. Verify whether the input layer already consumes skeletal data.
 3. Keep the shipped native Glock as the HL1-like base (no Beretta, no sculpting)
@@ -124,10 +129,15 @@ internal arithmetic consistency, not that the visible barrel and the bullet
 agree in a headset. `scripts/check_aim_pose.py` uses only a simulated 35 degree
 grip tilt and checks the renderer, not the bullet.
 
-**First three checks for the next agent:** log `muzzle_pos`, `muzzle_pos2`,
-`vuser2` and the final `tr.viewent` orientation in the same frame; run
-`aim_shot_evidence.sh` with a real grip tilt and without the `start` override;
-then switch the direction source and re-run `M1`/`R1`/`W0`.
+**Resolved 2026-11-10.** The root cause was not the numeric calibration but the
+pose source: `XR_GetPrimaryHandMuzzleTransform` read
+`XR_GetPrimaryHandTransform`, which applies `XR_ApplyTwoHandStabilizer` and
+blends the angle toward the off-hand grip line, while the renderer reads
+`XR_GetPrimaryAimPose`. The muzzle path now reads the aim pose first
+(`engine/platform/openxr/xr_input.c`); `aim_shot_evidence.sh`, `M1`, `R1` and
+`W0` pass. Remaining: the harness forces zero angles and overwrites the logged
+start, so it cannot engage the stabilizer; validate with a real two-hand grip on
+the headset.
 
 ## Evidence
 
