@@ -126,6 +126,24 @@ visually points where the hand points.
 
 The code change was reverted. Do not reintroduce it without that capture.
 
+### Aim pose contract (2026-11-09)
+
+The viewmodel and the `viewmodel` entity are oriented by `XR_GetPrimaryAimPose()`
+(the ray the player points with). `XR_GetPrimaryGripTransform()` supplies only
+the palm position. The muzzle, the laser and the authoritative firing line also
+read the aim pose, so the visible barrel and the shot agree. Do not feed the
+grip orientation back into `XR_GetWeaponPose`; `M1` assertion 49 deliberately
+tilts the simulated grip pose away from the aim pose and fails if the renderer
+does.
+
+Aim-related cvars:
+
+| Cvar | Default | Meaning |
+|---|---|---|
+| `vr_lasersight` | `1` | Draw the 3D laser from the aim pose. |
+| `vr_crosshair` | `0` | Draw the flat-screen 2D crosshair in VR. Off because it is a head-locked screen sprite that shows in both eyes and follows the head. |
+| `vr_test_grip_delta_pitch` | `0` | Harness only: tilt the simulated grip pose away from the aim pose. Keep `0` in shipped configs. |
+
 ## Content families
 
 ```json

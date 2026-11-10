@@ -15,6 +15,7 @@ extern XrSession g_xrSession;
 extern XrSpace g_xrLocalSpace;
 extern XrSpace g_xrViewSpace;
 extern XrSpace g_xrMenuQuadSpace;
+extern XrReferenceSpaceType g_xrLocalSpaceType;
 extern XrSessionState g_xrSessionState;
 extern qboolean g_xrSessionRunning;
 
@@ -45,6 +46,7 @@ extern EXPORT convar_t *vr_haptics_intensity;
 extern EXPORT convar_t *vr_pointer_hud;
 extern EXPORT convar_t *vr_test_hands;
 extern EXPORT convar_t *vr_test_hand_pitch;
+extern EXPORT convar_t *vr_test_grip_delta_pitch;
 extern EXPORT convar_t *vr_test_hand_yaw;
 extern EXPORT convar_t *vr_test_hand_roll;
 extern EXPORT convar_t *vr_test_hand_offset;

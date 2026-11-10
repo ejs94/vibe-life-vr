@@ -329,6 +329,9 @@ assert_test 47 "VR Coordinates: No Space Mixups or Collapsed Transforms" \
 assert_test 48 "Hand Conversion: OpenXR Pitch/Yaw/Roll Map to GoldSrc Axes" \
     'python3 "${SCRIPT_DIR}/check_hand_conversion.py" "$TEST_LOG"'
 
+assert_test 49 "Weapon Pose: Aim Orientation Wins Over a 35 Degree Grip Tilt" \
+    'python3 "${SCRIPT_DIR}/check_aim_pose.py" "$TEST_LOG"'
+
 # 7. Optional Quest Launcher UI Verification
 if [ "${TARGET_ARG}" = "all" ] || [ "${TARGET_ARG}" = "--with-launcher" ] || [ "${TARGET_ARG}" = "full" ]; then
     log_title "PHASE 3: Executing Meta Quest APK Launcher UI Verification"

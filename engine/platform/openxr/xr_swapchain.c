@@ -539,8 +539,9 @@ void XR_AnchorMenuQuad( void )
     float theta = atan2f(-fx, -fz);
     float halfTheta = theta * 0.5f;
 
-    Con_Printf( "[VR_MENU] anchor head=(%.2f %.2f %.2f) fwd=(%.2f %.2f) theta=%.1f\n",
-        hx, hy, hz, fx, fz, theta * (180.0f / (float)M_PI) );
+    Con_Printf( "[VR_MENU] anchor space_type=%d head=(%.2f %.2f %.2f) fwd=(%.2f %.2f) theta=%.1f pos=(%.2f %.2f %.2f) dist=%.2f\n",
+        (int)g_xrLocalSpaceType, hx, hy, hz, fx, fz,
+        theta * (180.0f / (float)M_PI), anchorX, anchorY, anchorZ, menuDist );
     float quadQy = sinf(halfTheta);
     float quadQw = cosf(halfTheta);
 
@@ -552,7 +553,12 @@ void XR_AnchorMenuQuad( void )
 
     XrReferenceSpaceCreateInfo spaceInfo = {0};
     spaceInfo.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;
-    spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    // Use the same reference space type as g_xrLocalSpace. headLoc was located
+    // in g_xrLocalSpace, so reinterpreting these coordinates in a different
+    // space type (LOCAL vs STAGE) moves the panel on runtimes whose origins
+    // differ, which is why the pause menu could open off to the side or behind
+    // the player on Quest while the simulated runtime looked correct.
+    spaceInfo.referenceSpaceType = g_xrLocalSpaceType;
     spaceInfo.poseInReferenceSpace.position.x = anchorX;
     spaceInfo.poseInReferenceSpace.position.y = anchorY;
     spaceInfo.poseInReferenceSpace.position.z = anchorZ;

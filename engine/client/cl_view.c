@@ -193,14 +193,20 @@ static void V_SetupViewModel( void )
 			// Compute world weapon pose from the 6DoF grip/palm pose via the
 			// single source of truth (this also applies the left-handed grip
 			// mirror). The renderer uses the same anchor.
-			vec3_t handOrigin, handAngles;
+			vec3_t handOrigin, handAngles, aimAnglesRaw;
 			if( XR_GetPrimaryGripTransform( handOrigin, handAngles ) )
 			{
 				float scale = (vr_worldscale && vr_worldscale->value > 0.0f) ? vr_worldscale->value : 40.0f;
 				float turn_yaw = XR_GetPlayerTurnYaw();
 				const char *wpn = ( view->model && view->model->name[0] ) ? view->model->name : "";
 
-				XR_GetWeaponPose( wpn, handOrigin, handAngles, turn_yaw, refState.vieworg, scale,
+				// Orient from the aim pose (the ray the player points with),
+				// not the tilted palm/grip pose. Position still comes from the
+				// palm so the weapon stays seated in the hand.
+				if( !XR_GetPrimaryAimPose( NULL, aimAnglesRaw ))
+					VectorCopy( handAngles, aimAnglesRaw );
+
+				XR_GetWeaponPose( wpn, handOrigin, aimAnglesRaw, turn_yaw, refState.vieworg, scale,
 					view->origin, view->angles );
 
 				Con_DPrintf( "[VR_GRIP] src=viewmodel model=%s origin=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d\n",

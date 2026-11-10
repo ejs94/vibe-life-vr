@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-11-07
+**Last updated:** 2026-11-09
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
 **Previous checkpoint:** `pre-cleanup-2026-10-31`
@@ -24,7 +24,7 @@ current counts and gate freshness.
 ### Validation
 
 - [x] `D1` documentation gate
-- [x] `M1` Monado 47/47
+- [x] `M1` Monado 49/49
 - [x] `R1` regression 19/19
 - [x] `A7` Glock manual reload
 - [ ] `Q1` Quest hardware-in-the-loop (maintainer decision)
@@ -68,8 +68,10 @@ new geometry.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | 47/47 PASS |
+| Monado unit suite (`M1`) | 49/49 PASS |
 | Hand motion and coordinate contracts (`M1` 45-47) | PASS: 6DoF translation, independent offhand, weapon follow, no space mixups |
+| Aim/grip separation (`M1` 49) | PASS: renderer and viewmodel stay on the aim pose with a 35 degree grip tilt |
+| Menu quad anchor (`M1` 36-37) | PASS in simulation; the anchor now uses the same reference space type as the head pose (D-018) |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation gate (`D1`) | See `out/qa/D1/latest` |
 | Evidence hygiene (`H1`) | See `out/qa/H1/latest` |
@@ -81,6 +83,25 @@ new geometry.
 | Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
 | Weapon epic | **W2 SHIPPED 2026-11-06**: Half-Life: VR (SD) Glock as the native base |
 | Native asset | `models/native/v_9mmhandgun.mdl`, 3 bodies, 4 anchors, 10 sequences, Gordon gloves |
+
+## 2026-11-09 aim and menu pass
+
+- Firearms are oriented by the aim pose, not the tilted grip pose (D-017). The
+  suite gained assertion 49 and `scripts/check_aim_pose.py`; reverting the
+  renderer to the grip pose fails it with a 35 degree pitch.
+- The pause/menu quad anchor is created with the same reference space type as
+  the head pose (D-018). This was a Quest-only placement bug: LOCAL and STAGE
+  do not share an origin, while the simulated runtime makes them coincide.
+- The satchel is classified as an off-hand-only viewmodel: its baked hand and
+  the charge it holds stay, the left arm is not collapsed, and the standalone
+  primary hand is skipped so a second hand no longer floats on the charge. The
+  free-controller off-hand remains available. The post-weapon fallback now also
+  respects a baked off-hand, which was the duplicate-hand path when the
+  persistent hand layer was disabled.
+- `aim_shot_evidence.sh` still reports the shot following the barrel
+  (0.01-0.18 degrees for Glock/.357/Gauss, 2.41 for the shotgun spread).
+- Quest validation of the aim orientation, the menu position and the satchel is
+  still pending; no headset was attached for this pass.
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could

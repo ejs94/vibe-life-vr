@@ -31,7 +31,7 @@ A stale APK is the most common false negative in hardware testing.
 ./scripts/test_simulated_monado.sh
 ```
 
-The suite runs 47 assertions and writes to `out/qa/M1/runs/<timestamp>/`. The
+The suite runs 49 assertions and writes to `out/qa/M1/runs/<timestamp>/`. The
 default engine timeout is 120 seconds. If the unarmed-hand phase is cut off,
 raise it explicitly:
 
@@ -39,10 +39,10 @@ raise it explicitly:
 TIMEOUT_SECS=120 ./scripts/test_simulated_monado.sh
 ```
 
-A pass requires all 47 assertions and the two unarmed captures
+A pass requires all 49 assertions and the two unarmed captures
 `unit_23_unarmed_rest.png` and `unit_24_unarmed_moved.png`.
 
-Two of the assertions exist because the suite used to pass while the headset
+Three of the assertions exist because the suite used to pass while the headset
 misbehaved:
 
 - `check_hand_motion.py` drives the simulated controllers through a 6DoF sweep
@@ -54,6 +54,11 @@ misbehaved:
   transforms collapsed to `(0,0,0)`, hands that leave the grip origin, and
   muzzle/viewmodel pairs that disagree on their world position by more than one
   gun length (the classic view-space vs world-space mixup).
+- `check_aim_pose.py` reads the `AIM_GRIP_PROBE` phase, where the simulated grip
+  pose is tilted 35 degrees away from the aim pose, and requires both the
+  renderer and the viewmodel to stay on the aim orientation. The suite used to
+  keep the grip and aim poses identical, which is why every gun could point up
+  in the headset while Monado stayed green.
 
 ## Coordinate test bed
 

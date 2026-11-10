@@ -225,3 +225,83 @@ rotation runs against the left grip.
 The hand-angle conversion hypothesis was tested and rejected: the legacy
 converter already maps OpenXR pitch/yaw/roll to the GoldSrc axes, which is now
 guarded by an `M1` assertion.
+
+## D-017: The weapon is oriented by the aim pose, not the grip pose
+
+**Status:** accepted 2026-11-09
+
+The OpenXR runtime exposes two poses per controller: the aim pose (the ray the
+player points with) and the grip pose (where the palm sits). The grip pose is
+tilted roughly 30-40 degrees relative to the aim ray on a Touch controller.
+
+The renderer used the grip pose for the viewmodel orientation. The simulated
+Monado harness returned the same values for both poses, so the suite stayed
+green while every firearm pointed upward in the headset. The viewmodel and
+`viewmodel` entity now read `XR_GetPrimaryAimPose()` for orientation and keep
+`XR_GetPrimaryGripTransform()` only for the palm position. The muzzle, the laser
+and the authoritative firing line already followed the aim pose, so barrel and
+shot are now consistent.
+
+The suite gained assertion 49 and `scripts/check_aim_pose.py`: the simulated
+grip pose is deliberately tilted 35 degrees away from the aim pose and both the
+renderer and the viewmodel must stay at the aim orientation. Reverting the
+renderer to the grip pose makes the assertion fail with a 35 degree pitch.
+
+Consequences:
+
+- A change to the viewmodel orientation must keep the aim/grip split; making
+  the simulated poses identical again removes the regression coverage.
+- `vr_test_grip_delta_pitch` exists only for the harness and must stay `0` in
+  shipped configs.
+
+## D-018: The menu quad is anchored in the same reference space as the head
+
+**Status:** accepted 2026-11-09
+
+`XR_AnchorMenuQuad` located the head in `g_xrLocalSpace` (STAGE when the runtime
+supports it) and then created a new `XR_REFERENCE_SPACE_TYPE_LOCAL` space from
+those coordinates. LOCAL and STAGE do not share an origin: LOCAL is relative to
+the initial headset position while STAGE is the centre of the tracked area.
+On the simulated runtime both origins coincide, so the menu landed in front of
+the player and the `M1` menu assertions passed; on Quest the offset could push
+the panel out of view.
+
+The anchor space is now created with `g_xrLocalSpaceType`, the same type used
+for the head pose. The anchor log prints `space_type`, the head position, the
+forward vector and the final quad position so a headset run can be diagnosed
+from one line.
+
+Consequences:
+
+- The pointer raycast still treats the quad as an identity pose inside
+  `g_xrMenuQuadSpace`, so the existing dual-pointer path is unchanged.
+- `M1` assertions 36 and 37 still require the menu button path, the quad
+  submission and a quad facing the player at a 90 degree heading.
+
+## D-019: A viewmodel's baked off-hand owns that slot
+
+**Status:** accepted 2026-11-09
+
+The satchel viewmodel has a baked off-hand and no baked primary hand; the
+charge mesh is skinned to the left arm. The shared hand layer assumed a baked
+off-hand always came with a baked primary, and the post-weapon fallback drew
+the standalone off-hand without checking the baked one. Together those produced
+a hand floating next to the charge when the persistent hand layer was disabled.
+
+Decision:
+
+- `s_viewmodel_offhand_only` marks viewmodels with a baked off-hand and no
+  baked primary (currently the satchel).
+- For those viewmodels the left arm is not collapsed (the charge would vanish
+  with it), the standalone primary hand is not drawn, and the standalone
+  off-hand may still be drawn for the free controller.
+- The post-weapon fallback only draws the standalone off-hand when the
+  viewmodel does not already provide one (or is off-hand-only).
+
+Consequences:
+
+- The satchel now shows the charge plus the baked hand that holds it and no
+  duplicate. The baked hand follows the weapon, not the left controller; rigging
+  the charge to the real off-hand would need the modelling work that is still
+  paused.
+- `vr_hide_arms 2` still replaces baked hands with the debug standalone path.

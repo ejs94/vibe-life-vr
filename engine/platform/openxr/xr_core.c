@@ -25,6 +25,11 @@ XrSession g_xrSession = XR_NULL_HANDLE;
 XrSpace g_xrLocalSpace = XR_NULL_HANDLE;
 XrSpace g_xrViewSpace = XR_NULL_HANDLE;
 XrSpace g_xrMenuQuadSpace = XR_NULL_HANDLE;
+// Reference space type backing g_xrLocalSpace (STAGE when available). The menu
+// anchor must be created with the same type, otherwise STAGE-relative head
+// coordinates get reinterpreted as LOCAL-relative ones and the panel lands
+// away from the player on runtimes where those origins differ (Quest).
+XrReferenceSpaceType g_xrLocalSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
 XrSessionState g_xrSessionState = XR_SESSION_STATE_UNKNOWN;
 qboolean g_xrSessionRunning = false;
 
@@ -53,6 +58,7 @@ EXPORT convar_t *vr_haptics_intensity = NULL;
 EXPORT convar_t *vr_pointer_hud = NULL;
 EXPORT convar_t *vr_test_hands = NULL;
 EXPORT convar_t *vr_test_hand_pitch = NULL;
+EXPORT convar_t *vr_test_grip_delta_pitch = NULL;
 EXPORT convar_t *vr_test_hand_yaw = NULL;
 EXPORT convar_t *vr_test_hand_roll = NULL;
 EXPORT convar_t *vr_test_hand_offset = NULL;
@@ -349,6 +355,7 @@ void XR_RegisterCVars( void )
     vr_test_finger_curl = Cvar_Get("vr_test_finger_curl", "0", 0, "Simulate finger curling axes for headless regression testing");
     vr_test_hands = Cvar_Get("vr_test_hands", "0", 0, "Simulate 6DoF hand pose when physical controllers unavailable");
     vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
+    vr_test_grip_delta_pitch = Cvar_Get("vr_test_grip_delta_pitch", "0", 0, "Offset the simulated grip pose pitch away from the aim pose (regression probe)");
     vr_test_hand_yaw = Cvar_Get("vr_test_hand_yaw", "0", 0, "Simulated hand aim yaw degrees");
     vr_test_hand_roll = Cvar_Get("vr_test_hand_roll", "0", 0, "Simulated hand roll degrees");
     vr_test_hand_offset = Cvar_Get("vr_test_hand_offset", "0 0 0", 0, "Simulated primary hand translation in meters relative to the controller rest pose: forward left up");
@@ -701,6 +708,7 @@ qboolean XR_CreateSession( void )
         XrResult res = xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrLocalSpace);
         if (XR_SUCCEEDED(res))
         {
+            g_xrLocalSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
             Con_Printf("OpenXR: Stage Reference Space (Roomscale/Guardian) created successfully!\n");
         }
         else
@@ -714,8 +722,10 @@ qboolean XR_CreateSession( void )
     {
         spaceInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
         OXR_CHECK(xrCreateReferenceSpace(g_xrSession, &spaceInfo, &g_xrLocalSpace), "xrCreateReferenceSpace");
+        g_xrLocalSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
         Con_Printf("OpenXR: Local Reference Space created successfully!\n");
     }
+    Con_Printf("OpenXR: menu quad anchor uses reference space type %d\n", (int)g_xrLocalSpaceType);
 
     // Issue #2: Create VIEW reference space (Headset-relative space).
     // An identity pose in VIEW space represents looking directly forward from the headset display/eyes.

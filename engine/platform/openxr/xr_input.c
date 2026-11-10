@@ -1392,6 +1392,14 @@ static qboolean XR_GetGripPoseTransform( int hand, vec3_t out_origin, vec3_t out
             valid = XR_GetRightHandTransform( out_origin, out_angles );
         else
             valid = XR_GetLeftHandTransform( out_origin, out_angles );
+
+        // Regression hook: tilt the grip pose away from the aim pose so the
+        // suite can prove the weapon reads the aim orientation. A real
+        // controller grip is tilted relative to the aim ray; the simulated
+        // harness used to make both identical, which hid that bug.
+        if( valid && out_angles && vr_test_grip_delta_pitch && vr_test_grip_delta_pitch->value != 0.0f )
+            out_angles[0] += vr_test_grip_delta_pitch->value;
+
         s_rawHandPose = prevRaw;
         return valid;
     }
