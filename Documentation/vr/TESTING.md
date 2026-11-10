@@ -292,3 +292,21 @@ A pass needs the command exit code, the expected assertions, and the required
 artifacts. A screenshot of the Monado compositor window is not engine evidence.
 A black `screencap_os.png` is expected in VR. A Quest pass needs a non-black
 engine eye dump and no native crash.
+
+## Two-hand aim evidence
+
+```sh
+./scripts/test_aim_shot_twohand.sh
+```
+
+Runs one engine session with two segments. The control segment leaves the
+harness hand transform unmodified; the stress segment applies
+`vr_test_hand_transform_yaw 20`, which emulates the yaw that
+`XR_ApplyTwoHandStabilizer` used to add. The firing line must report the aim
+angles in both segments. Evidence: `out/qa/V1/twohand_<timestamp>/` with
+`engine.log` and `twohand_aim.txt`.
+
+The check fails on the pre-2026-11-10 behaviour: the stress segment reports a
+20 degree yaw and the script prints `TWO-HAND AIM CHECK FAILED`. It is a
+diagnostic, not a gate.
+

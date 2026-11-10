@@ -59,6 +59,7 @@ EXPORT convar_t *vr_pointer_hud = NULL;
 EXPORT convar_t *vr_test_hands = NULL;
 EXPORT convar_t *vr_test_hand_pitch = NULL;
 EXPORT convar_t *vr_test_grip_delta_pitch = NULL;
+EXPORT convar_t *vr_test_hand_transform_yaw = NULL;
 EXPORT convar_t *vr_test_hand_yaw = NULL;
 EXPORT convar_t *vr_test_hand_roll = NULL;
 EXPORT convar_t *vr_test_hand_offset = NULL;
@@ -356,6 +357,7 @@ void XR_RegisterCVars( void )
     vr_test_hands = Cvar_Get("vr_test_hands", "0", 0, "Simulate 6DoF hand pose when physical controllers unavailable");
     vr_test_hand_pitch = Cvar_Get("vr_test_hand_pitch", "0", 0, "Simulated hand aim pitch degrees");
     vr_test_grip_delta_pitch = Cvar_Get("vr_test_grip_delta_pitch", "0", 0, "Offset the simulated grip pose pitch away from the aim pose (regression probe)");
+    vr_test_hand_transform_yaw = Cvar_Get("vr_test_hand_transform_yaw", "0", 0, "Harness only: emulate a two-hand stabilizer yaw offset on the hand transform; the firing line must ignore it");
     vr_test_hand_yaw = Cvar_Get("vr_test_hand_yaw", "0", 0, "Simulated hand aim yaw degrees");
     vr_test_hand_roll = Cvar_Get("vr_test_hand_roll", "0", 0, "Simulated hand roll degrees");
     vr_test_hand_offset = Cvar_Get("vr_test_hand_offset", "0 0 0", 0, "Simulated primary hand translation in meters relative to the controller rest pose: forward left up");

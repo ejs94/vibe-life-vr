@@ -1883,6 +1883,10 @@ qboolean XR_GetRightHandTransform( vec3_t out_origin, vec3_t out_angles )
                     out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
                 if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
                     out_angles[2] += vr_weapon_rolladjust->value;
+                // Harness hook: emulate the yaw a two-hand stabilizer would add
+                // to the hand transform. The muzzle path must ignore it.
+                if (vr_test_hand_transform_yaw && vr_test_hand_transform_yaw->value != 0.0f)
+                    out_angles[1] = anglemod(out_angles[1] + vr_test_hand_transform_yaw->value);
             }
         }
 
@@ -1986,6 +1990,10 @@ qboolean XR_GetLeftHandTransform( vec3_t out_origin, vec3_t out_angles )
                     out_angles[1] = anglemod(out_angles[1] + vr_weapon_yawadjust->value);
                 if (vr_weapon_rolladjust && vr_weapon_rolladjust->value != 0.0f)
                     out_angles[2] += vr_weapon_rolladjust->value;
+                // Harness hook: emulate the yaw a two-hand stabilizer would add
+                // to the hand transform. The muzzle path must ignore it.
+                if (vr_test_hand_transform_yaw && vr_test_hand_transform_yaw->value != 0.0f)
+                    out_angles[1] = anglemod(out_angles[1] + vr_test_hand_transform_yaw->value);
             }
         }
 

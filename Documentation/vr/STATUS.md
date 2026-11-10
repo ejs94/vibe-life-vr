@@ -137,7 +137,8 @@ blends the angle toward the off-hand grip line, while the renderer reads
 (`engine/platform/openxr/xr_input.c`); `aim_shot_evidence.sh`, `M1`, `R1` and
 `W0` pass. Remaining: the harness forces zero angles and overwrites the logged
 start, so it cannot engage the stabilizer; validate with a real two-hand grip on
-the headset.
+the headset. `scripts/test_aim_shot_twohand.sh` reproduces the old 20 degree
+divergence and now passes (control and stress both 0.00 degrees).
 
 ## Evidence
 
