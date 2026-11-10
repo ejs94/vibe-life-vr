@@ -1954,24 +1954,34 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 
 	matrix3x4 *bt = g_studio.bonestransform;
 
-	// Muzzle bone and barrel axis.
-	int muzzle = -1;
-	for( int i = 0; i < m_pStudioHeader->numbones && muzzle < 0; i++ )
+	// Muzzle bones and the model-authored bore axis.
+	int muzzle = -1, muzzle2 = -1;
+	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
 	{
-		if( !Q_strcmp( pbones[i].name, "muzzle_pos" ))
+		if( muzzle < 0 && !Q_strcmp( pbones[i].name, "muzzle_pos" ))
 			muzzle = i;
+		else if( muzzle2 < 0 && !Q_strcmp( pbones[i].name, "muzzle_pos2" ))
+			muzzle2 = i;
 	}
 	if( muzzle < 0 )
 		return;
 
-	// Barrel axis from the grip to the muzzle bone. This matches the visible
-	// bore for every gun in the shipped set; the muzzle bone of the shotgun
-	// and crossbow sits slightly above the bore, which is a known cosmetic
-	// residual rather than a pose error.
+	// The model defines the bore as muzzle_pos -> muzzle_pos2, the same pair
+	// the reference mod uses for ballistics. Fall back to the grip only when
+	// the model has no muzzle_pos2.
 	vec3_t barrel;
-	barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
-	barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
-	barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+	if( muzzle2 >= 0 )
+	{
+		barrel[0] = bt[muzzle2][0][3] - bt[muzzle][0][3];
+		barrel[1] = bt[muzzle2][1][3] - bt[muzzle][1][3];
+		barrel[2] = bt[muzzle2][2][3] - bt[muzzle][2][3];
+	}
+	else
+	{
+		barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
+		barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
+		barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+	}
 	{
 		float barrel_len = VectorLength( barrel );
 		if( barrel_len < 1.0f )

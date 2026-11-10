@@ -11,7 +11,7 @@ available and must not be broken.
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | **SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
-| Aim direction | **FIXED 2026-11-10** — firing line reads the aim pose; two-hand HIL check pending |
+| Aim direction | **FIXED 2026-11-10** — model bore anchors drive renderer and firing line |
 | HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the
@@ -67,80 +67,35 @@ scientist hands, which do not match this mod. All sculpted trigger, guard and
 magazine-release work was abandoned on 2026-11-09 and its evidence removed;
 no cosmetic variant is adopted.
 
-## Grip alignment for native models
+## Model bore axis and firing line
 
-The imported Half-Life: VR viewmodels are authored around that mod's own hand
-bone, and their flat-screen idle pose tilts the whole model about 46 degrees
-down. The translation anchor seated the grip on the palm but kept the tilt, so
-the barrel did not follow the hand.
+The model owns the bore. `muzzle_pos` (attachment 0) and `muzzle_pos2`
+(attachment 1) define the axis; the reference mod uses the same pair for
+ballistics ([`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md)).
 
-Fix: the renderer rotates the **native** viewmodel around the palm after seating
-it, so the barrel (`muzzle_pos - grip bone`) points along the controller grip
-pose (`ref/gl_vr/gl_studio.c`, `R_VR_RotateViewmodelToPalm`). It is gated by
-`vr_anchor_rotation` (default 1) and skipped for weapons whose profile has no
-muzzle (`muzzle_attachment -1`: melee and toss). The model is re-seated after
-the rotation.
+- The renderer rotates the native viewmodel around the palm so that
+  `muzzle_pos -> muzzle_pos2` follows the aim pose
+  (`ref/gl_vr/gl_studio.c`, `R_VR_RotateViewmodelToPalm`). Models without
+  `muzzle_pos2` fall back to `muzzle_pos - grip`; melee and toss weapons keep
+  their authored pose.
+- `XR_GetPrimaryHandMuzzleTransform` reads the same world-space pair from
+  `clgame.viewent.attachment[0..1]` and fires along it. `pitch_adjust` is a
+  fallback for models without the anchors, never a tuning knob for a model whose
+  anchors are wrong.
+- The aim pose, not the grip pose, orients the viewmodel. `M1` assertion 49
+  deliberately tilts the simulated grip by 35 degrees and fails if the renderer
+  follows it.
+- Do not re-tune per-weapon calibration to hide a bad anchor: fix the asset or
+  add a per-model override.
 
-Measured after the fix, with no per-weapon data:
+Measured with `scripts/aim_shot_evidence.sh` against the model bore:
 
-| Check | Result |
-|---|---|
-| barrel vs hand, 9 gun models | 0.0 deg |
-| shot start vs muzzle | 0.05-0.07 units |
-| shot vs barrel | 0.01-0.18 deg (shotgun spread excluded) |
-
-The earlier per-weapon `grip_rot` values were removed; they compensated one
-pose and drifted at others. The hand-angle conversion was also checked: the
-legacy Euler conversion maps OpenXR pitch/yaw/roll to the GoldSrc axes
-correctly, so it was not the cause (see `M1` assertion 48 and
-`scripts/check_hand_conversion.py`).
-
-### Left-handed hold
-
-`vr_lefthanded 1` now mirrors the whole viewmodel through the same renderer
-path as `cl_righthand`, so the baked right hand becomes a left hand, and the
-barrel rotation runs against the left grip pose.
-
-## Aim direction (measured, rejected)
-
-Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
-model-derived alternatives were measured on 2026-11-06 and rejected:
-
-| Candidate axis | Angle from the hand forward |
+| Weapon | Angle from bore |
 |---|---:|
-| `muzzle_pos2 - muzzle_pos` | 66.5 deg |
-| muzzle world position minus the weapon pose origin | 42.0 deg |
-
-Neither is a barrel axis in the hand frame, so using them would have thrown the
-shot away from where the player is aiming. The measurement was taken with
-`vr_test_hand_pitch -5 -10` on `models/native/v_9mmhandgun.mdl` and a `+attack`
-event, which is the only path that calls `XR_GetPrimaryHandMuzzleTransform`.
-
-The 42-degree pose delta also means the native models do not yet sit in the palm
-the way the legacy offsets expect: the profile `grip_offset` values were tuned
-for the MMOD meshes. Re-check the model-derived aim **after** the per-weapon grip
-pose is verified against a capture; the axis is only meaningful once the weapon
-visually points where the hand points.
-
-The code change was reverted. Do not reintroduce it without that capture.
-
-### Aim pose contract (2026-11-09)
-
-The viewmodel and the `viewmodel` entity are oriented by `XR_GetPrimaryAimPose()`
-(the ray the player points with). `XR_GetPrimaryGripTransform()` supplies only
-the palm position. The muzzle, the laser and the authoritative firing line also
-read the aim pose, so the visible barrel and the shot agree. Do not feed the
-grip orientation back into `XR_GetWeaponPose`; `M1` assertion 49 deliberately
-tilts the simulated grip pose away from the aim pose and fails if the renderer
-does.
-
-Aim-related cvars:
-
-| Cvar | Default | Meaning |
-|---|---|---|
-| `vr_lasersight` | `1` | Draw the 3D laser from the aim pose. |
-| `vr_crosshair` | `0` | Draw the flat-screen 2D crosshair in VR. Off because it is a head-locked screen sprite that shows in both eyes and follows the head. |
-| `vr_test_grip_delta_pitch` | `0` | Harness only: tilt the simulated grip pose away from the aim pose. Keep `0` in shipped configs. |
+| Glock | 0.00 deg |
+| .357 | 0.19 deg |
+| Gauss | 0.00 deg |
+| Shotgun | 1.44 deg (pellet spread) |
 
 ## Content families
 

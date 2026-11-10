@@ -8,9 +8,10 @@ Per weapon segment (marker `SHOT_PROBE weapon=...`) the engine logs:
   [VR_ANCHOR] bone=... delta=(...) palm=(x y z)
 
 The shot must start at the muzzle attachment (not at the eye and not at the
-hand), the palm->muzzle line is the visible barrel axis, and the shot direction
-must follow that axis. A sideways or downward start is what makes a VR shot
-look crooked even when the viewmodel is aligned.
+hand), the muzzle_pos -> muzzle_pos2 line is the visible barrel axis, and the
+shot direction must follow that axis. Palm -> muzzle is only the fallback for
+models without the second bore anchor. A sideways or downward start is what
+makes a VR shot look crooked even when the viewmodel is aligned.
 
 Usage:
     python3 scripts/check_shot_origin.py <engine.log>
@@ -28,7 +29,9 @@ MARK = re.compile(r"SHOT_PROBE weapon=(\w+)")
 IMPACT = re.compile(
     r"\[VR_IMPACT_DBG\]\s+Shot #\d+\s+start=\(([^)]+)\)\s+hit at \(([^)]+)\)"
 )
-MUZZLE = re.compile(r"\[VR_GRIP\]\s+src=muzzle\s+model=(\S+).*?world=\(([^)]+)\)")
+MUZZLE = re.compile(
+    r"\[VR_GRIP\]\s+src=muzzle\s+model=(\S+).*?world=\(([^)]+)\).*?bore2=\(([^)]+)\)"
+)
 ANCHOR = re.compile(r"\[VR_ANCHOR\]\s+bone=(.+?)\s+delta=\(([^)]+)\)\s+palm=\(([^)]+)\)")
 
 # Per-weapon tolerances. The shotgun fires pellets with spread, so its first
@@ -79,7 +82,8 @@ def main() -> int:
         marker = MARK.search(line)
         if marker:
             current = marker.group(1)
-            segments.setdefault(current, {"start": None, "hit": None, "muzzle": None, "palm": None})
+            segments.setdefault(current, {"start": None, "hit": None, "muzzle": None,
+                                          "palm": None, "bore2": None})
             palm = None
             continue
         if current is None:
@@ -94,6 +98,7 @@ def main() -> int:
         muzzle = MUZZLE.search(line)
         if muzzle and muzzle.group(2):
             segments[current]["muzzle"] = vec(muzzle.group(2))
+            segments[current]["bore2"] = vec(muzzle.group(3))
             continue
 
         impact = IMPACT.search(line)
@@ -111,14 +116,23 @@ def main() -> int:
             failures.append(f"{weapon}: missing telemetry (start/hit/muzzle/palm)")
             continue
 
-        barrel = norm(sub(muzzle_w, palm_w))
+        # The visible bore is the model-authored muzzle_pos -> muzzle_pos2 axis
+        # when the model exposes it; fall back to palm -> muzzle for models
+        # without the second anchor.
+        bore2 = data["bore2"]
+        if bore2 and any(abs(value) > 1e-6 for value in bore2):
+            barrel = norm(sub(bore2, muzzle_w))
+            axis_origin = muzzle_w
+        else:
+            barrel = norm(sub(muzzle_w, palm_w))
+            axis_origin = palm_w
         shot = norm(sub(hit, start))
         cosine = max(-1.0, min(1.0, dot(barrel, shot)))
         angle = math.degrees(math.acos(cosine))
         start_error = length(sub(start, muzzle_w))
 
         # Perpendicular distance from the shot start to the barrel line.
-        delta = sub(start, palm_w)
+        delta = sub(start, axis_origin)
         along = dot(delta, barrel)
         offset = length(sub(delta, tuple(barrel[i] * along for i in range(3))))
 

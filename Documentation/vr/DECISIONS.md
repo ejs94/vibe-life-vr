@@ -133,80 +133,15 @@ indices, the local/world coordinate bug, the overlay trap) are preserved in
 [`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) and
 [`AGENTS.md`](../../AGENTS.md).
 
-## D-015: Native weapons use a measured local grip rotation
+## Retired: grip/aim calibration decisions (D-015, D-016, D-017)
 
-**Status:** accepted 2026-11-07
+**Status:** superseded 2026-11-10 by D-024
 
-The imported Half-Life: VR viewmodels were authored for that mod's controller
-pose. Reusing the MMOD `grip_offset`/`pitch_adjust` left every weapon pointing
-about 46 degrees down and 8 degrees left of the hand: the barrel did not follow
-the aim, even though the model itself was correct.
-
-Decision:
-
-- Each native weapon profile carries a `grip_rot` measured from its own barrel
-  (`muzzle_pos` bone minus the palm/grip bone), applied as a true local rotation
-  by `XR_GetWeaponPose`. Measured residuals after the fix are 0.0-0.6 degrees.
-- `pitch_adjust` is `0` for the nine gun profiles. The bullet now follows the
-  barrel the player sees instead of compensating for a misoriented model.
-- Toss and melee weapons keep their old adjustment; their `muzzle_pos` bone is
-  not a barrel axis.
-- The authoritative firing line is unchanged in code: this is data, and `M1`
-  test 18 plus `R1` prove the ballistics and the VR pose did not regress.
-
-Consequences:
-
-- A model or pose-math change requires re-measuring `grip_rot`. The procedure is
-  documented in [`WEAPONS.md`](WEAPONS.md#grip-alignment-for-native-models).
-- The visual sweep (`scripts/weapon_visual_sweep.sh`) is the review artefact;
-  the numeric residual only tells you the measurement converged.
-
-## D-016: Barrel alignment is a renderer rotation, not per-weapon data
-
-**Status:** accepted 2026-11-07
-
-D-015 stored a measured `grip_rot` per weapon. That fixed one pose and drifted
-at others, because the tilt comes from the flat-screen idle animation, not from
-a constant model offset. The renderer now rotates native viewmodels around the
-palm so `muzzle_pos - grip bone` follows the controller grip pose
-(`R_VR_RotateViewmodelToPalm`), and the per-weapon `grip_rot` values were
-removed. The same rotation is skipped for weapons without a muzzle.
-
-Left-handed mode mirrors the whole viewmodel through the existing
-`cl_righthand` flip path, so the baked hand is a left hand and the barrel
-rotation runs against the left grip.
-
-The hand-angle conversion hypothesis was tested and rejected: the legacy
-converter already maps OpenXR pitch/yaw/roll to the GoldSrc axes, which is now
-guarded by an `M1` assertion.
-
-## D-017: The weapon is oriented by the aim pose, not the grip pose
-
-**Status:** accepted 2026-11-09
-
-The OpenXR runtime exposes two poses per controller: the aim pose (the ray the
-player points with) and the grip pose (where the palm sits). The grip pose is
-tilted roughly 30-40 degrees relative to the aim ray on a Touch controller.
-
-The renderer used the grip pose for the viewmodel orientation. The simulated
-Monado harness returned the same values for both poses, so the suite stayed
-green while every firearm pointed upward in the headset. The viewmodel and
-`viewmodel` entity now read `XR_GetPrimaryAimPose()` for orientation and keep
-`XR_GetPrimaryGripTransform()` only for the palm position. The muzzle, the laser
-and the authoritative firing line already followed the aim pose, so barrel and
-shot are now consistent.
-
-The suite gained assertion 49 and `scripts/check_aim_pose.py`: the simulated
-grip pose is deliberately tilted 35 degrees away from the aim pose and both the
-renderer and the viewmodel must stay at the aim orientation. Reverting the
-renderer to the grip pose makes the assertion fail with a 35 degree pitch.
-
-Consequences:
-
-- A change to the viewmodel orientation must keep the aim/grip split; making
-  the simulated poses identical again removes the regression coverage.
-- `vr_test_grip_delta_pitch` exists only for the harness and must stay `0` in
-  shipped configs.
+These entries tuned the viewmodel with per-weapon `grip_rot`, a renderer
+rotation, and a grip-vs-aim pose switch. They fixed the visual tilt but left
+two sources of truth: the renderer aligned a grip->muzzle axis while the bullet
+used hand angles. The bore anchors now define both; the long bodies were
+removed during the 2026-11-10 cleanup.
 
 ## D-018: The menu quad is anchored in the same reference space as the head
 
@@ -335,4 +270,37 @@ Consequences:
   is still required before claiming the visual fix.
 - A model-anchor direction (`muzzle_pos2 - muzzle_pos`) is still rejected until
   the renderer is proven to align the visible bore to that same anchor.
+
+## D-024: Model bore anchors are the single source of truth
+
+**Status:** accepted 2026-11-10
+
+The renderer and the firing line read different axes. `R_VR_RotateViewmodelToPalm`
+aligned `muzzle_pos - grip bone` to the aim pose, while the muzzle path fired
+along hand angles plus per-weapon `pitch_adjust`. The visible barrel and the
+bullet agreed only when the rotation matched the numbers; models whose
+`muzzle_pos` is not the visual bore (Hivehand, RPG) tilted.
+
+Decision:
+
+- The model-owned pair `muzzle_pos` -> `muzzle_pos2` is the bore axis. The
+  reference mod uses attachments 0 and 1 for ballistics; the project now does
+  the same.
+- The renderer rotates the native viewmodel so that pair follows the aim pose
+  (`ref/gl_vr/gl_studio.c`, `R_VR_RotateViewmodelToPalm`). Models without
+  `muzzle_pos2` fall back to `muzzle_pos - grip`.
+- `XR_GetPrimaryHandMuzzleTransform` reads the same world-space pair from
+  `clgame.viewent.attachment[0..1]` and derives the direction with
+  `VectorAngles`. `pitch_adjust` remains only as a fallback when the anchors are
+  absent.
+- Melee and toss weapons skip the rotation and keep their authored pose.
+
+Consequences:
+
+- `scripts/aim_shot_evidence.sh` measures the shot against the model bore:
+  Glock 0.00, .357 0.19, Gauss 0.00, shotgun 1.44 degrees (pellet spread).
+- `M1` 49/49, `R1` 19/19 and `W0` pass.
+- The two-hand stabilizer no longer affects the firing direction (D-023).
+- Do not re-tune `pitch_adjust` to hide a bad anchor: fix the asset or add a
+  per-model anchor override.
 

@@ -31,7 +31,7 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 GRIP_RE = re.compile(
     r"\[VR_GRIP\]\s+src=(\w+)\s+model=(\S*)\s+origin=\(([^)]+)\)"
-    r"(?:\s+world=\(([^)]+)\))?\s+angles=\(([^)]+)\)"
+    r"(?:\s+world=\(([^)]+)\))?(?:\s+bore2=\([^)]+\))?\s+angles=\(([^)]+)\)"
 )
 
 HAND_RE = re.compile(

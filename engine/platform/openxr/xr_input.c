@@ -1663,6 +1663,23 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
     local_angles[1] = anglemod( local_angles[1] + w_yaw );
     local_angles[2] += w_roll;
 
+    // Single source of truth: when the model exposes both bore anchors, the
+    // fired direction is the same world-space axis the renderer aligned
+    // (muzzle_pos -> muzzle_pos2). This removes the per-weapon hand
+    // calibration for every gun that carries the anchors.
+    if( clgame.viewent.model &&
+        !VectorIsNull( clgame.viewent.attachment[0] ) &&
+        !VectorIsNull( clgame.viewent.attachment[1] ) )
+    {
+        vec3_t bore;
+        VectorSubtract( clgame.viewent.attachment[1], clgame.viewent.attachment[0], bore );
+        if( VectorLength( bore ) > 1.0f )
+        {
+            VectorNormalize( bore );
+            VectorAngles( bore, local_angles );
+        }
+    }
+
     if( out_aim_angles )
     {
         VectorCopy( local_angles, out_aim_angles );
@@ -1713,9 +1730,10 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
             out_muzzle_offset[2] = (pose_origin[2] - refState.vieworg[2]) + forward[2] * off_fwd + right[2] * off_rt + up[2] * off_up;
         }
 
-        Con_DPrintf( "[VR_GRIP] src=muzzle model=%s origin=(%.2f %.2f %.2f) world=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d\n",
+        Con_DPrintf( "[VR_GRIP] src=muzzle model=%s origin=(%.2f %.2f %.2f) world=(%.2f %.2f %.2f) bore2=(%.2f %.2f %.2f) angles=(%.2f %.2f %.2f) lefthanded=%d\n",
             wpn, out_muzzle_offset[0], out_muzzle_offset[1], out_muzzle_offset[2],
             out_muzzle_offset[0] + refState.vieworg[0], out_muzzle_offset[1] + refState.vieworg[1], out_muzzle_offset[2] + refState.vieworg[2],
+            clgame.viewent.attachment[1][0], clgame.viewent.attachment[1][1], clgame.viewent.attachment[1][2],
             local_angles[0], local_angles[1], local_angles[2],
             (vr_lefthanded && vr_lefthanded->value > 0.0f) ? 1 : 0 );
     }
