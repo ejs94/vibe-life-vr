@@ -45,6 +45,12 @@ static char         s_handModelCacheName[2][64] = { {0}, {0} };
 static qboolean    s_viewmodel_has_offhand = false;
 static qboolean    s_viewmodel_has_primary_hand = false;
 static qboolean    s_twohanded_active = false;
+// True when the viewmodel has only a baked off-hand and no baked primary hand.
+// The satchel is built that way: the off-hand art holds the charge and the
+// charge mesh is skinned to that arm. Collapsing the arm would delete the
+// weapon, and adding the standalone primary hand would show a second hand
+// floating on the charge.
+static qboolean    s_viewmodel_offhand_only = false;
 
 // Semantic hand bone slots. The baked viewmodel and the standalone hand use
 // different prefixes (Bip01, Xbow biped, Bone...) but the same finger layout.
@@ -2345,14 +2351,20 @@ static void R_StudioSetupBones( cl_entity_t *e )
 
 		s_twohanded_active = R_VR_OffHandAttachedToWeapon();
 
+		// Off-hand-only viewmodel (satchel): the baked hand holds the object.
+		// Keep that hand, keep the arm (the charge is skinned to it), and skip
+		// the standalone primary hand that would otherwise float next to it.
+		s_viewmodel_offhand_only = ( s_viewmodel_has_offhand && !s_viewmodel_has_primary_hand );
+
 		static model_t *s_lastHandStateModel = NULL;
 		if( s_lastHandStateModel != e->model )
 		{
 			s_lastHandStateModel = e->model;
-			gEngfuncs.Con_DPrintf( "[VR_HAND_STATE] model=%s baked_primary=%d baked_offhand=%d\n",
+			gEngfuncs.Con_DPrintf( "[VR_HAND_STATE] model=%s baked_primary=%d baked_offhand=%d offhand_only=%d\n",
 				( e->model && e->model->name[0] ) ? e->model->name : "(null)",
 				s_viewmodel_has_primary_hand ? 1 : 0,
-				s_viewmodel_has_offhand ? 1 : 0 );
+				s_viewmodel_has_offhand ? 1 : 0,
+				s_viewmodel_offhand_only ? 1 : 0 );
 		}
 	}
 #endif
@@ -2363,7 +2375,8 @@ static void R_StudioSetupBones( cl_entity_t *e )
 
 		// When off-hand presence is enabled and player is not two-handed gripping,
 		// collapse any secondary arm/hand bones on the viewmodel so it does not render a duplicate 3rd hand.
-		if( is_viewent && XR_IsActive() && offhand_enabled && !s_twohanded_active )
+		if( is_viewent && XR_IsActive() && offhand_enabled && !s_twohanded_active &&
+		    !s_viewmodel_offhand_only )
 		{
 			qboolean is_sec_arm = false;
 			int p = i;
@@ -5527,9 +5540,12 @@ static qboolean R_VR_DrawHandsLayer( void )
 	// weapon. Only add the offhand when the viewmodel has no baked offhand.
 	if( weapon_drawn && !weapon_hides_hand )
 	{
-		if( !s_viewmodel_has_primary_hand )
+		// Off-hand-only art (satchel) already draws the hand that holds the
+		// object, so the standalone primary would show a second hand on the
+		// weapon. The off-hand still belongs to the free controller.
+		if( !s_viewmodel_has_primary_hand && !s_viewmodel_offhand_only )
 			R_DrawPrimaryHand();
-		if( !s_viewmodel_has_offhand )
+		if( !s_viewmodel_has_offhand || s_viewmodel_offhand_only )
 			R_DrawOffHand();
 		return true;
 	}
@@ -6158,7 +6174,12 @@ void R_DrawViewModel( void )
 	// 1) the persistent hand layer did not already draw it
 	// 2) vr_offhand_render is explicitly enabled (> 0)
 	// 3) Player is not currently gripping the weapon two-handed
-	if( !hands_drawn && XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f && !s_twohanded_active )
+	// 4) The viewmodel does not already provide the off-hand. Without this
+	//    guard the cooked hand and the standalone hand both rendered, which is
+	//    the floating second hand seen on the satchel when the persistent layer
+	//    was disabled.
+	if( !hands_drawn && XR_IsActive() && vr_offhand_render && vr_offhand_render->value > 0.0f &&
+	    !s_twohanded_active && ( !s_viewmodel_has_offhand || s_viewmodel_offhand_only ))
 	{
 		R_DrawOffHand();
 	}
