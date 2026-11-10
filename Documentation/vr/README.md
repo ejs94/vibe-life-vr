@@ -21,7 +21,6 @@ to do next.
 | [`reference/MODDER_GUIDE.md`](reference/MODDER_GUIDE.md) | You are integrating a mod or asset pack |
 | [`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) | You need design input from the two GoldSrc VR mods under `xash3d-vr-ports/` |
 | [`reference/BOX3D.md`](reference/BOX3D.md) | You are evaluating or integrating the Box3D physics dependency |
-| [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md) | You are resuming the paused Glock guard/trigger modelling work |
 
 ## Architecture in one screen
 
@@ -40,10 +39,10 @@ The flat `ref_gl` renderer is not the VR path. The VR path is `ref_gl_vr`.
 
 ## Current baseline
 
-- Monado unit suite: 44 assertions.
+- Monado unit suite: 49 assertions.
 - Regression battery: 19 assertions.
 - Evidence root: `out/qa/`.
-- Quest hardware validation: maintainer decision, pending by default.
+- Quest hardware validation: `Q1` passed 2026-11-07; a fresh run is the maintainer's decision.
 
 Exact commands and pass rules live in [`GATES.md`](GATES.md) and
 [`TESTING.md`](TESTING.md). Do not duplicate gate commands in other documents.

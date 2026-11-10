@@ -408,7 +408,7 @@ Ordered by expected value per unit of work. Sizes are rough.
 2. Does a single-eye mode actually halve the frame cost in `ref/gl_vr`, or is
    the second pass still submitted?
 3. Do our current viewmodels have usable attachment slots, or does the native
-   route have to author them as part of W2?
+   route need a new attachment contract?
 4. How much of the settings schema is worth porting before the weapon epic
    unfreezes?
 

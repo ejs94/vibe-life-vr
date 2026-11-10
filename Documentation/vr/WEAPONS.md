@@ -9,9 +9,9 @@ available and must not be broken.
 |---|---|
 | W0 native route + legacy fallback | PASS |
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
-| Native Glock mesh | **W2 SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
+| Native Glock mesh | **SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
-| Aim direction from `muzzle_pos2` | not started |
+| Aim direction from `muzzle_pos2` | **BLOCKED** — see the shot-vector handoff in [`STATUS.md`](STATUS.md#handoff-why-the-shot-vector-is-wrong) |
 | HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the
@@ -63,10 +63,9 @@ project's `A1` audit at the same settings:
 | Half-Life: VR SD (shipped) | 485 | — | — | — | adopted unmodified |
 
 The Blue Shift VR derivative is cleaner than the MMOD decompile but ships
-scientist hands, which do not match this mod. The sculpted trigger, guard
-opening and magazine-release work done in the `out/w2_work/bsvr_glock/` sessions
-is not part of the shipped asset; its measurements and the brief for a future
-attempt are recorded in [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
+scientist hands, which do not match this mod. All sculpted trigger, guard and
+magazine-release work was abandoned on 2026-11-09 and its evidence removed;
+no cosmetic variant is adopted.
 
 ## Grip alignment for native models
 
@@ -100,10 +99,9 @@ correctly, so it was not the cause (see `M1` assertion 48 and
 
 `vr_lefthanded 1` now mirrors the whole viewmodel through the same renderer
 path as `cl_righthand`, so the baked right hand becomes a left hand, and the
-barrel rotation runs against the left grip pose. The A/B capture in
-`out/qa/W2/hand_ab/` shows the two modes side by side.
+barrel rotation runs against the left grip pose.
 
-## Aim direction (measured, rejected)## Aim direction (measured, rejected)
+## Aim direction (measured, rejected)
 
 Aim direction is still the hand pose plus the per-weapon `pitch_adjust`. Two
 model-derived alternatives were measured on 2026-11-06 and rejected:
@@ -227,7 +225,8 @@ top before any modeling starts.
 - Use landmark markers and orthographic views.
 - If the muzzle marker is not on the barrel bore, W1 fails.
 - If the trigger marker is not on the trigger blade, W1 fails.
-- W1 is approved; native mesh, UV, skin and animation work may start.
+- W1 is approved. Cosmetic mesh work is not authorised; see
+  [`STATUS.md`](STATUS.md) for the current blockers.
 
 ## Rig and animation
 
@@ -241,7 +240,8 @@ top before any modeling starts.
   the physical reload drives the staged interaction.
 - Do not add bones to a viewmodel. Append attachments at the end of the table.
 - The six interaction sockets (primary grip, offhand grip, magwell, ejection,
-  slide rack, trigger contact) remain a modelling task and are blocked.
+  slide rack, trigger contact) remain a later task. They are not a prerequisite
+  for the shot-vector or hand-skeleton work.
 
 ## Order
 

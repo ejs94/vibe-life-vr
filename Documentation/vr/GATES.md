@@ -54,7 +54,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 |---|---|---|---|---|---|---|
 | `D1` | Docs | active | `python3 scripts/check_docs.py` | `out/qa/D1/latest` | monado | `gate-runner` |
 | `H1` | Hygiene | active | `python3 scripts/check_evidence_hygiene.py` | `out/qa/H1/latest` | monado | `gate-runner` |
-| `A1` | Assets | active | `python3 scripts/audit_holes.py --model out/mmod_import/decompiled/v_9mmhandgun --out out/qa/A1/latest` | `out/qa/A1/latest` | monado | `gate-runner` |
+| `A1` | Assets | retired | — | — | monado | `gate-runner` |
 | `A2` | Assets | active | `scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl` | `out/qa/A2/latest` | monado | `gate-runner` |
 | `A3` | Assets | active | `python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/A3/latest` | monado | `gate-runner` |
 | `A4` | Assets | active | `./scripts/test_gate0_hands.sh` | `out/qa/A4/latest` | monado | `gate-runner` |
@@ -67,18 +67,16 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
 | `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |
-| `W2` | Weapons | blocked | — | `out/qa/W2/latest` | monado | human |
-| `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/compare_glock` | monado | human |
+| `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/latest` | monado | human |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
 maintainer approval. Green automated checks do not prove appearance.
 
 ## Pass rules
 
-- `A1` passes when the tool completes, every boundary loop is classified or
-  explicitly `uncertain`, the defect table and review sheets exist, and the
-  input hashes are recorded. The asset verdict is recorded separately as
-  `asset_verdict`; a complete audit may still be `asset_verdict: FAIL`.
+- `A1` is retired 2026-11-09. It audited the abandoned MMOD Glock decompile;
+  its source working set and evidence were removed in the cleanup. Do not run
+  it or cite its old result.
 - `H1` passes when no review image, audit directory, score file or evidence
   manifest exists outside `out/qa`. Working sets may keep source SMDs, textures
   and compiled MDLs, but not generated evidence.
@@ -88,12 +86,10 @@ maintainer approval. Green automated checks do not prove appearance.
   maintainer approved the barrel-bore, trigger, rear-sight and hammer markers
   in `out/qa/W1/latest/calibration_sheet.png`. Generated images alone are not a
   pass.
-- `W2` is blocked as of 2026-11-01. The source-derived attempt reproduced MMOD
-  mesh defects and was rejected; its run is archived under `out/qa/W2/`. Do not
-  resume paid-agent geometry work before a budget/quality decision and a clean
-  or human-retopologized base mesh. A future W2 must show SIDE, MUZZLE, TOP and
-  3/4 views with distinct trigger contact and pivot markers; numeric checks do
-  not prove appearance.
+- `W2` is retired 2026-11-09. The cosmetic guard/trigger modelling work and its
+  evidence were removed; the shipped native Glock is adopted unmodified. The
+  live blockers (shot vector and hand skeleton) and their acceptance criteria
+  are recorded in [`STATUS.md`](STATUS.md). Do not recreate a W2 gate.
 - `M1` passes only when all 49 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 120 seconds.
 - `R1` passes only when all 19 assertions pass.

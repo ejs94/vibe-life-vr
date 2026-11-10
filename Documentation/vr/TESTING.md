@@ -141,14 +141,17 @@ launcher and APK. It writes to `out/qa/R1/runs/<timestamp>/`.
 
 ## Asset gates
 
+`A1` was retired on 2026-11-09. The commands below are diagnostic tools whose
+output is not a gate result; active gates are listed in [`GATES.md`](GATES.md).
+
 ```sh
 python3 scripts/audit_holes.py \
     --model out/mmod_import/decompiled/v_9mmhandgun \
-    --out out/qa/A1/latest
+    --out out/qa/V1/asset_diagnostics
 
 python3 scripts/audit_viewmodel_assets.py \
     --decompiled-dir out/mmod_import/decompiled \
-    --out out/qa/A1/latest/asset_audit
+    --out out/qa/V1/asset_diagnostics/asset_audit
 
 scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 

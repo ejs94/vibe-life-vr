@@ -93,7 +93,7 @@ python3 scripts/check_hand_asset.py --model assets/valve_vr/models/v_hand.mdl
 python3 scripts/check_viewmodel_names.py          # overlay names vs HLSDK requests
 python3 scripts/audit_viewmodel_assets.py \
     --decompiled-dir out/mmod_import/decompiled \
-    --out out/qa/A1/latest
+    --out out/qa/V1/asset_diagnostics
 scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 ./scripts/test_manual_reload.sh          # Glock staged reload vertical slice
 ./scripts/test_quest_auto.sh 25 crossfire  # Q1 only when the maintainer requests it

@@ -3,8 +3,12 @@
 **Last updated:** 2026-11-09
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
-**Previous checkpoint:** `pre-cleanup-2026-10-31`
 **Evidence root:** `out/qa/`
+
+This is the single page of truth. The abandoned Glock guard/trigger modelling
+sessions and their evidence were removed on 2026-11-09; the shipped native
+Glock is untouched. Do not resume cosmetic mesh work before the shot-vector and
+hand-skeleton blockers below are resolved.
 
 ## Progress
 
@@ -27,127 +31,107 @@ current counts and gate freshness.
 - [x] `M1` Monado 49/49
 - [x] `R1` regression 19/19
 - [x] `A7` Glock manual reload
-- [ ] `Q1` Quest hardware-in-the-loop (maintainer decision)
+- [x] `Q1` Quest hardware-in-the-loop (2026-11-07)
 
 ### Current task: native weapon path
 
 - [x] `W0` native route + legacy fallback
 - [x] `W1` coordinate calibration and human approval
-- [x] `W2` native Glock mesh adopted (Half-Life: VR SD, unmodified) and routed
-- [x] `W3` Glock sequences present in the asset (idle, fire, reload, draw, holster)
-- [ ] `W2` Glock guard/trigger detail (paused, needs modelling)
-- [ ] `W3` Glock physical interaction (sockets are a modelling task)
-- [ ] `W4` full arsenal behind the native route
-- [x] `W5` HEV glove on both hands (one two-hand model, mirrored left chain)
-- [ ] `W6` Magnum replication with no per-weapon code
-
-## Native base adopted 2026-11-06
-
-Native weapon production was frozen on 2026-11-01 after the source-derived
-blockout reproduced MMOD mesh defects. It resumed on 2026-11-06 with a different
-method: instead of sculpting a mesh, the project adopted the complete GoldSrc
-viewmodel shipped by Half-Life: VR's SD set, which already carries the four
-model-authored anchors (`muzzle_pos`, `muzzle_pos2`, `hud_pos`, `hud_pos2`), ten
-sequences and Gordon/HEV glove hands.
-
-`W2` shipped on 2026-11-06 as
-`assets/valve_vr/models/native/v_9mmhandgun.mdl`, unmodified, selected by the
-native route:
-
-```text
-[VR_WEAPON_ROUTE] legacy=models/v_9mmhandgun.mdl native=models/native/v_9mmhandgun.mdl route=native
-```
-
-The trigger, guard and magazine-release modelling is paused, not abandoned. The
-measurements, the reason for stopping and the brief for a future attempt are in
-[`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md). The next work is asset
-adoption, aim anchoring, the HEV gloves and interaction reuse; none of it needs
-new geometry.
+- [x] Native Glock adopted (Half-Life: VR SD, unmodified)
+- [x] Native arsenal (15 viewmodels) routed
+- [x] HEV glove on both hands (`v_hand.mdl`)
+- [ ] Shot direction follows the visible barrel
+- [ ] Hand matches the OpenVR 31-bone skeleton
+- [ ] Manual reload driven by 6DoF hands
 
 ## Current state
 
 | Item | Result |
 |---|---|
 | Monado unit suite (`M1`) | 49/49 PASS |
-| Hand motion and coordinate contracts (`M1` 45-47) | PASS: 6DoF translation, independent offhand, weapon follow, no space mixups |
-| Aim/grip separation (`M1` 49) | PASS: renderer and viewmodel stay on the aim pose with a 35 degree grip tilt |
-| Menu quad anchor (`M1` 36-37) | PASS in simulation; the anchor now uses the same reference space type as the head pose (D-018) |
 | Regression battery (`R1`) | 19/19 PASS |
-| Documentation gate (`D1`) | See `out/qa/D1/latest` |
-| Evidence hygiene (`H1`) | See `out/qa/H1/latest` |
-| Asset audit (`A1`) | PASS (audit); Glock baseline verdict FAIL |
-| Glock topology score | 9.67/35 provisional; 2 accidental defects, 0 uncertain |
-| Visual review (`V1`) | Available: `out/qa/V1/compare_glock/` (non-blocking) |
-| Native route/fallback (`W0`) | PASS: native selected, legacy fallback observed |
-| Coordinate calibration (`W1`) | PASS: barrel bore, trigger, rear sight and hammer approved 2026-11-01 |
-| Quest hardware-in-the-loop (`Q1`) | Pending; maintainer decides when to run |
-| Weapon epic | **W2 SHIPPED 2026-11-06**: Half-Life: VR (SD) Glock as the native base |
-| Native asset | `models/native/v_9mmhandgun.mdl`, 3 bodies, 4 anchors, 10 sequences, Gordon gloves |
+| Documentation (`D1`) / hygiene (`H1`) | PASS |
+| Native route (`W0`) | PASS: native selected, legacy fallback observed |
+| Native asset | `models/native/v_9mmhandgun.mdl`, 3 bodies, 4 anchors, 10 sequences, HEV gloves |
+| Deployed models | `assets/valve_vr/models/native/` (15), `out/valve/models/native/` (15), `out/valve_vr/models/native/` (15) |
+| Load proof | `[VR_WEAPON_ROUTE] ... route=native` and `[VM_DBG_CHANGE] ... models/native/v_9mmhandgun.mdl` in `out/qa/M1/runs/20261109_215814/monado_unittest_engine.log` |
+| Manual reload (`A7`) | PASS (staged vertical slice) |
+| Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
-## 2026-11-09 aim and menu pass
-
-- Firearms are oriented by the aim pose, not the tilted grip pose (D-017). The
-  suite gained assertion 49 and `scripts/check_aim_pose.py`; reverting the
-  renderer to the grip pose fails it with a 35 degree pitch.
-- The pause/menu quad anchor is created with the same reference space type as
-  the head pose (D-018). This was a Quest-only placement bug: LOCAL and STAGE
-  do not share an origin, while the simulated runtime makes them coincide.
-- The satchel is classified as an off-hand-only viewmodel: its baked hand and
-  the charge it holds stay, the left arm is not collapsed, and the standalone
-  primary hand is skipped so a second hand no longer floats on the charge. The
-  free-controller off-hand remains available. The post-weapon fallback now also
-  respects a baked off-hand, which was the duplicate-hand path when the
-  persistent hand layer was disabled.
-- `aim_shot_evidence.sh` still reports the shot following the barrel
-  (0.01-0.18 degrees for Glock/.357/Gauss, 2.41 for the shotgun spread).
-- The in-headset menu is now a single **VR Play** page (Continue, Testbed,
-  Crossfire, Hazard, Quit). The 4 accessibility/debug tabs are deferred (D-020).
-- The Quest launcher drops the VR Settings screen, redesigns the library card
-  and hero header, and replaces the hidden long-press map dialog with an
-  explicit three-card map picker. `testbed_scale` ships inside the APK and is
-  copied into the game directory on demand (D-021).
-- Quest validation of the aim orientation, the menu position, the satchel and
-  the new launcher is still pending; no headset was attached for this pass.
-
-The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
-default timeout was raised from 55s to 90s because the unarmed-hand phase could
-be cut off after the viewmodel telemetry grew. A clean run must finish the
-`UNARMED_HAND_TEST_BEGIN` phase and produce `unit_23_unarmed_rest.png` and
-`unit_24_unarmed_moved.png`.
+The overlay trap still applies: update both `out/valve/models` and
+`out/valve_vr/models`, and confirm in the log which file was loaded.
 
 ## Active blockers
 
-1. **Trigger, guard and magazine release need modelling.** The original mesh has
-   no trigger geometry and its guard is a near-solid block with a 0.3-unit slot,
-   so patching it produces artefacts. Four trigger generations and three guard
-   attempts were rejected. Stopped until a human Blender session or a premium
-   model is available; see [`reference/W2_HANDOFF.md`](reference/W2_HANDOFF.md).
-2. **The six interaction sockets do not exist yet.** Primary grip, offhand grip,
-   magwell, ejection, slide rack and trigger contact are a modelling task. Until
-   then the reload and touch contracts reuse the bodies and hitboxes that the
-   adopted assets already contain.
-3. **Old weapon assets are experimental.** MMOD Glock/Magnum, the A/B entries
-   and the blockouts are not an approved baseline.
-4. **A2 roundtrip toolchain caveat.** The patched and pristine MMOD Glock both
-   drift by about `1e-6` on the attachment float. A2 needs a documented
-   tolerance or a toolchain fix before it is a clean binary gate.
-5. **Quest pass is pending.** No Quest result is implied by the Monado or
-   regression results.
+1. **The shot direction does not follow the visible barrel.** The firing line is
+   built from controller angles plus per-weapon numeric calibration, while the
+   rendered barrel is rotated by the renderer. See the handoff below.
+2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
+   (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
+   The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
+   5 fingers x 3); a name/index mapping is needed before any re-skin.
+3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
+   the default local gate; never infer a Quest pass from Monado.
 
 ## Next steps
 
-1. Adopt the remaining Half-Life: VR SD viewmodels behind `models/native/`, with
-   the exact legacy basename (Android is case-sensitive).
-2. Derive the ballistic direction from `muzzle_pos2 - muzzle_pos` and verify the
-   right-handed result is unchanged.
-3. Ship the HEV glove on both hands as a two-chain model.
-4. Reuse the `clip_reference` body and the `Box*` hitboxes for the reload and
-   touch contracts.
-5. Keep the legacy route working and re-run `W0`, `M1` and `R1` after each step.
+1. Make `muzzle_pos2 - muzzle_pos` the direction source, with the numeric
+   fallback only for weapons without anchors. Fix the circular shot-origin test
+   and prove the right-handed result is unchanged
+   (`scripts/verify_grip_pose_math.py`).
+2. Map the existing hand rig onto the OpenVR 31-bone enum without replacing the
+   MDL. Verify whether the input layer already consumes skeletal data.
+3. Keep the shipped native Glock as the HL1-like base (no Beretta, no sculpting)
+   and drive manual reload with `A7` plus `clip_reference` and `Box02`.
+4. Re-run `W0`, `M1` and `R1` after each step; one labelled comparison sheet
+   for visual approval.
+
+## Handoff: why the shot vector is wrong
+
+**Facts, verified in code.** The firing direction is never derived from the
+model:
+
+1. `engine/platform/openxr/xr_input.c:1634-1654` builds `local_angles` from
+   `handAngles + turn_yaw + (pitch_adjust, yaw_adjust, roll_adjust)`.
+2. `xr_input.c:1656-1659` copies those angles to `out_aim_angles`.
+3. `engine/server/sv_pmove.c:945-950` writes them to `clent->v.vuser2` and the
+   muzzle offset to `vuser1`.
+4. `3rdparty/patches/hlsdk-vibe-life.patch:1071-1075` calls
+   `UTIL_MakeVectors( pev->vuser2 )` to produce `v_forward`, the authoritative
+   ballistics direction.
+5. Meanwhile the **visible barrel** is oriented by the renderer:
+   `ref/gl_vr/gl_studio.c:2491` calls `R_VR_RotateViewmodelToPalm`
+   (`:1890`), gated by `vr_anchor_rotation` (default `1`,
+   `engine/platform/openxr/xr_core.c:382`), and by the aim/grip pose split in
+   `DECISIONS.md` D-016 and D-017.
+
+`xr_input.c:1671-1674` states the split explicitly: the muzzle position follows
+the visual pose, the firing direction follows the aim pose. **No code path
+derives the direction from the rendered barrel.** The HL:VR reference combines
+attachments 0 and 1 for ballistics
+([`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) section 3.8);
+this project adopted attachment 0 for position only. `DECISIONS.md` D-014 still
+promises that direction will follow `muzzle_pos2 - muzzle_pos` "once that
+change lands" — it never landed (`9a5ba043` recorded the rejected measurement).
+
+**Why the test passed anyway.** `scripts/aim_shot_evidence.sh:39-48` forces every
+hand and head angle to zero; `engine/platform/openxr/xr_core.c:243-248`
+overwrites the logged shot `start` with the computed muzzle; and
+`scripts/check_shot_origin.py:114` defines the "barrel" as `palm -> muzzle`,
+where that muzzle is itself built from the same calibrated angles
+(`xr_input.c:1689-1703`). The reported 0.01-0.18 degrees therefore proves
+internal arithmetic consistency, not that the visible barrel and the bullet
+agree in a headset. `scripts/check_aim_pose.py` uses only a simulated 35 degree
+grip tilt and checks the renderer, not the bullet.
+
+**First three checks for the next agent:** log `muzzle_pos`, `muzzle_pos2`,
+`vuser2` and the final `tr.viewent` orientation in the same frame; run
+`aim_shot_evidence.sh` with a real grip tilt and without the `start` override;
+then switch the direction source and re-run `M1`/`R1`/`W0`.
 
 ## Evidence
 
 A gate result is only current if it is reachable from
-`out/qa/<gate-id>/latest`. Do not cite an old `out/evidence` directory; that
-root was retired on 2026-10-31. If a gate has no run, record it as `pending`,
-not as passed.
+`out/qa/<gate-id>/latest`. `out/qa/INDEX.md` lists the newest result per gate.
+Do not cite the retired `out/evidence` root. If a gate has no run, record it as
+`pending`, not as passed.
