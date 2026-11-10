@@ -184,8 +184,8 @@ assert_test 1  "OpenXR Runtime Handshake & Dual Stereo Swapchains" \
 assert_test 2  "Core VR CVars Registered and Accessible" \
     'grep -q "vr_smoothturn" "$TEST_LOG" && grep -q "vr_lasersight" "$TEST_LOG" && grep -q "vr_physical_crouch" "$TEST_LOG"'
 
-assert_test 3  "In-Headset Dedicated VR Options Menu (All 4 Tabs Captured)" \
-    '[ -f "${OUTPUT_DIR}/unit_01_menu_vr.png" ] && [ -f "${OUTPUT_DIR}/unit_01b_tab_weapons.png" ] && [ -f "${OUTPUT_DIR}/unit_01c_tab_presence.png" ] && [ -f "${OUTPUT_DIR}/unit_01d_menu_vr_debug.png" ]'
+assert_test 3  "In-Headset VR Play Menu (Single Page Captured)" \
+    '[ -f "${OUTPUT_DIR}/unit_01_menu_vr.png" ] && grep -q "\\[VR_MENU\\] play menu ready maps=testbed_scale,crossfire,t0a0" "$TEST_LOG"'
 
 assert_test 4  "Beat Saber Dual Alternating Laser Pointers (Right Hand)" \
     'grep -q "Switched active pointer to RIGHT hand" "$TEST_LOG"'

@@ -122,4 +122,20 @@
 	<string name="test_map_title">Weapon Testing Grounds</string>
 	<string name="test_map_crossfire">Crossfire (All weapons on ground)</string>
 	<string name="test_map_hazard">Hazard Course (Training range)</string>
+
+	<!-- Map picker (library card and dialog) -->
+	<string name="maps_button">MAPS</string>
+	<string name="test_map_picker_title">Test maps</string>
+	<string name="test_map_picker_subtitle">Choose a map to launch. Cheats stay enabled.</string>
+	<string name="test_map_crossfire_title">Crossfire (DM)</string>
+	<string name="test_map_crossfire_desc">Deathmatch arena with all weapons on the ground.</string>
+	<string name="test_map_testbed_title">Testbed Scale</string>
+	<string name="test_map_testbed_desc">Scale, alignment and shot-origin test map.</string>
+	<string name="test_map_hazard_title">Hazard Course</string>
+	<string name="test_map_hazard_desc">Half-Life training course.</string>
+	<string name="library_hero_title">Vibe-Life VR</string>
+	<string name="library_hero_subtitle">Half-Life in virtual reality</string>
+	<string name="library_hero_ready">Game files detected</string>
+	<string name="library_hero_missing">Game files not found</string>
+	<string name="library_section_title">Library</string>
 </resources>

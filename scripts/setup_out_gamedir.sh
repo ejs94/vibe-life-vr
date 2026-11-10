@@ -98,6 +98,25 @@ if [ -d "${REPO_DIR}/assets/valve_vr/models/native" ]; then
     done
 fi
 
+# 6c. VR test maps. The maps directory is normally a symlink into the Steam
+#     install, so replace it with a local directory of per-file symlinks. Our
+#     testbed then coexists with the retail maps without writing into Steam.
+MAPS_DIR="${OUT_VALVE}/maps"
+if [ -L "${MAPS_DIR}" ]; then
+    STEAM_MAPS="$(readlink -f "${MAPS_DIR}")"
+    rm -f "${MAPS_DIR}"
+    mkdir -p "${MAPS_DIR}"
+    if [ -d "${STEAM_MAPS}" ]; then
+        for bsp in "${STEAM_MAPS}"/*.bsp; do
+            ln -sfn "${bsp}" "${MAPS_DIR}/$(basename "${bsp}")"
+        done
+    fi
+fi
+mkdir -p "${MAPS_DIR}"
+for bsp in "${REPO_DIR}/assets/valve_vr/maps"/*.bsp; do
+    cp -f "${bsp}" "${MAPS_DIR}/$(basename "${bsp}")"
+done
+
 # 7. Versioned VR defaults. autoexec.cfg is normally a symlink into the Steam
 #    install, so copy it to a local file before appending; never write through
 #    the symlink.

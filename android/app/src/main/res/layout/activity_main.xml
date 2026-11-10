@@ -7,12 +7,13 @@
 	android:background="@color/horizon_bg"
 	android:fitsSystemWindows="true">
 
-	<!-- Ergonomic Centered VR Shell: Constrained to 960dp max width to eliminate neck craning and excessive FOV stretch -->
+	<!-- Ergonomic Centered VR Shell: capped width keeps the panel inside the
+	     comfortable field of view on a Quest 3S panel. -->
 	<androidx.constraintlayout.widget.ConstraintLayout
 		android:id="@+id/mainShellContainer"
 		android:layout_width="0dp"
 		android:layout_height="match_parent"
-		app:layout_constraintWidth_max="960dp"
+		app:layout_constraintWidth_max="1100dp"
 		app:layout_constraintStart_toStartOf="parent"
 		app:layout_constraintEnd_toEndOf="parent"
 		app:layout_constraintTop_toTopOf="parent"
@@ -22,7 +23,10 @@
 			android:id="@+id/navigationRail"
 			android:layout_width="wrap_content"
 			android:layout_height="0dp"
-			app:elevation="4dp"
+			android:background="@color/horizon_surface"
+			app:elevation="0dp"
+			app:itemIconTint="@color/nav_rail_item"
+			app:itemTextColor="@color/nav_rail_item"
 			app:labelVisibilityMode="labeled"
 			app:layout_constraintBottom_toBottomOf="parent"
 			app:layout_constraintStart_toStartOf="parent"
@@ -33,15 +37,19 @@
 			android:id="@+id/appBarLayout"
 			android:layout_width="0dp"
 			android:layout_height="wrap_content"
+			android:background="@color/horizon_bg"
+			app:elevation="0dp"
 			app:layout_constraintEnd_toEndOf="parent"
 			app:layout_constraintStart_toEndOf="@id/navigationRail"
 			app:layout_constraintTop_toTopOf="parent">
 
-			<androidx.appcompat.widget.Toolbar
+			<com.google.android.material.appbar.MaterialToolbar
 				android:id="@+id/toolbar"
 				android:layout_width="match_parent"
 				android:layout_height="?attr/actionBarSize"
-				android:minHeight="?attr/actionBarSize" />
+				android:minHeight="?attr/actionBarSize"
+				app:titleTextColor="@color/horizon_text_primary"
+				app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge" />
 
 		</com.google.android.material.appbar.AppBarLayout>
 

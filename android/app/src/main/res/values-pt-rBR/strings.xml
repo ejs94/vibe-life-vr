@@ -27,5 +27,21 @@
 	<string name="test_map_title">Fase de Testes de Armas</string>
 	<string name="test_map_crossfire">Crossfire (Todas as armas no chão)</string>
 	<string name="test_map_hazard">Hazard Course (Campo de treinamento)</string>
+
+	<!-- Seletor de mapas -->
+	<string name="maps_button">MAPAS</string>
+	<string name="test_map_picker_title">Mapas de teste</string>
+	<string name="test_map_picker_subtitle">Escolha um mapa. Os cheats ficam ativos.</string>
+	<string name="test_map_crossfire_title">Crossfire (DM)</string>
+	<string name="test_map_crossfire_desc">Arena deathmatch com todas as armas no chão.</string>
+	<string name="test_map_testbed_title">Testbed Scale</string>
+	<string name="test_map_testbed_desc">Mapa de escala, alinhamento e origem do tiro.</string>
+	<string name="test_map_hazard_title">Hazard Course</string>
+	<string name="test_map_hazard_desc">Curso de treinamento do Half-Life.</string>
+	<string name="library_hero_title">Vibe-Life VR</string>
+	<string name="library_hero_subtitle">Half-Life em realidade virtual</string>
+	<string name="library_hero_ready">Arquivos do jogo detectados</string>
+	<string name="library_hero_missing">Arquivos do jogo não encontrados</string>
+	<string name="library_section_title">Biblioteca</string>
 </resources>
 

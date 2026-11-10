@@ -299,15 +299,21 @@ else
     record_result "1.13 Standalone Meta Quest APK Architecture & Native Libs (ARM64-v8a)" "FAIL"
 fi
 
-# Check 14: Meta Horizon OS 2D Launcher Layout Constraints & Preferences (Issue #10)
+# Check 14: Meta Horizon OS 2D launcher layout and explicit test-map picker.
+# The VR Settings preference screen is deferred (D-020); the launcher must
+# expose the map picker and the bundled testbed instead (D-021).
 CARD_LAYOUT="${REPO_DIR}/android/app/src/main/res/layout/card_game.xml"
 ACTIVITY_LAYOUT="${REPO_DIR}/android/app/src/main/res/layout/activity_main.xml"
 PREFS_LAYOUT="${REPO_DIR}/android/app/src/main/res/xml/vr_preferences.xml"
+TEST_MAPS="${REPO_DIR}/android/app/src/main/java/su/xash/engine/util/TestMaps.kt"
+NAV_GRAPH="${REPO_DIR}/android/app/src/main/res/navigation/nav_graph.xml"
 
-if grep -q 'minHeight="170dp"' "$CARD_LAYOUT" && grep -q 'minHeight="?attr/actionBarSize"' "$ACTIVITY_LAYOUT" && grep -q 'vr_headtorch' "$PREFS_LAYOUT"; then
-    record_result "1.14 Meta Horizon OS 2D Launcher Layout Constraints & Preferences (Issue #10)" "PASS"
+if grep -q 'btnMaps' "$CARD_LAYOUT" && grep -q 'MaterialToolbar' "$ACTIVITY_LAYOUT" &&
+   [ ! -f "$PREFS_LAYOUT" ] && ! grep -q 'vrSettingsFragment' "$NAV_GRAPH" &&
+   grep -q 'testbed_scale' "$TEST_MAPS"; then
+    record_result "1.14 Meta Horizon OS 2D Launcher Layout & Test Map Picker" "PASS"
 else
-    record_result "1.14 Meta Horizon OS 2D Launcher Layout Constraints & Preferences (Issue #10)" "FAIL"
+    record_result "1.14 Meta Horizon OS 2D Launcher Layout & Test Map Picker" "FAIL"
 fi
 
 # ==============================================================================

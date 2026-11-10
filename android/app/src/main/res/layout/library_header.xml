@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	style="@style/Widget.Material3.CardView.Filled"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:layout_marginHorizontal="12dp"
+	android:layout_marginTop="12dp"
+	app:cardBackgroundColor="@color/horizon_surface"
+	app:cardCornerRadius="18dp"
+	app:strokeColor="@color/horizon_border"
+	app:strokeWidth="1dp">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center_vertical"
+		android:orientation="horizontal"
+		android:padding="20dp">
+
+		<com.google.android.material.card.MaterialCardView
+			style="@style/Widget.Material3.CardView.Filled"
+			android:layout_width="56dp"
+			android:layout_height="56dp"
+			app:cardBackgroundColor="@color/horizon_surface_variant"
+			app:cardCornerRadius="16dp">
+
+			<ImageView
+				android:layout_width="32dp"
+				android:layout_height="32dp"
+				android:layout_gravity="center"
+				android:contentDescription="@string/library_hero_title"
+				android:src="@drawable/ic_vr_headset_24"
+				app:tint="@color/horizon_primary" />
+		</com.google.android.material.card.MaterialCardView>
+
+		<LinearLayout
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="16dp"
+			android:layout_weight="1"
+			android:orientation="vertical">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/library_hero_title"
+				android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+				android:textColor="@color/horizon_text_primary"
+				android:textStyle="bold" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="2dp"
+				android:text="@string/library_hero_subtitle"
+				android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+				android:textColor="@color/horizon_text_secondary" />
+		</LinearLayout>
+
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:background="@drawable/status_chip"
+			android:paddingHorizontal="12dp"
+			android:paddingVertical="6dp"
+			android:text="@string/openxr_status_title"
+			android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+			android:textColor="@color/horizon_success"
+			android:textStyle="bold" />
+	</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

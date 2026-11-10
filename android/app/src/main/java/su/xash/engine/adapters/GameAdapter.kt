@@ -11,6 +11,7 @@ import su.xash.engine.R
 import su.xash.engine.databinding.CardGameBinding
 import su.xash.engine.model.Game
 import su.xash.engine.ui.library.LibraryViewModel
+import su.xash.engine.util.TestMapPicker
 
 
 class GameAdapter(private val libraryViewModel: LibraryViewModel) :
@@ -58,27 +59,10 @@ class GameAdapter(private val libraryViewModel: LibraryViewModel) :
 				launchButton.setOnClickListener {
 					libraryViewModel.startEngine(it.context, game)
 				}
-				btnTestMap.setOnClickListener {
-					// Launch test map with cheats enabled, deathmatch mode, suit equipped, and all weapons spawned
-					libraryViewModel.startEngine(it.context, game, "+sv_cheats 1 +deathmatch 1 +vr_test_weapons 1 +map crossfire")
-				}
-				btnTestMap.setOnLongClickListener { v ->
-					val options = arrayOf(
-						v.context.getString(R.string.test_map_crossfire),
-						v.context.getString(R.string.test_map_hazard)
-					)
-					val cmds = arrayOf(
-						"+sv_cheats 1 +deathmatch 1 +vr_test_weapons 1 +map crossfire",
-						"+sv_cheats 1 +vr_test_weapons 1 +map t0a0"
-					)
-					com.google.android.material.dialog.MaterialAlertDialogBuilder(v.context)
-						.setTitle(R.string.test_map_title)
-						.setItems(options) { _, which ->
-							libraryViewModel.startEngine(v.context, game, cmds[which])
-						}
-						.setNegativeButton(android.R.string.cancel, null)
-						.show()
-					true
+				btnMaps.setOnClickListener { v ->
+					TestMapPicker.show(v.context) { args ->
+						libraryViewModel.startEngine(v.context, game, args)
+					}
 				}
 			}
 		}

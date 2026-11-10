@@ -7,23 +7,45 @@
 	android:layout_height="wrap_content"
 	android:layout_marginHorizontal="8dp"
 	android:layout_marginTop="8dp"
-	app:layout_constraintBottom_toBottomOf="parent"
-	app:layout_constraintTop_toTopOf="parent">
+	app:cardBackgroundColor="@color/horizon_surface"
+	app:cardCornerRadius="14dp"
+	app:strokeColor="@color/horizon_border"
+	app:strokeWidth="1dp">
 
 	<androidx.constraintlayout.widget.ConstraintLayout
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
-		android:padding="10dp">
+		android:minHeight="64dp"
+		android:paddingHorizontal="16dp"
+		android:paddingVertical="12dp">
 
-		<TextView
-			android:id="@android:id/title"
-			android:layout_width="wrap_content"
+		<LinearLayout
+			android:layout_width="0dp"
 			android:layout_height="wrap_content"
-			android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+			android:layout_marginEnd="12dp"
+			android:orientation="vertical"
 			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toStartOf="@id/switchWidget"
 			app:layout_constraintStart_toStartOf="parent"
-			app:layout_constraintTop_toTopOf="parent"
-			tools:text="Switch preference" />
+			app:layout_constraintTop_toTopOf="parent">
+
+			<TextView
+				android:id="@android:id/title"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+				android:textColor="@color/horizon_text_primary"
+				tools:text="Switch preference" />
+
+			<TextView
+				android:id="@android:id/summary"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="2dp"
+				android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+				android:textColor="@color/horizon_text_secondary"
+				tools:text="Summary text" />
+		</LinearLayout>
 
 		<com.google.android.material.materialswitch.MaterialSwitch
 			android:id="@+id/switchWidget"
@@ -34,4 +56,3 @@
 			app:layout_constraintTop_toTopOf="parent" />
 	</androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>
-

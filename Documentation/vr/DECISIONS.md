@@ -305,3 +305,47 @@ Consequences:
   the charge to the real off-hand would need the modelling work that is still
   paused.
 - `vr_hide_arms 2` still replaces baked hands with the debug standalone path.
+
+## D-020: Accessibility UI is deferred until the build is playable
+
+**Status:** accepted 2026-11-09
+
+The in-headset menu had four tabs of comfort, handedness, calibration and
+debug toggles, and the Quest launcher had a parallel "VR Settings" preference
+screen. Both were premature: they were being tuned while the core aiming and
+hand alignment were still moving, and the duplication made every default
+change a two-place edit.
+
+Decision:
+
+- The in-headset menu is a single **VR Play** page: Continue, Testbed Scale,
+  Crossfire (DM), Hazard Course and Quit Game.
+- The Quest launcher drops the "VR Settings" destination, its fragment and
+  `vr_preferences.xml`; the navigation rail keeps Library, Engine Settings and
+  VR Diagnostics.
+- The launch arguments no longer read `vr_preferences`. Shipped defaults live
+  in `assets/valve_vr/vr_defaults.cfg`, including snap turn and the native
+  weapon route. Every deleted toggle remains available as a cvar for console
+  and config-file use.
+- Accessibility options return only after there is a playable build that the
+  maintainer is actively adjusting.
+
+## D-021: The scale testbed ships with the APK and installs on demand
+
+**Status:** accepted 2026-11-09
+
+`testbed_scale` was generated into `out/` and only reachable after a manual
+`quest push`. That made the new "Testbed" menu entry fail on a fresh install.
+
+Decision:
+
+- A built copy is committed at `assets/valve_vr/maps/testbed_scale.bsp`, so the
+  APK can carry it under `assets/valve_vr/maps/`.
+- `scripts/deploy_quest_assets.sh` pushes every `assets/valve_vr/maps/*.bsp` to
+  `<basedir>/<gamedir>/maps/`.
+- `su.xash.engine.util.TestMaps` copies the bundled map into the active game
+  directory before an engine launch that requests `+map testbed_scale`. The
+  launcher therefore works without a host-side deploy step.
+- `scripts/setup_out_gamedir.sh` replaces the Steam `maps` symlink with a local
+  directory of per-file symlinks, then copies the testbed in. It never writes
+  into the Steam install.

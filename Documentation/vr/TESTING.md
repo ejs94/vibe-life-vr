@@ -60,6 +60,13 @@ misbehaved:
   keep the grip and aim poses identical, which is why every gun could point up
   in the headset while Monado stayed green.
 
+Phase 2 opens the single-page **VR Play** menu (`menu_vr`), captures it as
+`unit_01_menu_vr.png`, and checks the `[VR_MENU] play menu ready
+maps=testbed_scale,crossfire,t0a0` line. The dual-pointer tests then run over
+the console instead of the menu, so a simulated trigger click cannot start a
+map in the middle of the suite. The accessibility and debug tabs are gone; the
+menu is only Continue, the three test maps and Quit.
+
 ## Coordinate test bed
 
 ```sh
@@ -67,8 +74,11 @@ python3 scripts/build_testbed_map.py
 ```
 
 Builds `out/valve_vr/maps/testbed_scale.bsp` (requires `VHLT_DIR` or the
-`~/JACK/halflife` tools). The room has a 1 m floor grid, so a distance is
-readable by counting cells, plus:
+`~/JACK/halflife` tools). A built copy ships as
+`assets/valve_vr/maps/testbed_scale.bsp`; `scripts/deploy_quest_assets.sh`
+pushes it to `/sdcard/xash/valve/maps/` and the Quest launcher also copies it
+out of the APK when the Testbed option is chosen. The room has a 1 m floor
+grid, so a distance is readable by counting cells, plus:
 
 - RGB axes at the origin: red `+X`, green `+Y`, blue `+Z`, two metres long;
 - a 1 m reference cube behind the axes;

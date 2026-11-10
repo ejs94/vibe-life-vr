@@ -100,8 +100,14 @@ new geometry.
   persistent hand layer was disabled.
 - `aim_shot_evidence.sh` still reports the shot following the barrel
   (0.01-0.18 degrees for Glock/.357/Gauss, 2.41 for the shotgun spread).
-- Quest validation of the aim orientation, the menu position and the satchel is
-  still pending; no headset was attached for this pass.
+- The in-headset menu is now a single **VR Play** page (Continue, Testbed,
+  Crossfire, Hazard, Quit). The 4 accessibility/debug tabs are deferred (D-020).
+- The Quest launcher drops the VR Settings screen, redesigns the library card
+  and hero header, and replaces the hidden long-press map dialog with an
+  explicit three-card map picker. `testbed_scale` ships inside the APK and is
+  copied into the game directory on demand (D-021).
+- Quest validation of the aim orientation, the menu position, the satchel and
+  the new launcher is still pending; no headset was attached for this pass.
 
 The 44/44 result was produced with the Monado suite on 2026-10-31. The suite
 default timeout was raised from 55s to 90s because the unarmed-hand phase could

@@ -32,10 +32,6 @@
 		android:name="su.xash.engine.ui.settings.CrashLogsFragment"
 		android:label="@string/crash_logs" />
 	<fragment
-		android:id="@+id/vrSettingsFragment"
-		android:name="su.xash.engine.ui.vrsettings.VrSettingsFragment"
-		android:label="@string/nav_vr_settings" />
-	<fragment
 		android:id="@+id/diagnosticsFragment"
 		android:name="su.xash.engine.ui.diagnostics.DiagnosticsFragment"
 		android:label="@string/nav_diagnostics">

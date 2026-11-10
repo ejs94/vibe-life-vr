@@ -48,7 +48,6 @@ class MainActivity : AppCompatActivity() {
 		appBarConfiguration = AppBarConfiguration(
 			setOf(
 				R.id.libraryFragment,
-				R.id.vrSettingsFragment,
 				R.id.appSettingsFragment,
 				R.id.diagnosticsFragment
 			)

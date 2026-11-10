@@ -81,6 +81,19 @@ if [ -f "$PROFILES" ]; then
     log_ok "Pushed vr_weapons.json"
 fi
 
+# VR test maps. The engine runs the base gamedir, so the scale testbed must
+# exist under <basedir>/<gamedir>/maps/. The launcher also installs it from the
+# APK on demand, but deploying it keeps HIL runs independent of the launcher.
+MAPS=( "${REPO_DIR}/assets/valve_vr/maps"/*.bsp )
+if [ ${#MAPS[@]} -gt 0 ]; then
+    adb shell "mkdir -p '${BASEDIR}/${GAMEDIR}/maps'"
+    for bsp in "${MAPS[@]}"; do
+        base="$(basename "${bsp}")"
+        adb push "${bsp}" "${BASEDIR}/${GAMEDIR}/maps/${base}" >/dev/null
+        log_ok "Pushed maps/${base}"
+    done
+fi
+
 # Versioned VR defaults. autoexec.cfg is the reliable place for cvars that are
 # not archived in config.cfg, so append the loader line once and leave the rest
 # of the user's file untouched.
