@@ -243,6 +243,10 @@ Decision:
 
 **Status:** accepted 2026-11-10
 
+**Superseded in part:** D-024 replaced the per-weapon `pitch_adjust` firing
+direction with the model bore anchors later the same day. The rule that the
+two-hand stabilizer must not change the firing direction still stands.
+
 The muzzle path and the renderer disagreed about which controller pose defines
 the barrel. `XR_GetPrimaryHandMuzzleTransform` read
 `XR_GetPrimaryHandTransform`, which runs `XR_ApplyTwoHandStabilizer` and blends

@@ -16,6 +16,9 @@ changing the authoritative animation or breaking the grip pose.
 - Validate with asset audit, MDL roundtrip, 360-degree renders and the Monado
   suite.
 - Pilot on the Glock, then the crossbow, then batch the remaining weapons.
+- Arm IK is planned in
+  [`reference/HAND_IK_AND_PHYSICS.md`](reference/HAND_IK_AND_PHYSICS.md); the
+  semantic map and the IK math (`H0`, `H1`) come before any physics.
 
 Gates: `A1`, `A2`, `A3`, `A4`, `A5`, `A6`, `M1`.
 
@@ -29,6 +32,10 @@ Goal: physical reloading and weapon handling that feels intentional in VR.
   ballistics override.
 - Document each new cvar or weapon field in `ASSETS.md` and, when relevant,
   `assets/valve_vr/CREDITS.md`.
+- The spatial reload gate (`H4a` in
+  [`reference/HAND_IK_AND_PHYSICS.md`](reference/HAND_IK_AND_PHYSICS.md))
+  replaces the staged B presses once the magwell, ejection and slide sockets
+  exist.
 
 Gates: `A7`, `M1`, `R1`.
 

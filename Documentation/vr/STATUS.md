@@ -32,8 +32,8 @@ current counts and gate freshness.
 - [x] `R1` regression 19/19
 - [x] `A7` Glock manual reload
 - [x] `Q1` Quest hardware-in-the-loop (2026-11-07)
-- [ ] `A4` hands gate (baked vs standalone hand)
-- [ ] `A5` grip seat against the latest `M1` engine log
+- [x] `A4` hands gate (baked vs standalone hand)
+- [x] `A5` grip seat against the latest `M1` engine log
 
 ### Current task: native weapon path
 
@@ -59,8 +59,8 @@ current counts and gate freshness.
 | Deployed models | `assets/valve_vr/models/native/` (15), `out/valve/models/native/` (15), `out/valve_vr/models/native/` (15) |
 | Load proof | `[VR_WEAPON_ROUTE] ... route=native` and `[VM_DBG_CHANGE] ... models/native/v_9mmhandgun.mdl` in `out/qa/M1/runs/20261110_005848/monado_unittest_engine.log` |
 | Manual reload (`A7`) | PASS (staged vertical slice) |
-| Hands (`A4`) | PENDING: no run |
-| Grip seat (`A5`) | PENDING: no run |
+| Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
+| Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
 The overlay trap still applies: update both `out/valve/models` and
@@ -83,64 +83,39 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Next steps
 
-1. Validate the aim-pose firing line on a real headset with two hands engaged,
-   and fix the circular shot-origin test (it forces zero angles and overwrites
-   the logged start). A model-anchor direction (`muzzle_pos2 - muzzle_pos`)
-   remains an option only after that.
+1. Validate the bore-anchor firing line on a real headset with two hands
+   engaged, and fix the circular shot-origin test (it forces zero angles and
+   overwrites the logged start).
 2. Map the existing hand rig onto the OpenVR 31-bone enum without replacing the
    MDL. Verify whether the input layer already consumes skeletal data.
 3. Keep the shipped native Glock as the HL1-like base (no Beretta, no sculpting)
    and drive manual reload with `A7` plus `clip_reference` and `Box02`.
 4. Re-run `W0`, `M1` and `R1` after each step; one labelled comparison sheet
    for visual approval.
+5. Arm IK, Box3D contact and the spatial reload gate are specified in
+   [`reference/HAND_IK_AND_PHYSICS.md`](reference/HAND_IK_AND_PHYSICS.md).
+   Start with `H0` (semantic map) and `H1` (IK math); neither needs Box3D.
+   Unresolved Quest reports are triaged in
+   [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
-## Handoff: why the shot vector is wrong
+## Resolved: shot vector
 
-**Facts, verified in code.** The firing direction is never derived from the
-model:
-
-1. `engine/platform/openxr/xr_input.c:1634-1654` builds `local_angles` from
-   `handAngles + turn_yaw + (pitch_adjust, yaw_adjust, roll_adjust)`.
-2. `xr_input.c:1656-1659` copies those angles to `out_aim_angles`.
-3. `engine/server/sv_pmove.c:945-950` writes them to `clent->v.vuser2` and the
-   muzzle offset to `vuser1`.
-4. `3rdparty/patches/hlsdk-vibe-life.patch:1071-1075` calls
-   `UTIL_MakeVectors( pev->vuser2 )` to produce `v_forward`, the authoritative
-   ballistics direction.
-5. Meanwhile the **visible barrel** is oriented by the renderer:
-   `ref/gl_vr/gl_studio.c:2491` calls `R_VR_RotateViewmodelToPalm`
-   (`:1890`), gated by `vr_anchor_rotation` (default `1`,
-   `engine/platform/openxr/xr_core.c:382`), and by the aim/grip pose split in
-   `DECISIONS.md` D-016 and D-017.
-
-`xr_input.c:1671-1674` states the split explicitly: the muzzle position follows
-the visual pose, the firing direction follows the aim pose. **No code path
-derives the direction from the rendered barrel.** The HL:VR reference combines
-attachments 0 and 1 for ballistics
-([`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) section 3.8);
-this project adopted attachment 0 for position only. `DECISIONS.md` D-014 still
-promises that direction will follow `muzzle_pos2 - muzzle_pos` "once that
-change lands" — it never landed (`9a5ba043` recorded the rejected measurement).
-
-**Why the test passed anyway.** `scripts/aim_shot_evidence.sh:39-48` forces every
-hand and head angle to zero; `engine/platform/openxr/xr_core.c:243-248`
-overwrites the logged shot `start` with the computed muzzle; and
-`scripts/check_shot_origin.py:114` defines the "barrel" as `palm -> muzzle`,
-where that muzzle is itself built from the same calibrated angles
-(`xr_input.c:1689-1703`). The reported 0.01-0.18 degrees therefore proves
-internal arithmetic consistency, not that the visible barrel and the bullet
-agree in a headset. `scripts/check_aim_pose.py` uses only a simulated 35 degree
-grip tilt and checks the renderer, not the bullet.
-
-**Resolved 2026-11-10.** The root cause was two sources of truth: the renderer
-aligned a grip->muzzle axis while the firing line used hand angles plus
+The firing line and the visible barrel used to have two sources of truth: the
+renderer aligned a grip->muzzle axis while the bullet used hand angles plus the
 per-weapon `pitch_adjust`. The model-owned pair `muzzle_pos -> muzzle_pos2` now
-drives both (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`), so
-the bullet follows the visible bore by construction. `scripts/aim_shot_evidence.sh`
-now measures against that bore: Glock 0.00, .357 0.19, Gauss 0.00, shotgun 1.44
-degrees; `M1` 49/49, `R1` 19/19 and `W0` pass. Remaining: validate on the
-headset reference space and fix the circular shot-origin harness (it forces
-zero angles and overwrites the logged start).
+drives both (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`); see
+[`DECISIONS.md`](DECISIONS.md) D-024. `scripts/aim_shot_evidence.sh` measures
+against that bore: Glock 0.00, .357 0.19, Gauss 0.00, shotgun 1.44 degrees;
+`M1` 49/49, `R1` 19/19 and `W0` pass.
+
+Two things remain before this is closed:
+
+- Validate the result on the headset reference space with two hands engaged.
+- Fix the circular shot-origin harness: `scripts/aim_shot_evidence.sh` forces
+  every hand and head angle to zero and `engine/platform/openxr/xr_core.c`
+  overwrites the logged shot start with the computed muzzle, so the reported
+  angle proves arithmetic consistency, not that the visible barrel agrees in a
+  headset.
 
 ## Evidence
 

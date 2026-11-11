@@ -21,6 +21,8 @@ to do next.
 | [`reference/MODDER_GUIDE.md`](reference/MODDER_GUIDE.md) | You are integrating a mod or asset pack |
 | [`reference/REFERENCE_PORTS.md`](reference/REFERENCE_PORTS.md) | You need design input from the two GoldSrc VR mods under `xash3d-vr-ports/` |
 | [`reference/BOX3D.md`](reference/BOX3D.md) | You are evaluating or integrating the Box3D physics dependency |
+| [`reference/HAND_IK_AND_PHYSICS.md`](reference/HAND_IK_AND_PHYSICS.md) | You are planning hand IK, Box3D contact or the spatial reload gate |
+| [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md) | You are triaging a Quest field report |
 
 ## Architecture in one screen
 
