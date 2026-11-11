@@ -2,10 +2,12 @@
 # encoding: utf-8
 # a1batross, mittorn, 2018
 
+import sys
+sys.dont_write_bytecode = True
+
 from waflib import Build, Context, Logs, TaskGen
 from waflib.Tools import waf_unit_test, c_tests
 import clang_format
-import sys
 import os
 
 # we need version 17 minimum
