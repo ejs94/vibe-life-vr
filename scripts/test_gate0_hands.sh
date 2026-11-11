@@ -52,6 +52,7 @@ SERVICE_PID=$!
 cleanup() {
     kill -TERM "$SERVICE_PID" 2>/dev/null || true
     pkill -9 -x monado-service 2>/dev/null || true
+    rm -f "${REPO_DIR}/out/vr_eye0.ppm"
 }
 trap cleanup EXIT
 sleep 1

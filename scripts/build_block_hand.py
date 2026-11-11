@@ -13,6 +13,7 @@ import math
 import shutil
 import subprocess
 import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 from PIL import Image

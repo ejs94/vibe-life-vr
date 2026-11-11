@@ -31,6 +31,7 @@ import re
 import shutil
 import subprocess
 import sys
+sys.dont_write_bytecode = True
 import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -19,6 +19,7 @@ import argparse
 import json
 import math
 import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 import numpy as np
