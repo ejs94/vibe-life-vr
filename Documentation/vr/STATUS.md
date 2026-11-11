@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-11-09
+**Last updated:** 2026-11-11
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
 **Evidence root:** `out/qa/`
@@ -32,6 +32,8 @@ current counts and gate freshness.
 - [x] `R1` regression 19/19
 - [x] `A7` Glock manual reload
 - [x] `Q1` Quest hardware-in-the-loop (2026-11-07)
+- [ ] `A4` hands gate (baked vs standalone hand)
+- [ ] `A5` grip seat against the latest `M1` engine log
 
 ### Current task: native weapon path
 
@@ -50,12 +52,15 @@ current counts and gate freshness.
 |---|---|
 | Monado unit suite (`M1`) | 49/49 PASS |
 | Regression battery (`R1`) | 19/19 PASS |
-| Documentation (`D1`) / hygiene (`H1`) | PASS |
+| Documentation (`D1`) | PASS |
+| Evidence hygiene (`H1`) | PASS (2026-11-11) |
 | Native route (`W0`) | PASS: native selected, legacy fallback observed |
 | Native asset | `models/native/v_9mmhandgun.mdl`, 3 bodies, 4 anchors, 10 sequences, HEV gloves |
 | Deployed models | `assets/valve_vr/models/native/` (15), `out/valve/models/native/` (15), `out/valve_vr/models/native/` (15) |
-| Load proof | `[VR_WEAPON_ROUTE] ... route=native` and `[VM_DBG_CHANGE] ... models/native/v_9mmhandgun.mdl` in `out/qa/M1/runs/20261109_215814/monado_unittest_engine.log` |
+| Load proof | `[VR_WEAPON_ROUTE] ... route=native` and `[VM_DBG_CHANGE] ... models/native/v_9mmhandgun.mdl` in `out/qa/M1/runs/20261110_005848/monado_unittest_engine.log` |
 | Manual reload (`A7`) | PASS (staged vertical slice) |
+| Hands (`A4`) | PENDING: no run |
+| Grip seat (`A5`) | PENDING: no run |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
 The overlay trap still applies: update both `out/valve/models` and
