@@ -2378,6 +2378,31 @@ static void XR_ProcessMenuToggle( void )
 	s_prevMenuButton = menuPressed;
 }
 
+// Rotate a vector by a unit quaternion: v' = v + 2*qw*(q x v) + 2*q x (q x v).
+static void XR_RotateVectorByQuat( const XrQuaternionf *q, const XrVector3f *v, XrVector3f *out )
+{
+	float tx = 2.0f * ( q->y * v->z - q->z * v->y );
+	float ty = 2.0f * ( q->z * v->x - q->x * v->z );
+	float tz = 2.0f * ( q->x * v->y - q->y * v->x );
+
+	out->x = v->x + q->w * tx + ( q->y * tz - q->z * ty );
+	out->y = v->y + q->w * ty + ( q->z * tx - q->x * tz );
+	out->z = v->z + q->w * tz + ( q->x * ty - q->y * tx );
+}
+
+// Map a point from the anchored menu quad space into view space. The renderer
+// adds the player view origin to the laser endpoints, so both must be
+// head-relative even when the hit test runs in quad space.
+static void XR_QuadPointToView( const XrPosef *quadInView, const XrVector3f *point, XrVector3f *out )
+{
+	XrVector3f rotated;
+
+	XR_RotateVectorByQuat( &quadInView->orientation, point, &rotated );
+	out->x = rotated.x + quadInView->position.x;
+	out->y = rotated.y + quadInView->position.y;
+	out->z = rotated.z + quadInView->position.z;
+}
+
 // Compute laser pointer ray cast and quad intersection for a specific hand
 static void XR_TracePointerRayForHand( int hand, XrTime syncTime, XrSpace targetQuadSpace,
                                        qboolean useMenuSpace, float menuDist, float worldScale,
@@ -2393,7 +2418,7 @@ static void XR_TracePointerRayForHand( int hand, XrTime syncTime, XrSpace target
 	{
 		poseInTarget.position.x = (hand == VR_HAND_LEFT) ? -0.15f : 0.15f;
 		poseInTarget.position.y = -0.15f;
-		poseInTarget.position.z = useMenuSpace ? 1.20f : -0.30f;
+		poseInTarget.position.z = useMenuSpace ? ( menuDist - 0.30f ) : -0.30f;
 
 		float pitch = vr_test_hand_pitch ? vr_test_hand_pitch->value : 0.0f;
 		float yaw   = vr_test_hand_yaw ? vr_test_hand_yaw->value : 0.0f;
@@ -2458,9 +2483,7 @@ static void XR_TracePointerRayForHand( int hand, XrTime syncTime, XrSpace target
 	float planeZ = useMenuSpace ? 0.0f : -menuDist;
 
 	vec3_t rayStart, rayEnd;
-	rayStart[0] = -poseInTarget.position.z * worldScale;
-	rayStart[1] = -poseInTarget.position.x * worldScale;
-	rayStart[2] =  poseInTarget.position.y * worldScale;
+	XrVector3f startPoint = poseInTarget.position;
 
 	float hit_x = poseInTarget.position.x + 2.0f * dx;
 	float hit_y = poseInTarget.position.y + 2.0f * dy;
@@ -2495,9 +2518,32 @@ static void XR_TracePointerRayForHand( int hand, XrTime syncTime, XrSpace target
 		}
 	}
 
-	rayEnd[0] = -hit_z * worldScale;
-	rayEnd[1] = -hit_x * worldScale;
-	rayEnd[2] =  hit_y * worldScale;
+	// The hand pose is expressed in quad space while the menu is anchored, but
+	// the renderer adds the player view origin to both endpoints. Convert them
+	// back to view space first, otherwise the laser is drawn from quad-space
+	// coordinates as if they were head-relative and looks skewed.
+	XrVector3f endPoint = { hit_x, hit_y, hit_z };
+	if( useMenuSpace && targetQuadSpace != XR_NULL_HANDLE && syncTime > 0 )
+	{
+		XrSpaceLocation quadLoc = {0};
+		quadLoc.type = XR_TYPE_SPACE_LOCATION;
+
+		if( XR_SUCCEEDED( xrLocateSpace( targetQuadSpace, g_xrViewSpace, syncTime, &quadLoc ) ) &&
+			( quadLoc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT ) &&
+			( quadLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT ) )
+		{
+			XR_QuadPointToView( &quadLoc.pose, &startPoint, &startPoint );
+			XR_QuadPointToView( &quadLoc.pose, &endPoint, &endPoint );
+		}
+	}
+
+	rayStart[0] = -startPoint.z * worldScale;
+	rayStart[1] = -startPoint.x * worldScale;
+	rayStart[2] =  startPoint.y * worldScale;
+
+	rayEnd[0] = -endPoint.z * worldScale;
+	rayEnd[1] = -endPoint.x * worldScale;
+	rayEnd[2] =  endPoint.y * worldScale;
 
 	s_pointerHands[hand].active = true;
 	s_pointerHands[hand].hit = hit;
@@ -2708,6 +2754,13 @@ void XR_UpdatePointerCursor( void )
 				s_pointerHands[s_activePointerHand].y,
 				s_pointerHands[s_activePointerHand].u,
 				s_pointerHands[s_activePointerHand].v );
+			Con_Printf( "^3[VR_POINTER] ray start=(%.1f %.1f %.1f) end=(%.1f %.1f %.1f)\n",
+				s_pointerHands[s_activePointerHand].rayStart[0],
+				s_pointerHands[s_activePointerHand].rayStart[1],
+				s_pointerHands[s_activePointerHand].rayStart[2],
+				s_pointerHands[s_activePointerHand].rayEnd[0],
+				s_pointerHands[s_activePointerHand].rayEnd[1],
+				s_pointerHands[s_activePointerHand].rayEnd[2] );
 		}
 	}
 
