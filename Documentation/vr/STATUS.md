@@ -61,6 +61,7 @@ current counts and gate freshness.
 | Manual reload (`A7`) | PASS (staged vertical slice) |
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
+| Bore diagnostic (`A9`) | FINDING: 7/10 barrel pairs are 66-90° off the body's long axis |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
 The overlay trap still applies: update both `out/valve/models` and
@@ -68,12 +69,15 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Active blockers
 
-1. **Shot direction: fixed in code, HIL validation pending.** The renderer and
-   the muzzle path now read the same model-owned axis, `muzzle_pos` ->
-   `muzzle_pos2`, so the bullet follows the visible bore by construction. The
-   old split (renderer aligned `muzzle - grip`, bullet used hand angles) is
-   gone. `aim_shot_evidence.sh`, `M1`, `R1` and `W0` pass; a headset check with
-   two hands is still required on the real reference space.
+1. **The muzzle pair is not the bore on 7 of 10 barrel weapons.** `A9`
+   measures `muzzle_pos -> muzzle_pos2` against the authored body hitbox:
+   Glock 89.8°, MP5 88.4°, shotgun 85.4°, Egon/Gauss/Hivehand 90.0°, tripmine
+   65.8°; only the .357, crossbow and RPG align (3.1°). The renderer and the
+   firing line share this axis, which is why the weapon laser looks cross-eyed.
+   The circular `aim_shot_evidence.sh` cannot catch it because it uses the same
+   pair as the reference. Fix with a per-weapon `bore_axis` or by moving
+   `muzzle_pos2` onto the true bore; do not tune `pitch_adjust`. HIL validation
+   is still pending after the fix.
 2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
    (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
    The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
@@ -98,24 +102,28 @@ The overlay trap still applies: update both `out/valve/models` and
    Unresolved Quest reports are triaged in
    [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
-## Resolved: shot vector
+## Bore axis: open
 
-The firing line and the visible barrel used to have two sources of truth: the
-renderer aligned a grip->muzzle axis while the bullet used hand angles plus the
-per-weapon `pitch_adjust`. The model-owned pair `muzzle_pos -> muzzle_pos2` now
-drives both (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`); see
-[`DECISIONS.md`](DECISIONS.md) D-024. `scripts/aim_shot_evidence.sh` measures
-against that bore: Glock 0.00, .357 0.19, Gauss 0.00, shotgun 1.44 degrees;
-`M1` 49/49, `R1` 19/19 and `W0` pass.
+The renderer and the bullet used to have two sources of truth: the renderer
+aligned a grip->muzzle axis while the bullet used hand angles plus the
+per-weapon `pitch_adjust`. They now share one axis, `muzzle_pos ->
+muzzle_pos2` (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`;
+[`DECISIONS.md`](DECISIONS.md) D-024).
 
-Two things remain before this is closed:
+That fixed the split, but it did not make the shared axis the visible bore.
+`A9` compares the pair with the authored body hitbox and finds it 66-90° off on
+7 of the 10 barrel weapons. `scripts/aim_shot_evidence.sh` reports 0.00 degrees
+because it measures the bullet against the same pair, so the result is
+circular. The weapon laser in the headset shows the mismatch directly.
 
-- Validate the result on the headset reference space with two hands engaged.
+Open items:
+
+- Replace the pair with a per-weapon bore axis (or move `muzzle_pos2` onto the
+  true bore) and make the renderer and the firing line use it.
 - Fix the circular shot-origin harness: `scripts/aim_shot_evidence.sh` forces
   every hand and head angle to zero and `engine/platform/openxr/xr_core.c`
-  overwrites the logged shot start with the computed muzzle, so the reported
-  angle proves arithmetic consistency, not that the visible barrel agrees in a
-  headset.
+  overwrites the logged shot start with the computed muzzle.
+- Validate the result on the headset reference space with two hands engaged.
 
 ## Evidence
 

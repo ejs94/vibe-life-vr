@@ -251,7 +251,9 @@ The semantics are fixed by code, not by convention:
 - attachment 0 = muzzle (`VR_MUZZLE_ATTACHMENT`,
   `cl_dll/VRHelper.cpp:1494-1506`);
 - 0 and 1 together define the ballistic direction
-  (`cl_dll/VRHelper.cpp:1508-1520`, `dlls/player.cpp:4784-4799`);
+  (`cl_dll/VRHelper.cpp:1508-1520`, `dlls/player.cpp:4784-4799`); on the
+  **weapon** rigs this pair is a short lateral offset, not a bore, so read
+  section 3.14 before copying it;
 - 2 and 3 are the HUD anchor and HUD up vector
   (`cl_dll/VRHelper.cpp:1566-1590`);
 - `Box*` bones are melee/touch colliders.
@@ -371,6 +373,61 @@ inside gameplay code:
   insta-death, hand/weapon alignment, crash on launch or level change, save
   corruption, and "immersive ladders are hard to dismount".
 
+### 3.14 Bore axis: the muzzle pair is a flash quad, not a barrel
+
+Both GoldSrc VR mods derive the shot direction from the same model pair:
+
+- Half-Life-VR: `GetAutoaimVector()` returns
+  `normalize(attachment[1] - attachment[0])`
+  (`Half-Life-VR/src/cl_dll/VRHelper.cpp:1508-1523`,
+  `Half-Life-VR/src/dlls/VRController.cpp:601-611`), and the server reads the
+  same pair (`Half-Life-VR/src/dlls/player.cpp:4784-4799`).
+- Blue Shift VR carries the same code (`Blue-Shift-VR/dlls/vr/VRController.cpp`,
+  `VRController::GetAim`).
+
+What they do **not** do is orient the visible viewmodel from that pair. The
+client copies the controller position and angles straight into the viewmodel
+entity every frame (`Half-Life-VR/src/cl_dll/VRHelper.cpp:1282-1297`,
+`VRHelper::UpdateViewEnt`). The gun you see follows the controller; the pair is
+only the server's ballistic vector. The reference study already notes that the
+hand you see and the hand that shoots are separate state
+(section 3.4).
+
+The rigs explain why this works for them:
+
+| Rig | Muzzle pair | Long body axis | Attachments |
+|---|---|---|---|
+| HL:VR original viewmodel `art/models/v_9mmhandgun.mdl` | 1.43, -Y | `BoxPistol` Z 8.0 | 4, `Hands mesh` chain |
+| HL:VR SD viewmodel `art/models/SD/v_9mmhandgun.mdl`, identical to the project native model | 1.588, +Y | `BoxGun` Z 9.8 | 4, `Hands biped`, `Bone01`/`Bone02` |
+| HL:VR hand `art/models/v_hand_labcoat.mdl` | 2.06, +X | none (hand) | 4, including `R_Arm_bone` |
+| HL:VR hand `art/models/v_hand_hevsuit.mdl` | 2.07, +X | none (hand) | 4 |
+| Project `assets/valve_vr/models/v_hand.mdl` | none | none | HEV glove, 31 bones, no muzzle/HUD attachments |
+
+The same field name therefore carries two different meanings:
+
+- on the **hand** rigs, `muzzle_pos -> muzzle_pos2` is the hand's forward axis
+  (+X, about 2 units long);
+- on the **weapon** rigs, it is a short lateral offset (1.4-1.6 units on Y),
+  most likely the width of the muzzle-flash quad, not the bore.
+
+The reference mods never expose the second meaning visually because their
+viewmodel is decoupled. Vibe-Life VR uses the pair for **both** the bullet and
+the visible viewmodel rotation (`R_VR_RotateViewmodelToPalm`), so the lateral
+offset becomes a visible gun and laser error. That is why `A9` measures 66-90°
+between the pair and the body's long axis on 7 of the 10 native barrel weapons.
+
+Why it matters: there is no "reference solution" for the bore itself to copy.
+The reusable lesson is the decoupling: the visible gun must follow the palm or
+the aim pose, never the muzzle pair; the pair may remain a flash/HUD anchor.
+The bullet and the laser need a real per-weapon bore axis (or a corrected
+asset), which is a separate contract from the flash quad.
+
+Recommendation: keep the reference's decoupling, add a per-weapon bore axis
+for ballistics and the laser, and treat `muzzle_pos`/`muzzle_pos2` as the
+muzzle-flash pair on weapon rigs. Do not copy the reference's server-side pair
+as the aiming invariant; their own defect list still carries "hand/weapon
+alignment" (section 3.13).
+
 ## 4. What not to copy
 
 | Item | Why |
@@ -382,6 +439,7 @@ inside gameplay code:
 | Speech recognition, FMOD, Steam achievements as core features | Platform-locked and out of scope for Quest. |
 | Their hand geometry | Acknowledged as broken upstream; copy the rig contract only. |
 | Server as the ballistic pose source | Conflicts with D-002 and with client prediction. |
+| The `muzzle_pos -> muzzle_pos2` pair as the bore | On weapon rigs it is a 1.4-1.6 unit lateral flash offset; see section 3.14. |
 
 ## 5. Proposed follow-ups
 

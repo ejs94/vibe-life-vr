@@ -279,6 +279,13 @@ Consequences:
 
 **Status:** accepted 2026-11-10
 
+**Premise under review (2026-11-11):** gate `A9` shows that the pair is the
+muzzle's lateral axis, not the bore, on 7 of the 10 native barrel weapons
+(Glock 89.8°, MP5 88.4°). The renderer and the firing line still share one axis,
+which is the part that stands; the axis itself must be replaced by a per-weapon
+bore override or a corrected asset. Do not treat the pair as the bore until
+`A9` is aligned.
+
 The renderer and the firing line read different axes. `R_VR_RotateViewmodelToPalm`
 aligned `muzzle_pos - grip bone` to the aim pose, while the muzzle path fired
 along hand angles plus per-weapon `pitch_adjust`. The visible barrel and the
