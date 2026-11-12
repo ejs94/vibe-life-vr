@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Diagnose the bore axis used by the VR laser and the firing line.
+"""Measure the authored muzzle pair against the weapon body's long axis.
 
-The renderer and the muzzle path treat ``muzzle_pos -> muzzle_pos2`` as the
-barrel direction. That pair is authored per model and is not guaranteed to be
-the visible bore, so this review gate measures it against the weapon body's
-long axis taken from the authored hitboxes.
+This is an asset diagnostic only; the renderer uses the runtime grip->muzzle
+bone vector (D-027). ``muzzle_pos -> muzzle_pos2`` is a lateral muzzle-flash
+quad, so a large angle against the body's long hitbox axis is expected for most
+native weapons and does not describe the bore the VR laser and the firing line
+follow.
 
-A weapon profile may author a per-model ``bore_axis`` override for a model
-whose authored pair is not the visible bore. The override is compared to the
-same hitbox axis, and the comparison ignores sign because the renderer resolves
-the bore direction at runtime.
+A row is ``ALIGNED`` when the pair is within five degrees of the body's long
+hitbox axis, ``OFF-AXIS`` otherwise, and ``NOT-APPLICABLE`` when the weapon has
+no barrel. The angle does not take ``abs(dot)``: a fully reversed pair is
+OFF-AXIS, not ALIGNED.
 
 This script is read-only. It does not change the firing line and it does not
 rewrite an asset. A mismatch is a finding for the maintainer, not an automatic
-failure; use ``--strict`` in CI when a tolerance must be enforced.
+failure; ``--fail-on-off-axis`` turns the finding into exit code 1 when a CI job
+wants to record it.
 """
 
 from __future__ import annotations
@@ -163,22 +165,8 @@ def angle_between(a, b) -> float:
     if ua is None or ub is None:
         return float("nan")
     # Do NOT take abs(dot): a 180-degree reversed pair is OFF-AXIS, not
-    # ALIGNED. abs() would mask a fully reversed bore as 0 degrees.
+    # ALIGNED. abs() would mask a fully reversed pair as 0 degrees.
     dot = max(-1.0, min(1.0, sum(ua[k] * ub[k] for k in range(3))))
-    return math.degrees(math.acos(dot))
-
-
-def angle_to_axis_undirected(a, b) -> float:
-    """Return the unsigned angle between two axis lines, in degrees.
-
-    Unlike :func:`angle_between`, this takes ``abs(dot)``. An authored
-    ``bore_axis`` only fixes the line, not its direction; the renderer resolves
-    the sign at runtime, so a reversed override still describes a valid bore.
-    """
-    ua, ub = unit(a), unit(b)
-    if ua is None or ub is None:
-        return float("nan")
-    dot = max(-1.0, min(1.0, abs(sum(ua[k] * ub[k] for k in range(3)))))
     return math.degrees(math.acos(dot))
 
 
@@ -194,40 +182,7 @@ def profile_muzzles() -> dict[str, int]:
     return result
 
 
-def profile_bore_overrides() -> dict[str, list[float]]:
-    """Return the authored ``bore_axis`` overrides keyed by model filename.
-
-    A missing, unreadable or malformed profile yields no overrides so the gate
-    keeps its legacy pair-only behaviour.
-    """
-    if not PROFILE.is_file():
-        return {}
-    try:
-        data = json.loads(PROFILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    weapons = data.get("weapons", data)
-    if not isinstance(weapons, dict):
-        return {}
-    result = {}
-    for name, entry in weapons.items():
-        if not isinstance(entry, dict) or "bore_axis" not in entry:
-            continue
-        axis = entry["bore_axis"]
-        if not isinstance(axis, (list, tuple)) or len(axis) != 3:
-            continue
-        try:
-            vector = [float(v) for v in axis]
-        except (TypeError, ValueError):
-            continue
-        if unit(vector) is None:
-            continue
-        result[name] = vector
-    return result
-
-
-def diagnose_model(mdl_path: Path, muzzle_attachment: int | None,
-                   bore_override: list[float] | None = None) -> dict:
+def diagnose_model(mdl_path: Path, muzzle_attachment: int | None) -> dict:
     if muzzle_attachment is not None and muzzle_attachment < 0:
         return {"model": mdl_path.name, "state": "NOT-APPLICABLE", "note": "no barrel"}
 
@@ -278,18 +233,11 @@ def diagnose_model(mdl_path: Path, muzzle_attachment: int | None,
         smd_name, box, pair, axis = best
         angle = angle_between(pair, axis)
         dot = sum(unit(pair)[k] * unit(axis)[k] for k in range(3))
-        override_angle = None
-        if bore_override is not None:
-            override_angle = angle_to_axis_undirected(bore_override, axis)
-            state = "ALIGNED (override)" if override_angle <= ALIGNED_DEG else "BAD-OVERRIDE"
-        else:
-            state = "ALIGNED" if angle <= ALIGNED_DEG else "OFF-AXIS"
+        state = "ALIGNED" if angle <= ALIGNED_DEG else "OFF-AXIS"
         return {
             "model": mdl_path.name,
             "state": state,
             "angle": angle,
-            "override_angle": override_angle,
-            "has_override": bore_override is not None,
             "pair_len": math.sqrt(sum(x * x for x in pair)),
             "pair": pair,
             "barrel": axis,
@@ -306,17 +254,15 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true",
                         help="return 1 when a barrel weapon is off-axis")
     parser.add_argument("--fail-on-off-axis", action="store_true",
-                        help="exit 1 when any row state is OFF-AXIS or BAD-OVERRIDE")
+                        help="exit 1 when any row state is OFF-AXIS")
     parser.add_argument("--model", action="append", default=[],
                         help="diagnose only this model (repeatable)")
     parser.add_argument("--json", nargs="?", const="-", default=None, metavar="PATH",
-                        help="dump a JSON map {model: {state, bore_axis, pair, "
-                             "angle, override_angle, has_override, hbox_bone, "
-                             "dot_sign}} to PATH (or stdout if no PATH)")
+                        help="dump a JSON map {model: {state, pair, angle, "
+                             "hbox_bone, dot_sign}} to PATH (or stdout if no PATH)")
     args = parser.parse_args()
 
     muzzles = profile_muzzles()
-    overrides = profile_bore_overrides()
     models = [NATIVE_DIR / name for name in sorted(args.model)] if args.model else sorted(NATIVE_DIR.glob("*.mdl"))
     if not models:
         print("[FAIL] no native models found")
@@ -327,37 +273,30 @@ def main() -> int:
         if not mdl_path.is_file():
             print(f"[FAIL] missing model: {mdl_path}")
             return 1
-        rows.append(diagnose_model(mdl_path, muzzles.get(mdl_path.name),
-                                   overrides.get(mdl_path.name)))
+        rows.append(diagnose_model(mdl_path, muzzles.get(mdl_path.name)))
 
-    print(f"{'model':22s} {'state':18s} {'angle':>7s} {'pair':>7s} {'hbox':>6s} {'axis':>4s}  detail")
+    print(f"{'model':22s} {'state':14s} {'angle':>7s} {'pair':>7s} {'hbox':>6s} {'axis':>4s}  detail")
     print("-" * 100)
     off_axis = 0
     for row in rows:
         if "angle" not in row:
-            print(f"{row['model']:22s} {row['state']:18s} {'-':>7s} {'-':>7s} {'-':>6s} {'-':>4s}  {row['note']}")
+            print(f"{row['model']:22s} {row['state']:14s} {'-':>7s} {'-':>7s} {'-':>6s} {'-':>4s}  {row['note']}")
             continue
         if row["state"] == "OFF-AXIS":
             off_axis += 1
-        detail = (f"hbox={row['hbox_bone']} dot={row['dot_sign']:+.2f} smd={row['smd']}")
-        if row["has_override"]:
-            # The pair angle is the legacy measurement; the override angle is
-            # what the gate now accepts for this model.
-            detail += (f" pair={row['angle']:.1f}° override={row['override_angle']:.1f}°")
+        detail = f"hbox={row['hbox_bone']} dot={row['dot_sign']:+.2f} smd={row['smd']}"
         print(
-            f"{row['model']:22s} {row['state']:18s} {row['angle']:6.1f}° "
+            f"{row['model']:22s} {row['state']:14s} {row['angle']:6.1f}° "
             f"{row['pair_len']:7.2f} {row['hbox_len']:6.1f} {row['hbox_axis']:>4s}  {detail}"
         )
 
     print("-" * 100)
-    failing = [row for row in rows if row["state"] in ("OFF-AXIS", "BAD-OVERRIDE")]
-    bad_override = sum(1 for row in rows if row["state"] == "BAD-OVERRIDE")
+    failing = [row for row in rows if row["state"] == "OFF-AXIS"]
     print(f"{off_axis} barrel weapon(s) off the body's long axis by more than {ALIGNED_DEG:.0f}°")
-    print(f"{bad_override} bore_axis override(s) off the body's long axis by more than {ALIGNED_DEG:.0f}°")
-    print("Review gate: the pair is not proven to be the visible bore until every row is ALIGNED.")
+    print("Asset diagnostic: the pair is not the runtime bore (D-027); an OFF-AXIS row is a finding.")
     if failing:
-        names = ", ".join(f"{row['model']}={row['state']}" for row in failing)
-        print(f"[FAIL] {len(failing)} barrel weapon(s) not aligned: {names}")
+        names = ", ".join(row["model"] for row in failing)
+        print(f"[FINDING] {len(failing)} barrel weapon(s) not aligned: {names}")
     else:
         print("[PASS] every barrel weapon is aligned or not applicable")
 
@@ -367,19 +306,14 @@ def main() -> int:
             if "barrel" in row:
                 payload[row["model"]] = {
                     "state": row["state"],
-                    "bore_axis": row["barrel"],
                     "pair": row["pair"],
                     "angle": row["angle"],
-                    "override_angle": row["override_angle"],
-                    "has_override": row["has_override"],
                     "hbox_bone": row["hbox_bone"],
                     "dot_sign": row["dot_sign"],
                 }
             else:
                 payload[row["model"]] = {
                     "state": row.get("state"),
-                    "override_angle": None,
-                    "has_override": False,
                     "note": row.get("note"),
                 }
         text = json.dumps(payload, indent=2)

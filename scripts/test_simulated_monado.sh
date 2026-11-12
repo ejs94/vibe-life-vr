@@ -219,6 +219,48 @@ sys.exit(0)
 ' "$OUTPUT_DIR"
 }
 
+# A vertical bright-green line in a weapon capture is the bullet-impact debug
+# tracer firing straight up instead of out of the barrel. It was present on
+# every pre-fix MP5/shotgun capture and passed all 49 old assertions. Reject it:
+# this is the visual regression the log greps could never see.
+no_vertical_shot_line() {
+    python3 -c '
+import sys
+from pathlib import Path
+from PIL import Image
+
+run = Path(sys.argv[1])
+checked = 0
+for name in ("unit_09_mp5_muzzle.png", "unit_10_shotgun_muzzle.png",
+             "unit_11_crossbow_muzzle.png", "unit_12_rpg_muzzle.png"):
+    path = run / name
+    if not path.is_file():
+        continue
+    checked += 1
+    im = Image.open(path).convert("RGB")
+    w, h = im.size
+    px = im.load()
+    pts = []
+    for y in range(0, h, 2):
+        for x in range(0, w, 2):
+            r, g, b = px[x, y]
+            if g > 140 and g > r * 1.6 and g > b * 1.6:
+                pts.append((x, y))
+    if len(pts) < 100:
+        continue
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    span_x, span_y = max(xs) - min(xs), max(ys) - min(ys)
+    # A vertical shot tracer is a tall, thin, dense green line (the old
+    # captures measured 986 px in 28x254). Legitimate impact crosshairs are
+    # short or wide, so they must not trip this assertion.
+    if len(pts) > 400 and span_y > 150 and span_x < 45:
+        print(f"{name}: vertical green tracer {span_x}x{span_y} ({len(pts)} px)")
+        sys.exit(1)
+sys.exit(0 if checked else 1)
+' "$OUTPUT_DIR"
+}
+
 # Informational only: identical frames are possible when two phases render the
 # same static scene. Never fail the gate on this; assertion 16/17 now require
 # their own log events, so a duplicate PNG cannot stand in for behaviour.
@@ -405,6 +447,8 @@ assert_test 50 "Captures are non-blank (no black eye dumps)" 'captures_nonblank'
 
 assert_test 51 "All scheduled eye dumps captured" \
     '[ "$CAPTURED_IMAGES" -ge 20 ]'
+
+assert_test 52 "Bullet tracer leaves the barrel, not straight up" 'no_vertical_shot_line'
 
 dups="$(capture_duplicates)"
 if [ -n "$dups" ]; then
