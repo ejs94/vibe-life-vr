@@ -451,10 +451,12 @@ assert_test 51 "All scheduled eye dumps captured" \
 assert_test 52 "Bullet tracer leaves the barrel, not straight up" 'no_vertical_shot_line'
 
 # The maintainer's acceptance criterion: the simulator must NOT be green while
-# the laser/aim, the visible barrel and the hands are misaligned. This assertion
-# is deliberately expected to FAIL on the current build; it must not be removed
-# or loosened to make the scorecard look green. Quest 3 HIL stays blocked until
-# check_weapon_alignment.py passes on a fresh run.
+# the laser/aim, the visible barrel and the hands are misaligned. With
+# vr_anchor_rotation OFF (D-031) the renderer no longer forces a proxy vector
+# onto the aim ray, so this gate measures the RAW asset geometry instead of
+# confirming the renderer's own correction. It is expected to FAIL until the
+# viewmodels are authored for VR or replaced by a VR-ready fallback (F1).
+# Do not remove or loosen it to make the scorecard look green.
 assert_test 53 "Visible barrel, laser and hands aligned (acceptance)" \
     'python3 "${SCRIPT_DIR}/check_weapon_alignment.py" --log "$TEST_LOG" --ground-truth "${REPO_DIR}/out/qa/P2/bore_ground_truth.json"'
 

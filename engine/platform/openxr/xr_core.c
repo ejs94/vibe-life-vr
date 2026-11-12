@@ -396,7 +396,12 @@ void XR_RegisterCVars( void )
     Cvar_Get("vr_test_camera_azimuth", "0", 0, "Fixed comparison camera orbit azimuth in degrees for vr_test_camera 5");
     Cvar_Get("vr_test_camera_elevation", "0", 0, "Fixed comparison camera orbit elevation in degrees for vr_test_camera 5");
     vr_native_weapons = Cvar_Get("vr_native_weapons", "0", 0, "Resolve native weapon models from models/native/<name>.mdl; fall back to legacy when missing");
-    Cvar_Get("vr_anchor_rotation", "1", FCVAR_ARCHIVE, "Rotate native viewmodels so the grip bone matches the controller palm orientation");
+    // D-031: rotating every bone to force a proxy "bore vector" onto the aim
+    // direction twisted native viewmodels by 33-94 degrees and tore the baked
+    // hand off the grip. No engine-side rotation can repair an asset that was
+    // never authored for VR. Leave this OFF by default; it stays as an A/B
+    // switch for the asset-preparation work, not as a runtime fix.
+    Cvar_Get("vr_anchor_rotation", "0", FCVAR_ARCHIVE, "Rotate native viewmodels so a proxy bone vector matches the aim (OFF: assets must be VR-ready)");
     vr_baked_hand_curling = Cvar_Get("vr_baked_hand_curling", "1", 0, "Curling on the baked viewmodel hand: 0=off, 1=current, 2=index finger only");
     vr_thumb_curl_axis = Cvar_Get("vr_thumb_curl_axis", "1", 0, "Standalone thumb curl axis: 0=legacy local Y, 1=thumb-specific local Z toward palm");
     vr_hand_grip_lock = Cvar_Get("vr_hand_grip_lock", "1", 0, "0=off, 1=snap standalone hand position to the viewmodel grip bone, 2=also copy its orientation");

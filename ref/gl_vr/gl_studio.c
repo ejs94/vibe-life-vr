@@ -1885,6 +1885,12 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 
 	if( !e || e != tr.viewent || !XR_IsActive() || !m_pStudioHeader )
 		return;
+	// D-031: OFF by default. This whole function was an attempt to force a
+	// proxy bone vector (grip->muzzle, then muzzle->hud) onto the aim ray.
+	// Neither vector is the visible barrel on the shipped SD assets, so the
+	// correction rotated the model 33-94 degrees and detached the baked hand.
+	// The viewmodel must simply follow the controller pose, like VRHelper's
+	// UpdateViewEnt. Re-enable ONLY with assets authored for VR (see F1).
 	if( !vr_anchor_rotation || vr_anchor_rotation->value <= 0.0f )
 		return;
 	if( !e->model || Q_strnicmp( e->model->name, "models/native/", 14 ))
