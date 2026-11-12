@@ -456,7 +456,7 @@ assert_test 52 "Bullet tracer leaves the barrel, not straight up" 'no_vertical_s
 # or loosened to make the scorecard look green. Quest 3 HIL stays blocked until
 # check_weapon_alignment.py passes on a fresh run.
 assert_test 53 "Visible barrel, laser and hands aligned (acceptance)" \
-    'python3 "${SCRIPT_DIR}/check_weapon_alignment.py" --log "$TEST_LOG"'
+    'python3 "${SCRIPT_DIR}/check_weapon_alignment.py" --log "$TEST_LOG" --ground-truth "${REPO_DIR}/out/qa/P2/bore_ground_truth.json"'
 
 dups="$(capture_duplicates)"
 if [ -n "$dups" ]; then
