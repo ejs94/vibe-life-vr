@@ -1681,6 +1681,54 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
         VectorCopy( local_angles, out_aim_angles );
     }
 
+    // V3 acceptance telemetry. Measure the angle between the AUTHORED visible
+    // barrel (attachment 0 "muzzle_pos" -> attachment 2 "hud_pos") and the
+    // direction the bullet/laser actually takes. Both are world-space studio
+    // attachments, so this is independent of the flash-quad pair (0 -> 1) used
+    // elsewhere and of the renderer alignment; it cannot self-confirm. The
+    // maintainer's HIL gate requires this angle to be small on every weapon.
+    {
+        vec3_t aim_fwd;
+        AngleVectors( local_angles, aim_fwd, NULL, NULL );
+
+        vec3_t barrel;
+        qboolean have_barrel = false;
+        if( clgame.viewent.model &&
+            !VectorIsNull( clgame.viewent.attachment[0] ) &&
+            !VectorIsNull( clgame.viewent.attachment[2] ))
+        {
+            VectorSubtract( clgame.viewent.attachment[0], clgame.viewent.attachment[2], barrel );
+            if( VectorLength( barrel ) > 1.0f )
+            {
+                VectorNormalize( barrel );
+                have_barrel = true;
+            }
+        }
+
+        // Only cache a model once we have a REAL measurement. The studio
+        // attachments are computed later in the frame, so the first call for a
+        // freshly equipped weapon often has a null hud_pos; logging that would
+        // replace the model's one row with MISSING and hide the real angle.
+        static char s_lastAimModel[64] = { 0 };
+        if( wpn[0] && have_barrel && Q_strcmp( s_lastAimModel, wpn ))
+        {
+            Q_strncpy( s_lastAimModel, wpn, sizeof( s_lastAimModel ));
+
+            float d = DotProduct( aim_fwd, barrel );
+            if( d > 1.0f ) d = 1.0f;
+            if( d < -1.0f ) d = -1.0f;
+            float ang = acosf( d ) * ( 180.0f / 3.14159265f );
+
+            vec3_t to_muzzle;
+            VectorSubtract( clgame.viewent.attachment[0], refState.vieworg, to_muzzle );
+            int in_front = ( DotProduct( to_muzzle, aim_fwd ) > 0.0f ) ? 1 : 0;
+
+            Con_DPrintf( "[VR_AIM] model=%s angle=%.1f in_front=%d barrel=(%.2f %.2f %.2f) aim=(%.2f %.2f %.2f)\n",
+                wpn, ang, in_front, barrel[0], barrel[1], barrel[2],
+                aim_fwd[0], aim_fwd[1], aim_fwd[2] );
+        }
+    }
+
     if( out_muzzle_offset )
     {
         // 1. If viewmodel already has attachment computed by studio bone transformation, use it directly
