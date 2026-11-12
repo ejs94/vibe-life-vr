@@ -323,16 +323,34 @@ Consequences:
   crashed run; engine exit code and the suite sentinel are now required.
 - `T1` mutates the evidence and requires the assertions to flip, so a green
   suite cannot hide a tautological check.
-- `A9`-style diagnostics record a FINDING, not a PASS; `B1` converts the bore
-  finding into a real failing gate.
+- `A9`-style diagnostics record a FINDING, not a PASS; the `B1` gate (retired
+  2026-11-11) tried to convert the bore finding into a real failing gate.
 
 ## D-026: Per-weapon bore_axis override
 
-**Status:** accepted 2026-11-11
+**Status:** superseded 2026-11-11 by D-027
 
 - The 7 off-axis native weapons get a model-space `bore_axis` in
   `vr_weapons.json`; the renderer resolves its sign from the muzzle-minus-grip
   bone vector.
 - The 3 aligned weapons keep the legacy pair path.
-- `B1` verifies the overrides; HIL visual confirmation is still required.
+- The `B1` gate (retired) verified the overrides; HIL visual confirmation is
+  still required.
+
+## D-027: The bore axis is measured at runtime from the bone hierarchy
+
+**Status:** accepted 2026-11-11
+
+- The `muzzle_pos -> muzzle_pos2` pair is a lateral muzzle-flash quad, not the
+  barrel. Aligning it to the aim pose twisted the native viewmodels by roughly
+  90 degrees and made the MP5 shot leave the barrel as a vertical tracer.
+- Asset-space axes taken from SMD hitboxes, Blender coordinates or the MDL
+  conversion live in a different space than the studio bone transforms. They
+  must not be injected into world-space bone math; that is why the per-weapon
+  `bore_axis` override twisted the gun and is being removed.
+- `R_VR_RotateViewmodelToPalm` now uses the world-space grip-bone -> muzzle-bone
+  vector, and the native firing path keeps the raw aim angles
+  (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`).
+- `M1` assertion 52 rejects a vertical green tracer in the weapon captures. The
+  earlier 49 log-grep assertions could not detect a bullet firing straight up.
 

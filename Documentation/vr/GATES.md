@@ -63,7 +63,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `A7` | Interaction | active | `./scripts/test_manual_reload.sh` | `out/qa/A7/latest` | monado | `gate-runner` |
 | `A8` | Assets | active | `python3 scripts/check_viewmodel_names.py` | `out/qa/A8/latest` | monado | `gate-runner` |
 | `A9` | Assets | review | `python3 scripts/check_weapon_bore.py` | `out/qa/A9/latest` | monado | `gate-runner` |
-| `B1` | Assets | active | `python3 scripts/check_weapon_bore.py --fail-on-off-axis` | `out/qa/B1/latest` | monado | `gate-runner` |
+| `B1` | Assets | retired | — | — | monado | `gate-runner` |
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
 | `T1` | Tests | active | `python3 scripts/check_assertion_integrity.py --script scripts/test_simulated_monado.sh --log out/qa/M1/latest/monado_unittest_engine.log --captures out/qa/M1/latest` | `out/qa/T1/latest` | monado | `gate-runner` |
@@ -98,10 +98,13 @@ maintainer approval. Green automated checks do not prove appearance.
 - `R1` passes only when all 19 assertions pass.
 - `A2` passes only when bones, sequences, events, bodygroups and attachments
   survive the mdldec -> pxstudiomdl roundtrip.
-- `A9` is a read-only diagnostic. It compares `muzzle_pos -> muzzle_pos2` with
-  the weapon body's long hitbox axis for every native barrel weapon. A non-zero
-  angle is a finding for the maintainer, not an automatic failure: fix it with a
-  per-weapon bore override or an asset change, never by tuning `pitch_adjust`.
+- `A9` is a read-only diagnostic that compares `muzzle_pos -> muzzle_pos2` with
+  the weapon body's long hitbox axis for every native barrel weapon. That pair
+  is a lateral muzzle-flash quad, not the bore, so a non-zero angle is expected.
+  `A9` is an asset diagnostic recorded as FINDING; it never gates automation.
+- `B1` is retired 2026-11-11. Its asset-level bore override was wrong
+  (model-space axis injected into world-space bone math). The bore is now the
+  runtime grip->muzzle vector; see D-027. Do not recreate B1.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.

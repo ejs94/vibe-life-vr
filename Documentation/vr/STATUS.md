@@ -44,7 +44,7 @@ current counts and gate freshness.
 - [x] Native Glock adopted (Half-Life: VR SD, unmodified)
 - [x] Native arsenal (15 viewmodels) routed
 - [x] HEV glove on both hands (`v_hand.mdl`)
-- [x] Shot direction follows the visible barrel (model bore anchors; HIL validation pending)
+- [x] Shot direction follows the visible barrel (runtime grip->muzzle axis; HIL validation pending)
 - [ ] Hand matches the OpenVR 31-bone skeleton
 - [ ] Manual reload driven by 6DoF hands
 
@@ -64,7 +64,7 @@ current counts and gate freshness.
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
-| Bore gate (`B1`) | PASS: 7 `bore_axis` overrides verified against the asset hitboxes |
+| Bore alignment (runtime) | FIXED in simulator: renderer aligns grip->muzzle; Glock seated, MP5 vertical tracer gone (before/after captures in `out/qa/V2/`) |
 | Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
@@ -73,13 +73,9 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Active blockers
 
-1. **Bore axis code complete, headset confirmation pending.** The pair is
-   lateral on 7/10 barrel weapons (`A9`). Seven `bore_axis` overrides now live
-   in `vr_weapons.json`; the renderer aligns them (sign resolved from
-   muzzle-minus-grip) and the firing line stays on the raw aim. `B1` is green.
-   The circular shot-origin harness is broken (independent hitbox axis, second
-   tilted pose, `reported_start` preserved). Only a two-handed headset check can
-   confirm the visible barrel and laser agree; do not claim it from Monado.
+1. **Bore axis: code fixed, HIL still pending.** The runtime grip->muzzle axis
+   removed the ~90deg Glock twist and the vertical shot tracer. A two-handed
+   headset check is still required; do not claim appearance from Monado.
 2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
    (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
    The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
@@ -93,9 +89,10 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Next steps
 
-1. **Stage 1, bore axis (code done).** Validate on a real headset with two
-   hands engaged; `B1`, `M1`, `R1` and `W0` are green locally. See
-   [`PLAN.md`](PLAN.md#stage-1-bore-axis).
+1. **Stage 1, bore axis (code done; HIL is the remaining exit criterion).**
+   The renderer now uses the runtime grip->muzzle bone vector; the simulator
+   run is green. Validate on a real headset with two hands engaged before
+   claiming appearance. See [`PLAN.md`](PLAN.md#stage-1-bore-axis-code-complete-hil-pending).
 2. **Stage 2, `pitch_adjust` removal (data + precedence done).** All 16
    shipped profiles are zero; the Euler adjust is now only a fallback for mods
    without bore anchors. The optional hand/aim transform cleanup remains.
@@ -109,28 +106,39 @@ The overlay trap still applies: update both `out/valve/models` and
    for visual approval. Unresolved Quest reports are triaged in
    [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
-## Bore axis: open
+## Bore axis: code fixed, HIL open
 
-The renderer and the bullet used to have two sources of truth: the renderer
-aligned a grip->muzzle axis while the bullet used hand angles plus the
-per-weapon `pitch_adjust`. They now share one axis, `muzzle_pos ->
-muzzle_pos2` (`ref/gl_vr/gl_studio.c`, `engine/platform/openxr/xr_input.c`;
-[`DECISIONS.md`](DECISIONS.md) D-024).
+The renderer, the laser and the bullet used to disagree. D-024 made
+`muzzle_pos -> muzzle_pos2` the shared axis, but that pair is a lateral
+muzzle-flash quad, so aligning it to the aim pose twisted every native
+viewmodel by roughly 90 degrees and the MP5 shot left the barrel as a vertical
+tracer.
 
-That fixed the split, but it did not make the shared axis the visible bore.
-`A9` compares the pair with the authored body hitbox and finds it 66-90° off on
-7 of the 10 barrel weapons. `scripts/aim_shot_evidence.sh` reports 0.00 degrees
-because it measures the bullet against the same pair, so the result is
-circular. The weapon laser in the headset shows the mismatch directly.
+The fix (D-027) derives the bore at runtime:
+
+- `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` rotates the viewmodel
+  with the world-space grip-bone -> muzzle-bone vector. No model-space axis is
+  involved and no Blender/MDL/OpenXR axis conversion is applied.
+- `engine/platform/openxr/xr_input.c` keeps the raw aim angles for
+  `models/native/` weapons, so the firing line stays on the aim pose.
+- The `muzzle_pos -> muzzle_pos2` pair is treated as the muzzle-flash quad.
+
+Simulator evidence: the MP5 capture went from 986 bright-green pixels in a
+28x254 vertical line (tracer firing up) to 0 after the fix; the Glock is seated
+in the hand with the laser leaving the slide; the `[VR_ALIGN]` Glock correction
+dropped from ~90deg to ~52deg. Captures are in `out/qa/V2/`.
+
+`A9` still reports 7/10 weapons OFF-AXIS. That is expected: it measures the
+asset pair, which is not the bore, so it stays a `FINDING` and never gates
+automation.
 
 Open items:
 
-- Replace the pair with a per-weapon bore axis (or move `muzzle_pos2` onto the
-  true bore) and make the renderer and the firing line use it.
-- Fix the circular shot-origin harness: `scripts/aim_shot_evidence.sh` forces
-  every hand and head angle to zero and `engine/platform/openxr/xr_core.c`
-  overwrites the logged shot start with the computed muzzle.
-- Validate the result on the headset reference space with two hands engaged.
+- Two-handed headset confirmation that the visible barrel, the laser and the
+  bullet agree. Monado cannot prove appearance.
+- The circular shot-origin harness still needs an independent reference:
+  `scripts/aim_shot_evidence.sh` measures the bullet against the same pair and
+  forces every hand and head angle to zero.
 
 ## Evidence
 

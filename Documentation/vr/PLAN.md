@@ -13,28 +13,32 @@ state; `GATES.md` lists gate commands.
 - D-002: `XR_GetWeaponPose()` is the single pose source.
 - D-003: the baked hand is authoritative.
 - D-004: no new viewmodel bones; append attachments only.
-- D-024: bore anchors under review (`A9` 7/10 off).
+- D-027: the bore is the runtime grip->muzzle bone vector; `A9` is an asset
+  diagnostic only.
 - Green gates do not prove appearance; HIL confirmation required for visual changes.
 
 ## Blocker register
 
 | Blocker | Evidence | Gate | Exit criterion |
 |---|---|---|---|
-| Bore axis | `A9`: 7/10 off-axis | `B1` | `B1` PASS + `M1`/`R1`/`W0` green + HIL |
+| Bore axis | `A9`: 7/10 off-axis (asset pair only) | `A9` (FINDING) + `M1` assertion 52 | runtime grip->muzzle axis + 2-hand HIL |
 | OpenVR 31-bone hand skeleton | `v_hand.mdl` layout differs | `A3`/`A4` | name/index map, no re-skin |
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
 
 ## Stage 1 bore axis (code complete; HIL pending)
 
-- `engine/platform/openxr/xr_profile.h/.c`: `bore_axis` field, parser, getter.
-- `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` (~1972).
-- `engine/platform/openxr/xr_input.c` `XR_GetPrimaryHandMuzzleTransform` (~1663).
-- `assets/valve_vr/models/vr_weapons.json`: 7 overrides.
-- `bore_axis` is NOT mirrored for left-handed players.
-- Renderer resolves sign from the muzzle-minus-grip bone vector.
-- Firing line stays numerically the raw aim.
-- Exit: `B1` PASS + `M1`/`R1`/`W0` green + HIL confirmation.
+- `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` derives the bore at
+  runtime from the world-space grip-bone -> muzzle-bone vector; there is no
+  model-space axis, no Blender/MDL/OpenXR axis conversion, and no per-weapon
+  override.
+- `engine/platform/openxr/xr_input.c` keeps the raw aim angles for
+  `models/native/` weapons, so the authoritative firing line is unchanged.
+- The `muzzle_pos -> muzzle_pos2` pair is a lateral muzzle-flash quad, not the
+  barrel; nothing aligns to it.
+- `M1` assertion 52 rejects a vertical green tracer in the weapon captures that
+  the earlier log greps could not see.
+- Exit: `M1`/`R1`/`W0` green plus two-handed HIL confirmation.
 
 ## Stage 2 pitch_adjust removal (DONE data + muzzle precedence)
 
@@ -64,13 +68,13 @@ state; `GATES.md` lists gate commands.
 
 ## Retired
 
-- Retired gates: `A1`, `W2`, `W4`, `H0`/`H4a` names, `out/mmod_import` pipelines.
+- Retired gates: `A1`, `B1`, `W2`, `W4`, `H0`/`H4a` names, `out/mmod_import` pipelines.
 
 ## Gate map
 
 - Docs: `D1`
 - Hygiene: `H1`
-- Assets: `A2`-`A9`, `B1`, `V1`
+- Assets: `A2`-`A9`, `V1`
 - Engine: `M1`, `R1`, `T1`
 - Quest: `Q1`
 - Weapons: `W0`, `W1`

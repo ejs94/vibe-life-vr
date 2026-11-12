@@ -11,7 +11,7 @@ available and must not be broken.
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | **SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
-| Aim direction | shared axis in place; bore axis still open (`B1`) |
+| Aim direction | runtime grip->muzzle bore axis in place; HIL pending (`D-027`) |
 | HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the
@@ -54,9 +54,9 @@ Verified in-engine on 2026-11-06:
 ### Bases measured and rejected
 
 Both alternatives come from the same MMOD lineage and were measured with
-`scripts/check_weapon_bore.py` (gate `B1`) at the same settings:
+`scripts/check_weapon_bore.py` (asset diagnostic `A9`, FINDING) at the same settings:
 
-| Asset | Triangles (body) | Boundary edges | Non-manifold | Winding | `B1` score |
+| Asset | Triangles (body) | Boundary edges | Non-manifold | Winding | `A9` finding |
 |---|---:|---:|---:|---:|---:|
 | MMOD decompile | 294 | 63 | 3 | 4 | 9.67/35 |
 | Blue Shift VR derivative | 473 | 57 | 9 | 0 | 30.00/35 |

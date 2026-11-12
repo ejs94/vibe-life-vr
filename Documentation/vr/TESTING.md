@@ -318,6 +318,11 @@ diagnostic, not a gate.
 - The `M1` runner now requires engine exit code 0 and the suite sentinel; a
   truncated or crashed run cannot pass.
 - Captures must be non-blank and unique before `M1` is accepted.
-- `A9` is a read-only diagnostic (FINDING, not PASS); its old PASS was replaced
-  by `B1`'s expected FAIL for the 7 off-axis weapons.
+- `M1` assertion 52 rejects a vertical green tracer in the weapon captures. The
+  original 49 assertions were log greps and image-presence checks; none of them
+  could see a bullet firing straight up while every logged value looked sane.
+  Do not remove this check when editing the capture list.
+- `A9` is an asset diagnostic recorded as FINDING, never a pass. It measures the
+  `muzzle_pos -> muzzle_pos2` pair, which is the lateral muzzle-flash quad and
+  not the bore, so its 7/10 OFF-AXIS rows are expected (D-027).
 
