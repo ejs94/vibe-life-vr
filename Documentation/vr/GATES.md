@@ -148,4 +148,7 @@ maintainer approval. Green automated checks do not prove appearance.
   canonical HLSDK case, `pitch_adjust` 0 for every entry,
   `bore_basis_attachment` 2 for measurable weapons, and at least one entry. It
   generates DATA for a Silver-tier gamedir; it never edits MDLs or DLLs.
-  LOW-confidence bases must be reported, never promoted to a pass.
+  LOW-confidence bases must be reported, never promoted to a pass. NOTE:
+  `bore_basis_attachment` is declarative metadata for the next stage; the
+  engine currently uses the fixed 0->2 bone-name contract, so a per-mod index
+  override is not wired yet.
