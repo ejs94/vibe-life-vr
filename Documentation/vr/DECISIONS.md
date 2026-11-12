@@ -381,3 +381,19 @@ OpenVR hand skeleton is `XR_EXT_hand_tracking` with 26 `XrHandJointEXT`
 joints, not 31 bones. `S2` maps the shipped rig to that 26-joint set as
 the primary reference; the OpenVR enum remains a secondary semantic guide.
 The project does not consume `XR_EXT_hand_tracking` yet.
+
+## D-029: A green simulator with a broken weapon is a failing simulator
+
+**Status:** accepted 2026-11-11
+
+- The maintainer will not request Quest 3 HIL while the Monado captures
+  show misaligned aim/laser/barrel/hands and the gates still pass.
+- `XR_GetPrimaryHandMuzzleTransform` emits `[VR_AIM]` telemetry measuring
+  the angle between the authored visible barrel (attachment 0 `muzzle_pos`
+  -> attachment 2 `hud_pos`) and the firing/laser direction, plus whether
+  the muzzle is in front of the eye. This reference is independent of the
+  flash-quad pair used before and of the renderer alignment.
+- Gate `V3` and M1 assertion 53 require `angle <= 8` degrees, `in_front=1`
+  and at least 6 distinct weapons. Both are intentionally RED on the
+  current build (8 of 9 weapons fail; crossbow is behind the head). They
+  must not be loosened or marked PASS from an older run.

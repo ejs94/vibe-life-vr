@@ -21,7 +21,7 @@ state; `GATES.md` lists gate commands.
 
 | Blocker | Evidence | Gate | Exit criterion |
 |---|---|---|---|
-| Bore axis | `A9`: 7/10 off-axis; laser ~40deg off the slide | `A9` + M1 52 | laser collinear with the visible barrel + HIL |
+| Bore axis | `V3`: 8/9 weapons >8deg, crossbow behind head | `V3` + M1 53 (both RED) | every weapon `angle <= 8`, `in_front=1`, then HIL |
 | Hand skeleton semantics | `v_hand.mdl` layout differs | `S1`/`A3`/`A4` | rig axis + name map, no re-skin; OpenVR enum is a guide only |
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
@@ -102,3 +102,12 @@ the Glock and SMG. Measured in the MDLs: the pair is a lateral flash quad
 SMG/shotgun (~+X / ~-X) but a diagonal for the Glock, and QC hitbox axes
 disagree with mesh principal axes on gauss/hgun/egon. Do not call this
 fixed until a labelled headset capture shows the ray leaving the barrel.
+
+## HIL is blocked (maintainer criterion)
+
+The maintainer will not test the build on the Quest 3 while the simulator
+shows misaligned aim/laser/barrel/hands AND the tests pass. `V3` and M1
+assertion 53 now FAIL deliberately on the current build; `progress_report.py`
+must show them red. A fresh `V3` PASS at the current commit is the exit
+criterion before any HIL request. Never mark these green from an older run
+and never relax the 8-degree / `in_front=1` thresholds to hide the defect.

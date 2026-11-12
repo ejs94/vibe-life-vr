@@ -52,7 +52,7 @@ current counts and gate freshness.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | 51/51 PASS (engine exit 0, sentinel, non-blank captures) |
+| Monado unit suite (`M1`) | **FAIL (expected)**: 52/53; assertion 53 = alignment acceptance |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation (`D1`) | PASS |
 | Evidence hygiene (`H1`) | PASS (2026-11-11) |
@@ -64,9 +64,10 @@ current counts and gate freshness.
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
-| Bore alignment (runtime) | PARTIAL: gun pose and vertical tracer fixed, but the laser is still ~40deg off the slide on Glock/SMG (OPEN, blocker 5) |
+| Bore alignment (runtime) | **FAIL (expected)**: `V3` measures Glock 10.0deg, SMG 18.6deg, crossbow 81.9deg behind the head; see `V3` |
 | Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
-| Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
+| Acceptance gate (`V3`) | **FAIL (expected)**: 8/9 weapons misaligned; HIL blocked |
+| Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision; blocked while `V3` is red |
 
 The overlay trap still applies: update both `out/valve/models` and
 `out/valve_vr/models`, and confirm in the log which file was loaded.
@@ -90,9 +91,12 @@ The overlay trap still applies: update both `out/valve/models` and
    sweeping every finger down towards -Z.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
-5. **Ray is not collinear with the barrel (OPEN).** See blocker 1; the M1
-   gates verify the pose and the absence of a vertical tracer, NOT that the
-   ray leaves straight out of the barrel.
+5. **Ray is not collinear with the barrel (OPEN, now RED).** `V3` and M1
+   assertion 53 measure the angle between the authored visible barrel
+   (`muzzle_pos -> hud_pos`) and the firing/laser direction. 8 of 9 weapons
+   exceed 8 degrees and the crossbow's muzzle is behind the head. The
+   simulator now FAILS these gates, so Quest 3 HIL is blocked until they are
+   green. Do not loosen the thresholds to silence them.
 4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
    suite sentinel, log events (no OR-to-PNG fallbacks) and non-blank captures;
    `T1` mutates the log and requires assertions to flip. `D1` checks gate
