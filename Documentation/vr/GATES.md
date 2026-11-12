@@ -65,6 +65,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `A9` | Assets | review | `python3 scripts/check_weapon_bore.py` | `out/qa/A9/latest` | monado | `gate-runner` |
 | `B1` | Assets | retired | — | — | monado | `gate-runner` |
 | `S1` | Assets | active | `python3 scripts/check_hand_curl_axis.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S1/latest` | monado | `gate-runner` |
+| `S2` | Assets | active | `python3 scripts/check_hand_skeleton_map.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S2/latest` | monado | `gate-runner` |
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
 | `T1` | Tests | active | `python3 scripts/check_assertion_integrity.py --script scripts/test_simulated_monado.sh --log out/qa/M1/latest/monado_unittest_engine.log --captures out/qa/M1/latest` | `out/qa/T1/latest` | monado | `gate-runner` |
@@ -110,6 +111,10 @@ maintainer approval. Green automated checks do not prove appearance.
   (`|dot| >= 0.9`) for both the proximal and middle phalanx. `--legacy-y`
   must exit 1 (negative control). It fails if `v_hand.mdl` is recompiled
   with a different axis convention.
+- `S2` passes only when the name/index map has unique indices, maps `Root` and
+  `Wrist`, and maps at least two phalanges per finger. The OpenVR 31-bone enum
+  is a semantic GUIDE only; the Quest 3 runtime input contract is OpenXR. No
+  OpenVR runtime dependency may be added.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.
