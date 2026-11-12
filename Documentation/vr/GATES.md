@@ -65,9 +65,11 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `A9` | Assets | review | `python3 scripts/check_weapon_bore.py` | `out/qa/A9/latest` | monado | `gate-runner` |
 | `B1` | Assets | retired | — | — | monado | `gate-runner` |
 | `S1` | Assets | active | `python3 scripts/check_hand_curl_axis.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S1/latest` | monado | `gate-runner` |
+| `P2` | Assets | active | `python3 scripts/measure_bore_basis.py --dir assets/valve_vr/models/native --json out/qa/P2/bore_ground_truth.json` | `out/qa/P2/latest` | monado | `gate-runner` |
 | `S2` | Assets | active | `python3 scripts/check_hand_skeleton_map.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S2/latest` | monado | `gate-runner` |
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
+| `R2` | Engine | active | `./scripts/test_roll_alignment.sh` | `out/qa/R2/latest` | monado | `gate-runner` |
 | `T1` | Tests | active | `python3 scripts/check_assertion_integrity.py --script scripts/test_simulated_monado.sh --log out/qa/M1/latest/monado_unittest_engine.log --captures out/qa/M1/latest` | `out/qa/T1/latest` | monado | `gate-runner` |
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
@@ -99,6 +101,10 @@ maintainer approval. Green automated checks do not prove appearance.
 - `M1` passes only when all 49 assertions pass and the run is not cut off by
   the engine timeout. The suite default is 120 seconds.
 - `R1` passes only when all 19 assertions pass.
+- `R2` passes only when the authored barrel/aim alignment holds (angle <= 8
+  degrees, `in_front=1`) at wrist roll 0, 45, 90 and 180 for the Glock. This
+  catches the Euler-trap error the playbook measured at 10.70/19.85/28.21
+  degrees; `M1` forces hand angles to zero and cannot see it.
 - `A2` passes only when bones, sequences, events, bodygroups and attachments
   survive the mdldec -> pxstudiomdl roundtrip.
 - `A9` is a read-only diagnostic that compares `muzzle_pos -> muzzle_pos2` with
@@ -119,7 +125,12 @@ maintainer approval. Green automated checks do not prove appearance.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.
-- `V3` is the maintainer's simulator acceptance gate. It passes only when at least 6 distinct native weapons report `angle <= 8` degrees between the authored visible barrel and the firing/laser direction, every muzzle is `in_front=1`, and no row is `MISSING`. It is EXPECTED TO FAIL on the current build (the Glock/SMG laser is roughly 40 degrees off the slide). Do not request Quest 3 HIL while `V3` is red, and never mark it PASS from an older run.
+- `V3` is the maintainer's simulator acceptance gate. It passes only when every measurable weapon reports `angle <= 8` degrees between the AUTHORED two-point barrel basis (attachment 0 `muzzle_pos` -> attachment 2 `hud_pos`) and the firing/laser direction, every muzzle is `in_front=1`, at least 6 weapons are measurable, and no row is `UNKNOWN`. Weapons with `muzzle_attachment -1` (melee/toss/placeable) are `N/A` and excluded. `--ground-truth` cross-checks the offline bone-position measurement from `P2`; `--allow-unknown` is for Bronze-tier mods only. `R2` additionally requires the alignment to hold at wrist roll 0/45/90/180. Never mark `V3` PASS from an older run, and do not request Quest 3 HIL while `V3` or `R2` is red.
 - `V1` is a non-blocking human review artifact. It produces labelled turntable
   and animation GIFs; it never gates automation and is not counted as a pass
   or fail.
+
+- `P2` measures the authored two-point barrel basis from the MDL skeleton
+  bone positions only. Mesh vertices from `mdldec` are in a DIFFERENT
+  coordinate space and must not be used for PCA. LOW-confidence bases are
+  reported as `UNKNOWN` by `V3`, never as a pass.

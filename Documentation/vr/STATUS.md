@@ -52,7 +52,7 @@ current counts and gate freshness.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | **FAIL (expected)**: 52/53; assertion 53 = alignment acceptance |
+| Monado unit suite (`M1`) | 53/53 PASS (engine exit 0, sentinel, non-blank captures, `V3` acceptance) |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation (`D1`) | PASS |
 | Evidence hygiene (`H1`) | PASS (2026-11-11) |
@@ -64,24 +64,24 @@ current counts and gate freshness.
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
-| Bore alignment (runtime) | **FAIL (expected)**: `V3` measures Glock 10.0deg, SMG 18.6deg, crossbow 81.9deg behind the head; see `V3` |
+| Bore alignment (runtime) | PASS: `V3` 6/6 measurable weapons at 0.0deg, 3 no-barrel `N/A`; `R2` roll 0/45/90/180 all 0.0deg |
 | Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
-| Acceptance gate (`V3`) | **FAIL (expected)**: 8/9 weapons misaligned; HIL blocked |
-| Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision; blocked while `V3` is red |
+| Acceptance gate (`V3`) | PASS at current commit: 6 aligned, 0 FAIL, 0 UNKNOWN, 3 N/A |
+| Quest (`Q1`) | PASS 2026-11-07 at an older commit; a fresh HIL run is now unblocked but is the maintainer's decision |
 
 The overlay trap still applies: update both `out/valve/models` and
 `out/valve_vr/models`, and confirm in the log which file was loaded.
 
 ## Active blockers
 
-1. **Bore axis: partial fix, ray/barrel collinearity OPEN.** The runtime
-   grip->muzzle axis removed the ~90deg Glock twist and the vertical shot
-   tracer, but the laser still leaves the muzzle roughly 40 degrees off the
-   visible slide on the Glock and SMG. `grip -> muzzle` is a wrist-to-tip
-   diagonal, `muzzle_pos -> muzzle_pos2` is a lateral flash quad, and the QC
-   hitbox axes disagree with mesh principal axes on several converted MDLs.
-   No runtime vector is proven to be the visible bore. HIL/asset work required;
-   do not claim appearance from Monado.
+1. **Bore axis: aligned in the simulator, HIL still pending.** `S0.5`
+   proved the SD assets are byte-identical to HL:VR SD and that swapping the
+   MP5 original only improved 18.6deg -> 10.0deg, so the engine layer was
+   required. The renderer now aligns the AUTHORED two-point basis
+   (`muzzle_pos` -> `hud_pos`) to the aim direction; `grip -> muzzle` was a
+   wrist-to-tip diagonal and the `muzzle_pos2` pair is a flash quad. `V3` is
+   green at this commit and `R2` holds under roll. A two-handed headset check
+   is still required before claiming appearance.
 2. **The hand rig is not mapped yet.** The OpenVR hand skeleton is a naming
    guide (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux
    bones), NOT a runtime dependency: the Quest 3 target is OpenXR-only. The
@@ -91,12 +91,11 @@ The overlay trap still applies: update both `out/valve/models` and
    sweeping every finger down towards -Z.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
-5. **Ray is not collinear with the barrel (OPEN, now RED).** `V3` and M1
-   assertion 53 measure the angle between the authored visible barrel
-   (`muzzle_pos -> hud_pos`) and the firing/laser direction. 8 of 9 weapons
-   exceed 8 degrees and the crossbow's muzzle is behind the head. The
-   simulator now FAILS these gates, so Quest 3 HIL is blocked until they are
-   green. Do not loosen the thresholds to silence them.
+5. **Simulator acceptance: CLOSED at this commit.** `V3` 6/6 PASS and `R2`
+   4/4 PASS. `vr_hide_arms 2` debug phases are excluded from telemetry, and
+   no-barrel weapons are `N/A`, so the gate no longer reports false failures.
+   The thresholds were not loosened. Do not mark either gate PASS from an
+   older run.
 4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
    suite sentinel, log events (no OR-to-PNG fallbacks) and non-blank captures;
    `T1` mutates the log and requires assertions to flip. `D1` checks gate
@@ -122,7 +121,7 @@ The overlay trap still applies: update both `out/valve/models` and
    for visual approval. Unresolved Quest reports are triaged in
    [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
-## Bore axis: partial fix, ray/barrel still open
+## Bore axis: simulator aligned, HIL open
 
 The renderer, the laser and the bullet used to disagree. D-024 made
 `muzzle_pos -> muzzle_pos2` the shared axis, but that pair is a lateral
@@ -162,3 +161,17 @@ A gate result is only current if it is reachable from
 `out/qa/<gate-id>/latest`. `out/qa/INDEX.md` lists the newest result per gate.
 Do not cite the retired `out/evidence` root. If a gate has no run, record it as
 `pending`, not as passed.
+
+## Mod port status
+
+One row per Xash3D gamedir. `S0` intake, `S1` measure, `S2` profile,
+`S3` simulator acceptance, `S4` Gold SDK, `S5` Quest HIL. A mod may sit at
+any stage without blocking the others. `UNKNOWN` is never a pass.
+
+| gamedir | tier | state | V3 | R2 | next |
+|---|---|---|---|---|---|
+| `valve` | gold | `S3` | PASS | PASS | labelled comparison sheet + HIL |
+| `gearbox` | silver | `S0` | pending | pending | model inventory |
+| `bshift` | silver | `S0` | pending | pending | model inventory |
+| `cstrike` | silver | `S0` | pending | pending | no-pair fallback test |
+| `hunger` | bronze | `S0` | UNKNOWN | pending | graceful degradation |

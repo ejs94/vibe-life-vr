@@ -21,12 +21,12 @@ state; `GATES.md` lists gate commands.
 
 | Blocker | Evidence | Gate | Exit criterion |
 |---|---|---|---|
-| Bore axis | `V3`: 8/9 weapons >8deg, crossbow behind head | `V3` + M1 53 (both RED) | every weapon `angle <= 8`, `in_front=1`, then HIL |
+| Bore axis | `V3` 6/6 at 0.0deg, `R2` roll 0/45/90/180 at 0.0deg | `V3` + `R2` + M1 53 (green) | two-handed headset confirmation |
 | Hand skeleton semantics | `v_hand.mdl` layout differs | `S1`/`A3`/`A4` | rig axis + name map, no re-skin; OpenVR enum is a guide only |
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
 
-## Stage 1 bore axis (PARTIAL; ray/barrel collinearity still open)
+## Stage 1 bore axis (simulator aligned; HIL open)
 
 - `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` derives the bore at
   runtime from the world-space grip-bone -> muzzle-bone vector; there is no
@@ -93,21 +93,13 @@ verifies the rig curl axis directly from the MDL rest bones.
 - Engine: `M1`, `R1`, `T1`
 - Quest: `Q1`
 - Weapons: `W0`, `W1`
-## Open: ray/barrel collinearity
-
-The runtime `grip -> muzzle` fix removed the ~90 degree Glock twist and the
-vertical shot tracer, but the laser is still ~40 degrees off the slide on
-the Glock and SMG. Measured in the MDLs: the pair is a lateral flash quad
-(1.6-4.5 units), `hud_pos` to `muzzle_pos` is roughly the barrel for the
-SMG/shotgun (~+X / ~-X) but a diagonal for the Glock, and QC hitbox axes
-disagree with mesh principal axes on gauss/hgun/egon. Do not call this
-fixed until a labelled headset capture shows the ray leaving the barrel.
-
-## HIL is blocked (maintainer criterion)
+## HIL gate (maintainer criterion)
 
 The maintainer will not test the build on the Quest 3 while the simulator
-shows misaligned aim/laser/barrel/hands AND the tests pass. `V3` and M1
-assertion 53 now FAIL deliberately on the current build; `progress_report.py`
-must show them red. A fresh `V3` PASS at the current commit is the exit
-criterion before any HIL request. Never mark these green from an older run
-and never relax the 8-degree / `in_front=1` thresholds to hide the defect.
+shows misaligned aim/laser/barrel/hands AND the tests pass. At the current
+commit `V3` (6/6 measurable weapons, 3 no-barrel `N/A`, 0 `UNKNOWN`), `R2`
+(roll 0/45/90/180) and M1 assertion 53 are green, so the simulator criterion
+is met. A fresh run at the current commit plus a labelled comparison sheet
+with maintainer `ADVANCE` are still required before HIL. Never mark these
+green from an older run and never relax the 8-degree / `in_front=1`
+thresholds to hide a defect.

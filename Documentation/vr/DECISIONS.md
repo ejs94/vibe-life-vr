@@ -394,6 +394,30 @@ The project does not consume `XR_EXT_hand_tracking` yet.
   the muzzle is in front of the eye. This reference is independent of the
   flash-quad pair used before and of the renderer alignment.
 - Gate `V3` and M1 assertion 53 require `angle <= 8` degrees, `in_front=1`
-  and at least 6 distinct weapons. Both are intentionally RED on the
-  current build (8 of 9 weapons fail; crossbow is behind the head). They
-  must not be loosened or marked PASS from an older run.
+  and at least 6 distinct weapons. They were RED on the reference build
+  (8 of 9 weapons failed) and are GREEN at the current commit after D-030.
+  They must not be loosened or marked PASS from an older run.
+
+## D-030: The authored two-point barrel basis, not a proxy vector
+
+**Status:** accepted 2026-11-12
+
+- `S0.5` proved the shipped native MDLs are byte-identical to the
+  Half-Life-VR SD variants, and that swapping the MP5 for the HL:VR
+  original only improved 18.6 -> 10.0 degrees. The asset alone does not
+  fix the alignment, so an engine-side contract is required.
+- Mesh vertices emitted by `mdldec` are in a DIFFERENT coordinate space
+  from the skeleton bone positions. Global mesh PCA and QC `$hbox` axes
+  are therefore not reliable barrel references. `P2` measures the
+  authored basis from bone positions only.
+- The renderer aligns `muzzle_pos -> hud_pos` (attachment 0 -> 2 of the
+  documented modding contract) to the aim direction. `grip -> muzzle`
+  was a wrist-to-tip diagonal; `muzzle_pos -> muzzle_pos2` is the lateral
+  flash quad. Both were wrong references.
+- `V3` reports PASS / FAIL / UNKNOWN / N/A. Weapons without a barrel are
+  N/A; `vr_hide_arms 2` debug phases are excluded from telemetry because
+  their attachments are stale; LOW-confidence authored bases are UNKNOWN,
+  never PASS. `--allow-unknown` exists only for Bronze-tier mods.
+- `R2` proves the alignment holds at wrist roll 0/45/90/180, the pose sweep
+  the playbook showed exposes 10.70/19.85/28.21 degrees of hidden
+  Euler-trap error. Thresholds were never loosened.
