@@ -45,7 +45,7 @@ current counts and gate freshness.
 - [x] Native arsenal (15 viewmodels) routed
 - [x] HEV glove on both hands (`v_hand.mdl`)
 - [x] Shot direction follows the visible barrel (runtime grip->muzzle axis; HIL validation pending)
-- [ ] Hand rig mapped to the OpenVR 31-bone enum (guide only; input is OpenXR)
+- [ ] Hand rig mapped to the OpenXR 26-joint `XrHandJointEXT` set (OpenVR is a guide only)
 - [ ] Manual reload driven by 6DoF hands
 
 ## Current state
@@ -108,9 +108,10 @@ The overlay trap still applies: update both `out/valve/models` and
    shipped profiles are zero; the Euler adjust is now only a fallback for mods
    without bore anchors. The optional hand/aim transform cleanup remains.
    Exit: `M1`/`R1`/`A5`/`A6`/`W0` green.
-3. **Stage 3, hand skeleton map.** Map the shipped rig onto the OpenVR enum
-   (guide only) without a re-skin; consume poses via OpenXR. Exit: `S1`, `A3`
-   pass and an `A4` comparison sheet is approved.
+3. **Stage 3, hand skeleton map.** Map the shipped rig onto the OpenXR
+   26-joint `XrHandJointEXT` set (`S2` default) without a re-skin; keep the
+   OpenVR 31-bone enum as a secondary guide; consume poses via OpenXR only.
+   Exit: `S1`, `S2`, `A3` pass and an `A4` comparison sheet is approved.
 4. **Stage 4, spatial reload.** Add the magwell, ejection and slide sockets and
    replace the staged B presses. Exit: `A7` passes with the new sockets.
 5. Re-run `W0`, `M1` and `R1` after each stage; one labelled comparison sheet
