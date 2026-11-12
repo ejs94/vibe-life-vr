@@ -20,6 +20,8 @@ typedef struct vr_weapon_profile_s
     vec3_t  grip_offset;                 // Position offset [forward, right, up] in GoldSrc units
     vec3_t  grip_rot;                    // Visual grip rotation [pitch, yaw, roll] in the palm's local frame
     qboolean grip_rot_set;               // True when the manifest provides grip_rot (enables socket rotation)
+    vec3_t  bore_axis;                   // Model-space unit axis along the visible barrel
+    qboolean bore_axis_set;              // True when the manifest provides bore_axis
     vec3_t  foregrip_offset;             // Offhand palm position in the weapon's local frame
     vec3_t  foregrip_rot;                // Offhand palm rotation [pitch, yaw, roll] in the weapon's local frame
     qboolean foregrip_set;               // True when the manifest provides a foregrip socket
@@ -76,6 +78,7 @@ EXPORT void     XR_ComposeLocalRotation( const vec3_t parentAngles, const vec3_t
 EXPORT void     XR_GetWeaponPitchAdjust( const char *model_name, float *out_pitch, float *out_yaw, float *out_roll );
 EXPORT qboolean XR_GetWeaponTwoHandParams( const char *model_name, qboolean *out_twohanded, float *out_min_dist, float *out_max_dist );
 EXPORT qboolean XR_GetWeaponMuzzleParams( const char *model_name, int *out_attachment, vec3_t out_fallback );
+EXPORT qboolean XR_GetWeaponBoreAxis( const char *model_name, vec3_t out_axis );
 EXPORT qboolean XR_GetWeaponHaptics( const char *model_name, float *out_fire_amp, float *out_fire_dur );
 
 #else // !XASH_OPENXR
@@ -117,6 +120,10 @@ static inline qboolean XR_GetWeaponTwoHandParams( const char *model_name, qboole
 static inline qboolean XR_GetWeaponMuzzleParams( const char *model_name, int *out_attachment, vec3_t out_fallback ) {
     if (out_attachment) *out_attachment = 0;
     if (out_fallback) { out_fallback[0] = 0; out_fallback[1] = 18.0f; out_fallback[2] = 0; }
+    return false;
+}
+static inline qboolean XR_GetWeaponBoreAxis( const char *model_name, vec3_t out_axis ) {
+    if (out_axis) VectorClear(out_axis);
     return false;
 }
 static inline qboolean XR_GetWeaponHaptics( const char *model_name, float *out_fire_amp, float *out_fire_dur ) {

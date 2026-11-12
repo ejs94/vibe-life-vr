@@ -1970,17 +1970,35 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 	// the reference mod uses for ballistics. Fall back to the grip only when
 	// the model has no muzzle_pos2.
 	vec3_t barrel;
-	if( muzzle2 >= 0 )
 	{
-		barrel[0] = bt[muzzle2][0][3] - bt[muzzle][0][3];
-		barrel[1] = bt[muzzle2][1][3] - bt[muzzle][1][3];
-		barrel[2] = bt[muzzle2][2][3] - bt[muzzle][2][3];
-	}
-	else
-	{
-		barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
-		barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
-		barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+		vec3_t axis;
+		qboolean have_bore = XR_GetWeaponBoreAxis( e->model->name, axis );
+		if( have_bore && VectorLength( axis ) > 0.001f )
+		{
+			// The manifest axis is undirected: orient it toward the muzzle so the
+			// barrel tip, not the grip, ends up along the aim direction.
+			vec3_t to_muzzle;
+			to_muzzle[0] = bt[muzzle][0][3] - bt[grip][0][3];
+			to_muzzle[1] = bt[muzzle][1][3] - bt[grip][1][3];
+			to_muzzle[2] = bt[muzzle][2][3] - bt[grip][2][3];
+			if( DotProduct( axis, to_muzzle ) < 0.0f ) VectorNegate( axis, axis );
+			VectorCopy( axis, barrel );
+		}
+		else
+		{
+			if( muzzle2 >= 0 )
+			{
+				barrel[0] = bt[muzzle2][0][3] - bt[muzzle][0][3];
+				barrel[1] = bt[muzzle2][1][3] - bt[muzzle][1][3];
+				barrel[2] = bt[muzzle2][2][3] - bt[muzzle][2][3];
+			}
+			else
+			{
+				barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
+				barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
+				barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+			}
+		}
 	}
 	{
 		float barrel_len = VectorLength( barrel );

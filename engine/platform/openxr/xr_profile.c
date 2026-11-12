@@ -363,6 +363,28 @@ qboolean XR_GetWeaponMuzzleParams( const char *model_name, int *out_attachment, 
 
 /*
 ====================
+XR_GetWeaponBoreAxis
+
+Returns the model-space barrel axis declared by the manifest. The axis is
+undirected; the caller resolves the sign against the weapon's aim direction.
+Returns false when the profile is absent or carries no bore_axis entry, which
+keeps the legacy attachment/muzzle-fallback path in charge.
+====================
+*/
+qboolean XR_GetWeaponBoreAxis( const char *model_name, vec3_t out_axis )
+{
+    if( out_axis ) VectorClear( out_axis );
+
+    const vr_weapon_profile_t *prof = XR_FindWeaponProfile( model_name );
+    if( !prof || !prof->bore_axis_set )
+        return false;
+
+    if( out_axis ) VectorCopy( prof->bore_axis, out_axis );
+    return true;
+}
+
+/*
+====================
 XR_GetWeaponHaptics
 ====================
 */
@@ -704,6 +726,22 @@ static qboolean XR_ParseWeaponsJSON( const char *json_text, size_t length )
                             JSON_ReadFloatArray3( &p, wp->grip_rot );
                             wp->grip_rot_set = true;
                         }
+                        else if( !Q_strcmp( prop, "bore_axis" ) )
+                        {
+                            // Undirected model-space barrel axis. Keep the raw
+                            // direction and only mark it usable when the entry
+                            // has a meaningful length, so a degenerate or empty
+                            // array falls back to the legacy aim path.
+                            vec3_t axis;
+
+                            JSON_ReadFloatArray3( &p, axis );
+                            if( VectorLength( axis ) > 0.001f )
+                            {
+                                VectorNormalize( axis );
+                                VectorCopy( axis, wp->bore_axis );
+                                wp->bore_axis_set = true;
+                            }
+                        }
                         else if( !Q_strcmp( prop, "foregrip_offset" ) )
                         {
                             JSON_ReadFloatArray3( &p, wp->foregrip_offset );
@@ -814,6 +852,9 @@ Built-in hardcoded fallback calibration for standard Half-Life arsenal
 */
 static void XR_RegisterDefaultWeaponProfiles( void )
 {
+    // Shipped profiles carry no Euler compensation; the legacy fields remain for third-party mods.
+    // Bore axes are manifest-only: every default is memset below, so bore_axis_set stays false
+    // here and the compiled-in arsenal keeps the legacy muzzle path.
     // Crowbar
     vr_weapon_profile_t *w = &s_weaponProfiles[s_numWeaponProfiles++];
     memset( w, 0, sizeof(*w) );
@@ -822,7 +863,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "melee", sizeof(w->type) );
     w->muzzle_attachment = -1;
     w->grip_offset[1] = 3.0f; w->grip_offset[2] = -1.0f;
-    w->pitch_adjust = -12.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = false;
     w->haptic_impact_amplitude = 1.0f;
     w->haptic_impact_duration_ms = 120.0f;
@@ -835,7 +876,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "hitscan", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 11.5f; w->muzzle_fallback[2] = 2.2f;
-    w->pitch_adjust = -5.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.12f; w->two_hand_max_dist = 0.45f;
     w->haptic_fire_amplitude = 0.85f; w->haptic_fire_duration_ms = 65.0f;
@@ -848,7 +889,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "hitscan", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 13.0f; w->muzzle_fallback[2] = 2.8f;
-    w->pitch_adjust = -5.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.12f; w->two_hand_max_dist = 0.45f;
     w->haptic_fire_amplitude = 1.0f; w->haptic_fire_duration_ms = 100.0f;
@@ -861,7 +902,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "hitscan", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 18.0f; w->muzzle_fallback[2] = 1.8f;
-    w->pitch_adjust = -4.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.18f; w->two_hand_max_dist = 0.55f;
     w->haptic_fire_amplitude = 0.70f; w->haptic_fire_duration_ms = 45.0f;
@@ -874,7 +915,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "hitscan", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 21.0f; w->muzzle_fallback[2] = 2.0f;
-    w->pitch_adjust = -4.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.22f; w->two_hand_max_dist = 0.60f;
     w->haptic_fire_amplitude = 1.0f; w->haptic_fire_duration_ms = 110.0f;
@@ -887,7 +928,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "projectile", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 22.0f; w->muzzle_fallback[2] = 1.5f;
-    w->pitch_adjust = -3.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.20f; w->two_hand_max_dist = 0.55f;
 
@@ -911,7 +952,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "beam", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 20.0f; w->muzzle_fallback[2] = 1.0f;
-    w->pitch_adjust = -2.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.20f; w->two_hand_max_dist = 0.55f;
 
@@ -923,7 +964,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "beam", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 22.0f; w->muzzle_fallback[2] = 2.0f;
-    w->pitch_adjust = -2.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = true;
     w->two_hand_min_dist = 0.22f; w->two_hand_max_dist = 0.55f;
 
@@ -935,7 +976,7 @@ static void XR_RegisterDefaultWeaponProfiles( void )
     Q_strncpy( w->type, "projectile", sizeof(w->type) );
     w->muzzle_attachment = 0;
     w->muzzle_fallback[1] = 15.0f; w->muzzle_fallback[2] = 0.5f;
-    w->pitch_adjust = -6.0f;
+    w->pitch_adjust = 0.0f;
     w->two_handed = false;
 
     // Hand Grenade
@@ -1102,6 +1143,9 @@ static void XR_DumpWeaponProfile_f( void )
     Con_Printf( "Model: ^3%s^7 (%s)\n", model_name, display_name );
     Con_Printf( "Grip Offset: [ forward=%.2f, right=%.2f, up=%.2f ] (GoldSrc units)\n", fwd, rt, up );
     Con_Printf( "Angles Adjust: pitch=%.2f, yaw=%.2f, roll=%.2f degrees\n\n", pitch, yaw, roll );
+    if( prof && prof->bore_axis_set )
+        Con_Printf( "Bore Axis: [ %.6f, %.6f, %.6f ] (undirected model space)\n\n",
+            prof->bore_axis[0], prof->bore_axis[1], prof->bore_axis[2] );
     Con_Printf( "^2JSON block for vr_weapons.json:\n" );
     Con_Printf( "{\n" );
     Con_Printf( "  \"model\": \"%s\",\n", model_name );
