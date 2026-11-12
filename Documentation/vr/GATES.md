@@ -73,6 +73,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
 | `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |
 | `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/latest` | monado | human |
+| `V3` | Engine | active | `python3 scripts/check_weapon_alignment.py --log out/qa/M1/latest/monado_unittest_engine.log` | `out/qa/V3/latest` | monado | `gate-runner` |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
 maintainer approval. Green automated checks do not prove appearance.
@@ -118,6 +119,7 @@ maintainer approval. Green automated checks do not prove appearance.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.
+- `V3` is the maintainer's simulator acceptance gate. It passes only when at least 6 distinct native weapons report `angle <= 8` degrees between the authored visible barrel and the firing/laser direction, every muzzle is `in_front=1`, and no row is `MISSING`. It is EXPECTED TO FAIL on the current build (the Glock/SMG laser is roughly 40 degrees off the slide). Do not request Quest 3 HIL while `V3` is red, and never mark it PASS from an older run.
 - `V1` is a non-blocking human review artifact. It produces labelled turntable
   and animation GIFs; it never gates automation and is not counted as a pass
   or fail.

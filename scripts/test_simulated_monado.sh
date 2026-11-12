@@ -450,6 +450,14 @@ assert_test 51 "All scheduled eye dumps captured" \
 
 assert_test 52 "Bullet tracer leaves the barrel, not straight up" 'no_vertical_shot_line'
 
+# The maintainer's acceptance criterion: the simulator must NOT be green while
+# the laser/aim, the visible barrel and the hands are misaligned. This assertion
+# is deliberately expected to FAIL on the current build; it must not be removed
+# or loosened to make the scorecard look green. Quest 3 HIL stays blocked until
+# check_weapon_alignment.py passes on a fresh run.
+assert_test 53 "Visible barrel, laser and hands aligned (acceptance)" \
+    'python3 "${SCRIPT_DIR}/check_weapon_alignment.py" --log "$TEST_LOG"'
+
 dups="$(capture_duplicates)"
 if [ -n "$dups" ]; then
     log_warn "$dups (informational; log events are required separately)"
