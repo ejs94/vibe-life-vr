@@ -64,7 +64,7 @@ current counts and gate freshness.
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
-| Bore alignment (runtime) | FIXED in simulator: renderer aligns grip->muzzle; Glock seated, MP5 vertical tracer gone (before/after captures in `out/qa/V2/`) |
+| Bore alignment (runtime) | PARTIAL: gun pose and vertical tracer fixed, but the laser is still ~40deg off the slide on Glock/SMG (OPEN, blocker 5) |
 | Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
@@ -73,9 +73,14 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Active blockers
 
-1. **Bore axis: code fixed, HIL still pending.** The runtime grip->muzzle axis
-   removed the ~90deg Glock twist and the vertical shot tracer. A two-handed
-   headset check is still required; do not claim appearance from Monado.
+1. **Bore axis: partial fix, ray/barrel collinearity OPEN.** The runtime
+   grip->muzzle axis removed the ~90deg Glock twist and the vertical shot
+   tracer, but the laser still leaves the muzzle roughly 40 degrees off the
+   visible slide on the Glock and SMG. `grip -> muzzle` is a wrist-to-tip
+   diagonal, `muzzle_pos -> muzzle_pos2` is a lateral flash quad, and the QC
+   hitbox axes disagree with mesh principal axes on several converted MDLs.
+   No runtime vector is proven to be the visible bore. HIL/asset work required;
+   do not claim appearance from Monado.
 2. **The hand rig is not mapped yet.** The OpenVR hand skeleton is a naming
    guide (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux
    bones), NOT a runtime dependency: the Quest 3 target is OpenXR-only. The
@@ -85,6 +90,9 @@ The overlay trap still applies: update both `out/valve/models` and
    sweeping every finger down towards -Z.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
+5. **Ray is not collinear with the barrel (OPEN).** See blocker 1; the M1
+   gates verify the pose and the absence of a vertical tracer, NOT that the
+   ray leaves straight out of the barrel.
 4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
    suite sentinel, log events (no OR-to-PNG fallbacks) and non-blank captures;
    `T1` mutates the log and requires assertions to flip. `D1` checks gate
@@ -109,7 +117,7 @@ The overlay trap still applies: update both `out/valve/models` and
    for visual approval. Unresolved Quest reports are triaged in
    [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
-## Bore axis: code fixed, HIL open
+## Bore axis: partial fix, ray/barrel still open
 
 The renderer, the laser and the bullet used to disagree. D-024 made
 `muzzle_pos -> muzzle_pos2` the shared axis, but that pair is a lateral

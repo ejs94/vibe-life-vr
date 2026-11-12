@@ -370,3 +370,14 @@ Consequences:
   not a runtime dependency. The target is the Meta Quest 3 on OpenXR;
   skeletal input must be consumed through OpenXR, never through an OpenVR
   runtime.
+
+**Known limitation (2026-11-11):** the laser is still not collinear with
+the visible barrel on the Glock and SMG captures (~40 degrees). D-027
+fixed the gun pose and the upward tracer, not the ray/barrel angle. Do
+not cite it as a complete aim alignment fix.
+
+**Hand skeleton clarification (2026-11-11):** the OpenXR equivalent of the
+OpenVR hand skeleton is `XR_EXT_hand_tracking` with 26 `XrHandJointEXT`
+joints, not 31 bones. `S2` maps the shipped rig to that 26-joint set as
+the primary reference; the OpenVR enum remains a secondary semantic guide.
+The project does not consume `XR_EXT_hand_tracking` yet.

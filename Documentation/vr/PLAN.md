@@ -21,12 +21,12 @@ state; `GATES.md` lists gate commands.
 
 | Blocker | Evidence | Gate | Exit criterion |
 |---|---|---|---|
-| Bore axis | `A9`: 7/10 off-axis (asset pair only) | `A9` (FINDING) + `M1` assertion 52 | runtime grip->muzzle axis + 2-hand HIL |
+| Bore axis | `A9`: 7/10 off-axis; laser ~40deg off the slide | `A9` + M1 52 | laser collinear with the visible barrel + HIL |
 | Hand skeleton semantics | `v_hand.mdl` layout differs | `S1`/`A3`/`A4` | rig axis + name map, no re-skin; OpenVR enum is a guide only |
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
 
-## Stage 1 bore axis (code complete; HIL pending)
+## Stage 1 bore axis (PARTIAL; ray/barrel collinearity still open)
 
 - `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` derives the bore at
   runtime from the world-space grip-bone -> muzzle-bone vector; there is no
@@ -46,7 +46,16 @@ state; `GATES.md` lists gate commands.
 - Optional hand/aim cleanup in `xr_input.c` (~1896-2070) remains.
 - Exit: `M1`/`R1`/`A5`/`A6`/`W0` green.
 
-## Stage 3 hand skeleton map (OpenVR enum as a guide; runtime is OpenXR)
+## Stage 3 hand skeleton map (OpenXR `XrHandJointEXT` primary; OpenVR secondary)
+
+The PRIMARY reference is the OpenXR `XR_EXT_hand_tracking` default joint
+set: 26 `XrHandJointEXT` joints (PALM, WRIST, thumb 4, index/middle/ring/
+little 5 each). See [`reference/OPENXR_HANDS_NOTE.md`](reference/OPENXR_HANDS_NOTE.md)
+and `3rdparty/openxr/include/openxr/openxr.h`. The OpenVR 31-bone enum is
+only a SECONDARY naming guide, not a runtime dependency. `S2` maps the
+shipped rig to the 26-joint set by default (`--standard openvr` keeps the
+31-name view). The project does not consume `XR_EXT_hand_tracking` today:
+hands are baked plus procedural curl. Quest 3 input is OpenXR-only.
 
 The OpenVR 31-bone enum is a SEMANTIC GUIDE for bone names and indices, not a
 runtime dependency. The target device is the Meta Quest 3, whose input path
@@ -84,3 +93,12 @@ verifies the rig curl axis directly from the MDL rest bones.
 - Engine: `M1`, `R1`, `T1`
 - Quest: `Q1`
 - Weapons: `W0`, `W1`
+## Open: ray/barrel collinearity
+
+The runtime `grip -> muzzle` fix removed the ~90 degree Glock twist and the
+vertical shot tracer, but the laser is still ~40 degrees off the slide on
+the Glock and SMG. Measured in the MDLs: the pair is a lateral flash quad
+(1.6-4.5 units), `hud_pos` to `muzzle_pos` is roughly the barrel for the
+SMG/shotgun (~+X / ~-X) but a diagonal for the Glock, and QC hitbox axes
+disagree with mesh principal axes on gauss/hgun/egon. Do not call this
+fixed until a labelled headset capture shows the ray leaving the barrel.
