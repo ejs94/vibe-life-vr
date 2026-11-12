@@ -62,8 +62,8 @@ if [ ! -x "${MONADO_SERVICE}" ] || [ ! -f "${XR_RUNTIME_JSON}" ]; then
     exit 1
 fi
 
-STAMP="$(date +%Y%m%d-%H%M%S)"
-RUN_DIR="out/qa/R2/runs/${STAMP}"
+RUN_DIR="$(python3 "${REPO_DIR}/scripts/qa_evidence.py" new --gate R2 \
+    --command "./scripts/test_roll_alignment.sh" --device monado)"
 mkdir -p "${RUN_DIR}" out/valve
 
 SERVICE_PID=""
@@ -180,4 +180,16 @@ else
     log_err "R2 FAIL: see ${SUMMARY}"
 fi
 cp "${SUMMARY}" out/qa/R2/roll_summary.txt
+cp "${SUMMARY}" "${RUN_DIR}/gate.log"
+
+QA_STATUS="FAIL"
+if [ "${OVERALL_RC}" -eq 0 ]; then
+    QA_STATUS="PASS"
+fi
+python3 "${REPO_DIR}/scripts/qa_evidence.py" finish \
+    --run "${RUN_DIR}" \
+    --exit-code "${OVERALL_RC}" \
+    --status "${QA_STATUS}" \
+    --device monado \
+    --note "Roll sweep 0/45/90/180: ${QA_STATUS}"
 exit "${OVERALL_RC}"

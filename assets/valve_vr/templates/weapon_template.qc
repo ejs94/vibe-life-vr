@@ -31,7 +31,8 @@ $bodygroup "magazine"
 // ==============================================================================
 // Attachment 0: MUZZLE
 // - Purpose: Laser sight emission, server-side bullet traces, flash and tracers
-// - Position: Tip of the barrel pointing in the firing direction (+Y forward)
+// - Position: Tip of the barrel. Engine forward is +X; the runtime bore
+//   basis is attachment 0 (muzzle) -> attachment 2 (hud/rear anchor).
 $attachment 0 "gun_barrel" 0.000000 14.500000 2.200000
 
 // Attachment 1: TWO-HANDED STABILIZATION GRIP ZONE

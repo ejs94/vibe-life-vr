@@ -90,7 +90,7 @@ Place `vr_weapons.json` inside your `<gamedir>_vr/models/` folder:
       "type": "hitscan",
       "muzzle_attachment": 0,
       "grip_attachment": 1,
-      "pitch_adjust": -4.0,
+      "bore_basis_attachment": 2,
       "two_handed": true,
       "two_hand_min_dist": 0.12,
       "two_hand_max_dist": 0.55,
@@ -104,6 +104,14 @@ Place `vr_weapons.json` inside your `<gamedir>_vr/models/` folder:
     }
   }
 }
+
+The engine derives the barrel direction from the AUTHORED two-point basis
+`attachment 0` (`muzzle_pos`) -> `bore_basis_attachment` (`hud_pos` by
+default) and aligns it to the aim pose; `attachment 1` is the muzzle-flash
+quad corner and `attachment 2/3` are ejector/magwell. Euler `pitch_adjust`
+trims are deprecated and must not be used to hide a bad bore basis. The
+engine's forward axis is `+X`; the QC comment in the weapon template is
+legacy and does not describe the runtime convention.
 ```
 
 ---
