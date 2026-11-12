@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "status": "PROPOSED",
+  "human_decision": "PENDING",
+  "description": "Per-weapon-class VR-ready fallback candidates. NOT adopted: no candidate has passed a labelled fixed-camera comparison, and no engine model substitution is implemented yet. This manifest exists so the next stage has a concrete, reviewable target.",
+  "policy": {
+    "why": "The shipped SD viewmodels were authored for flat-screen play. No engine-side rotation, attachment-pair or hitbox proxy can make them VR-correct: the baked hand detaches and the visible barrel stays 20-80 degrees off the aim ray.",
+    "rule": "For Bronze/Silver mods, do not try to repair the mod's own viewmodel. Render a VR-ready fallback model for the weapon CLASS while the mod keeps its own damage, fire rate, animations, sounds and ballistics.",
+    "exit_criterion": "One labelled fixed-camera comparison sheet per class with maintainer ADVANCE, then a fresh V3 PASS at that commit. Until then every entry is validated=false.",
+    "credits": "Before adoption, add source URL and author credit to assets/valve_vr/CREDITS.md for every third-party MDL."
+  },
+  "weapon_classes": {
+    "pistol": {
+      "legacy_models": ["v_9mmhandgun.mdl", "v_357.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_9mmhandgun.mdl",
+        "sha256_prefix": "23e49b0d09878539",
+        "bytes": 440752,
+        "validated": false,
+        "validation": "none"
+      }
+    },
+    "smg": {
+      "legacy_models": ["v_9mmAR.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_9mmar.mdl",
+        "sha256_prefix": "8056f8020882659e",
+        "bytes": 458632,
+        "validated": false,
+        "validation": "S0.5 measured 10.0 degrees (SD was 18.6); still above the 8-degree criterion"
+      }
+    },
+    "shotgun": {
+      "legacy_models": ["v_shotgun.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_shotgun.mdl",
+        "sha256_prefix": "63078b8314619ad4",
+        "bytes": 210416,
+        "validated": false,
+        "validation": "none"
+      }
+    },
+    "crossbow": {
+      "legacy_models": ["v_crossbow.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_crossbow.mdl",
+        "sha256_prefix": "65f7e0cbf8f122a4",
+        "bytes": 936420,
+        "validated": false,
+        "validation": "none"
+      }
+    },
+    "rpg": {
+      "legacy_models": ["v_rpg.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_rpg.mdl",
+        "sha256_prefix": "67b645babbf2b03f",
+        "bytes": 1693616,
+        "validated": false,
+        "validation": "none"
+      }
+    },
+    "melee": {
+      "legacy_models": ["v_crowbar.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Half-Life-VR/art/models/v_crowbar.mdl",
+        "sha256_prefix": "fc1b95c07621540a",
+        "bytes": 848712,
+        "validated": false,
+        "validation": "none"
+      }
+    },
+    "blue_shift_pistol": {
+      "legacy_models": ["v_9mmhandgun.mdl"],
+      "candidate": {
+        "source": "../xash3d-vr-ports/Blue-Shift-VR/installer/payload/models/v_9mmhandgun.mdl",
+        "sha256_prefix": "e63eb28971e51659",
+        "bytes": 660172,
+        "validated": false,
+        "validation": "none; P1 found v_9mmar.mdl case mismatch in this payload"
+      }
+    }
+  }
+}

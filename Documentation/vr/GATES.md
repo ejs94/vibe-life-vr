@@ -77,7 +77,8 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
 | `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |
 | `V1` | Assets | review | `./scripts/compare_weapon_review.sh` | `out/qa/V1/latest` | monado | human |
-| `V3` | Engine | active | `python3 scripts/check_weapon_alignment.py --log out/qa/M1/latest/monado_unittest_engine.log` | `out/qa/V3/latest` | monado | `gate-runner` |
+| `V3` | Engine | active | `python3 scripts/check_weapon_alignment.py --log out/qa/M1/latest/monado_unittest_engine.log --ground-truth out/qa/P2/bore_ground_truth.json` | `out/qa/V3/latest` | monado | `gate-runner` |
+| `F1` | Assets | review | `python3 scripts/check_vr_fallback.py --manifest assets/valve_vr/models/vr_fallback.json` | `out/qa/F1/latest` | monado | `human` |
 
 `A4` and any visual asset gate require a labeled comparison sheet and explicit
 maintainer approval. Green automated checks do not prove appearance.
@@ -100,13 +101,17 @@ maintainer approval. Green automated checks do not prove appearance.
   evidence were removed; the shipped native Glock is adopted unmodified. The
   live blockers (shot vector and hand skeleton) and their acceptance criteria
   are recorded in [`STATUS.md`](STATUS.md). Do not recreate a W2 gate.
-- `M1` passes only when all 49 assertions pass and the run is not cut off by
-  the engine timeout. The suite default is 120 seconds.
+- `M1` passes only when all 53 assertions pass, the engine exits 0, the suite
+  sentinel is present, captures are non-blank, and the run is not cut off by
+  the timeout. The suite default is 120 seconds. Assertion 53 is expected to
+  FAIL until VR-ready viewmodels are adopted (see `F1`); a green M1 while the
+  assets are wrong is the failure mode this registry exists to prevent.
 - `R1` passes only when all 19 assertions pass.
-- `R2` passes only when the authored barrel/aim alignment holds (angle <= 8
-  degrees, `in_front=1`) at wrist roll 0, 45, 90 and 180 for the Glock. This
-  catches the Euler-trap error the playbook measured at 10.70/19.85/28.21
-  degrees; `M1` forces hand angles to zero and cannot see it.
+- `R2` is a roll-sweep DIAGNOSTIC and is expected to FAIL while the assets
+  are not VR-ready. With `vr_anchor_rotation` OFF (D-031) it no longer re-tests
+  the renderer's own correction, so a failure is a real asset finding. Keep the
+  0/45/90/180 sweep: the playbook measured 10.70/19.85/28.21 degrees of hidden
+  Euler-trap error at those poses, which `M1` cannot see with zeroed angles.
 - `A2` passes only when bones, sequences, events, bodygroups and attachments
   survive the mdldec -> pxstudiomdl roundtrip.
 - `A9` is a read-only diagnostic that compares `muzzle_pos -> muzzle_pos2` with
@@ -114,8 +119,9 @@ maintainer approval. Green automated checks do not prove appearance.
   is a lateral muzzle-flash quad, not the bore, so a non-zero angle is expected.
   `A9` is an asset diagnostic recorded as FINDING; it never gates automation.
 - `B1` is retired 2026-11-11. Its asset-level bore override was wrong
-  (model-space axis injected into world-space bone math). The bore is now the
-  runtime grip->muzzle vector; see D-027. Do not recreate B1.
+  (model-space axis injected into world-space bone math). D-027 and D-030 are
+  both superseded by D-031: no proxy bore vector is used to rotate viewmodels.
+  Do not recreate B1.
 - `S1` passes only when the measured finger curl axis is the bone's local Z
   (`|dot| >= 0.9`) for both the proximal and middle phalanx. `--legacy-y`
   must exit 1 (negative control). It fails if `v_hand.mdl` is recompiled
@@ -127,15 +133,16 @@ maintainer approval. Green automated checks do not prove appearance.
 - `Q1` passes only with a non-black engine eye dump, OpenXR startup lines, and
   no native crash. `adb exec-out screencap` is black in VR and is not valid
   evidence.
-- `V3` is the maintainer's simulator acceptance gate. It passes only when every measurable weapon reports `angle <= 8` degrees between the AUTHORED two-point barrel basis (attachment 0 `muzzle_pos` -> attachment 2 `hud_pos`) and the firing/laser direction, every muzzle is `in_front=1`, at least 6 weapons are measurable, and no row is `UNKNOWN`. Weapons with `muzzle_attachment -1` (melee/toss/placeable) are `N/A` and excluded. `--ground-truth` cross-checks the offline bone-position measurement from `P2`; `--allow-unknown` is for Bronze-tier mods only. `R2` additionally requires the alignment to hold at wrist roll 0/45/90/180. Never mark `V3` PASS from an older run, and do not request Quest 3 HIL while `V3` or `R2` is red.
+- `V3` is the maintainer's simulator acceptance gate and is **EXPECTED TO FAIL** on the current assets. It passes only when every measurable weapon reports `angle <= 8` degrees between the authored asset geometry and the firing/laser direction, every muzzle is `in_front=1`, at least 6 weapons are measurable, and no row is `UNKNOWN`; no-barrel weapons are `N/A`. D-031 turned `vr_anchor_rotation` OFF, so this is no longer a tautology: the renderer does not force the measured vector onto the aim ray. A FAIL now means the VIEWMODEL ASSET is not VR-ready, which no engine math can fix. Do not loosen the 8-degree threshold, do not mark PASS from an older run, and do not request Quest 3 HIL while `V3` or `R2` is red. Exit criterion: one labelled fixed-camera sheet per weapon class approved by the maintainer (`F1`).
 - `V1` is a non-blocking human review artifact. It produces labelled turntable
   and animation GIFs; it never gates automation and is not counted as a pass
   or fail.
 
-- `P2` measures the authored two-point barrel basis from the MDL skeleton
-  bone positions only. Mesh vertices from `mdldec` are in a DIFFERENT
-  coordinate space and must not be used for PCA. LOW-confidence bases are
-  reported as `UNKNOWN` by `V3`, never as a pass.
+- `P2` measures bone-position pairs from the MDL skeleton. Mesh vertices from
+  `mdldec` are in a DIFFERENT coordinate space and must not be used for PCA.
+  IMPORTANT: `muzzle_pos -> hud_pos` is a DESCRIPTOR of the rig, not a proven
+  visible-barrel axis (D-031). `P2` output is asset metadata for `F1`, not a
+  ground truth that can certify alignment.
 
 - `P1` is the mod-intake inventory gate. Pass `--overlay-dir <gamedir>/models`
   (and `--no-native-subdir` when the mod has no `native/` folder) to
@@ -152,3 +159,11 @@ maintainer approval. Green automated checks do not prove appearance.
   `bore_basis_attachment` is declarative metadata for the next stage; the
   engine currently uses the fixed 0->2 bone-name contract, so a per-mod index
   override is not wired yet.
+
+- `F1` is a READINESS gate, not an acceptance gate. It reports which weapon
+  classes have an adopted, maintainer-approved VR-ready fallback model.
+  `assets/valve_vr/models/vr_fallback.json` is `PROPOSED` with
+  `human_decision: PENDING` and every candidate `validated: false`. `F1`
+  must stay `FINDING`/`PENDING` until a labelled fixed-camera comparison
+  sheet earns `ADVANCE` for each class. An exit 0 from the script only
+  means the manifest is structurally valid, never that weapons work.
