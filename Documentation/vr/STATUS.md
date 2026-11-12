@@ -4,6 +4,8 @@
 **Branch:** `feature/openxr-vr`
 **Baseline tag:** `baseline-clean-2026-10-31`
 **Evidence root:** `out/qa/`
+**Plan:** [`PLAN.md`](PLAN.md) is the single plan of truth for stages and
+blockers; this page tracks current state.
 
 This is the single page of truth. The abandoned Glock guard/trigger modelling
 sessions and their evidence were removed on 2026-11-09; the shipped native
@@ -50,7 +52,7 @@ current counts and gate freshness.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | 49/49 PASS |
+| Monado unit suite (`M1`) | 51/51 PASS (engine exit 0, sentinel, non-blank captures) |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation (`D1`) | PASS |
 | Evidence hygiene (`H1`) | PASS (2026-11-11) |
@@ -61,7 +63,9 @@ current counts and gate freshness.
 | Manual reload (`A7`) | PASS (staged vertical slice) |
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
-| Bore diagnostic (`A9`) | FINDING: 7/10 barrel pairs are 66-90° off the body's long axis |
+| Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
+| Bore gate (`B1`) | PASS: 7 `bore_axis` overrides verified against the asset hitboxes |
+| Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
 | Quest (`Q1`) | PASS 2026-11-07; a fresh run is the maintainer's decision |
 
 The overlay trap still applies: update both `out/valve/models` and
@@ -69,37 +73,40 @@ The overlay trap still applies: update both `out/valve/models` and
 
 ## Active blockers
 
-1. **The muzzle pair is not the bore on 7 of 10 barrel weapons.** `A9`
-   measures `muzzle_pos -> muzzle_pos2` against the authored body hitbox:
-   Glock 89.8°, MP5 88.4°, shotgun 85.4°, Egon/Gauss/Hivehand 90.0°, tripmine
-   65.8°; only the .357, crossbow and RPG align (3.1°). The renderer and the
-   firing line share this axis, which is why the weapon laser looks cross-eyed.
-   The circular `aim_shot_evidence.sh` cannot catch it because it uses the same
-   pair as the reference. Fix with a per-weapon `bore_axis` or by moving
-   `muzzle_pos2` onto the true bore; do not tune `pitch_adjust`. HIL validation
-   is still pending after the fix.
+1. **Bore axis code complete, headset confirmation pending.** The pair is
+   lateral on 7/10 barrel weapons (`A9`). Seven `bore_axis` overrides now live
+   in `vr_weapons.json`; the renderer aligns them (sign resolved from
+   muzzle-minus-grip) and the firing line stays on the raw aim. `B1` is green.
+   The circular shot-origin harness is broken (independent hitbox axis, second
+   tilted pose, `reported_start` preserved). Only a two-handed headset check can
+   confirm the visible barrel and laser agree; do not claim it from Monado.
 2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
    (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
    The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
    5 fingers x 3); a name/index mapping is needed before any re-skin.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
+4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
+   suite sentinel, log events (no OR-to-PNG fallbacks) and non-blank captures;
+   `T1` mutates the log and requires assertions to flip. `D1` checks gate
+   references dynamically, and diagnostics record `FINDING`, not `PASS`.
 
 ## Next steps
 
-1. Validate the bore-anchor firing line on a real headset with two hands
-   engaged, and fix the circular shot-origin test (it forces zero angles and
-   overwrites the logged start).
-2. Map the existing hand rig onto the OpenVR 31-bone enum without replacing the
-   MDL. Verify whether the input layer already consumes skeletal data.
-3. Keep the shipped native Glock as the HL1-like base (no Beretta, no sculpting)
-   and drive manual reload with `A7` plus `clip_reference` and `Box02`.
-4. Re-run `W0`, `M1` and `R1` after each step; one labelled comparison sheet
-   for visual approval.
-5. Arm IK, Box3D contact and the spatial reload gate are specified in
-   [`reference/HAND_IK_AND_PHYSICS.md`](reference/HAND_IK_AND_PHYSICS.md).
-   Start with `H0` (semantic map) and `H1` (IK math); neither needs Box3D.
-   Unresolved Quest reports are triaged in
+1. **Stage 1, bore axis (code done).** Validate on a real headset with two
+   hands engaged; `B1`, `M1`, `R1` and `W0` are green locally. See
+   [`PLAN.md`](PLAN.md#stage-1-bore-axis).
+2. **Stage 2, `pitch_adjust` removal (data + precedence done).** All 16
+   shipped profiles are zero; the Euler adjust is now only a fallback for mods
+   without bore anchors. The optional hand/aim transform cleanup remains.
+   Exit: `M1`/`R1`/`A5`/`A6`/`W0` green.
+3. **Stage 3, hand skeleton map.** Map the shipped 31-bone rig onto the OpenVR
+   enum without a re-skin. Exit: `A3` passes and an `A4` comparison sheet is
+   approved.
+4. **Stage 4, spatial reload.** Add the magwell, ejection and slide sockets and
+   replace the staged B presses. Exit: `A7` passes with the new sockets.
+5. Re-run `W0`, `M1` and `R1` after each stage; one labelled comparison sheet
+   for visual approval. Unresolved Quest reports are triaged in
    [`reference/QUEST_FIELD_REPORTS.md`](reference/QUEST_FIELD_REPORTS.md).
 
 ## Bore axis: open

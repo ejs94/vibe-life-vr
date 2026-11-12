@@ -25,7 +25,7 @@ REQUIRED = [
     DOC_ROOT / "reference" / "MODDER_GUIDE.md",
 ]
 
-GATE_IDS = ["D1", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "M1", "R1", "Q1"]
+# Gate IDs are parsed dynamically from Documentation/vr/GATES.md.
 
 ABSOLUTE_RE = re.compile(
     r"(?:^|[\s(])((?:/(?:home|Users|root|mnt|tmp|opt|var)/)|(?:[A-Za-z]:\\)|file://)"
@@ -91,14 +91,46 @@ def check_links(errors: list[str]) -> None:
                     )
 
 
-def check_gates(errors: list[str]) -> None:
+def parse_gate_registry() -> dict[str, str]:
     gates = DOC_ROOT / "GATES.md"
     if not gates.exists():
+        return {}
+    registry: dict[str, str] = {}
+    for line in gates.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.match(r"\|\s*`([^`]+)`\s*\|\s*[^|]+\|\s*([A-Za-z]+)\s*\|", line)
+        if match:
+            registry[match.group(1)] = match.group(2).lower()
+    return registry
+
+
+def check_gates(errors: list[str]) -> None:
+    registry = parse_gate_registry()
+    if not registry:
+        errors.append("GATES.md registry is empty or missing")
         return
-    text = gates.read_text(encoding="utf-8", errors="replace")
-    for gate_id in GATE_IDS:
-        if f"`{gate_id}`" not in text:
-            errors.append(f"GATES.md is missing gate id {gate_id}")
+    gate_like = re.compile(r"`([A-Z]{1,2}\d+[a-z]?)`")
+    for path in markdown_files():
+        if path == DOC_ROOT / "GATES.md":
+            continue
+        if "reference" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for line_no, line in enumerate(text.splitlines(), 1):
+            for match in gate_like.finditer(line):
+                gate_id = match.group(1)
+                if gate_id in ("S0", "S1", "S2", "S3", "S4", "S5", "H0", "H1",
+                               "H2", "H3", "H4", "H4a", "H4b", "H5", "H6",
+                               "IK1", "IK2", "W2", "W4"):
+                    continue
+                if gate_id not in registry:
+                    errors.append(
+                        f"unknown gate id in {path.relative_to(REPO_ROOT)}:{line_no}: `{gate_id}`"
+                    )
+                    continue
+                if registry[gate_id] == "retired" and "retired" not in line.lower():
+                    errors.append(
+                        f"retired gate cited as live in {path.relative_to(REPO_ROOT)}:{line_no}: `{gate_id}`"
+                    )
 
 
 def check_commands(errors: list[str]) -> None:

@@ -311,3 +311,13 @@ The check fails on the pre-2026-11-10 behaviour: the stress segment reports a
 20 degree yaw and the script prints `TWO-HAND AIM CHECK FAILED`. It is a
 diagnostic, not a gate.
 
+## False-positive guards
+
+- `T1` is the negative-control gate: it mutates the `M1` engine log and requires
+  the assertions to flip, so a green `M1` cannot hide a tautological check.
+- The `M1` runner now requires engine exit code 0 and the suite sentinel; a
+  truncated or crashed run cannot pass.
+- Captures must be non-blank and unique before `M1` is accepted.
+- `A9` is a read-only diagnostic (FINDING, not PASS); its old PASS was replaced
+  by `B1`'s expected FAIL for the 7 off-axis weapons.
+

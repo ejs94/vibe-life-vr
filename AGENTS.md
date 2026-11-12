@@ -51,7 +51,7 @@ Prefix any shell command that mutates `$PATH` (for example an inline
 - `scripts/` - build, deploy, HIL, regression, and hand/asset pipelines.
 - `Documentation/vr/` - canonical documentation: `STATUS.md`, `ROADMAP.md`,
   `GATES.md`, `TESTING.md`, `ASSETS.md`, `WEAPONS.md`, `UPSTREAM.md`,
-  `DECISIONS.md`, `MODEL_BENCHMARKS.md`, and `reference/`. Upstream
+  `DECISIONS.md`, `MODEL_BENCHMARKS.md`, `PLAN.md`, and `reference/`. Upstream
   documentation outside `Documentation/vr/` is read-only.
 
 ## 5. Build
@@ -83,7 +83,7 @@ The single gate registry is [`Documentation/vr/GATES.md`](Documentation/vr/GATES
 Read it before running or reviewing a gate. The common local gates are:
 
 ```sh
-./scripts/test_simulated_monado.sh      # M1: 47-assertion Monado suite
+./scripts/test_simulated_monado.sh      # M1: 49-assertion Monado suite (plus the T1 integrity gate)
 ./scripts/run_regression_battery.sh     # R1: 19-assertion regression battery
 python3 scripts/check_docs.py           # D1: docs, links and path rules
 python3 scripts/check_evidence_hygiene.py  # H1: evidence stays under out/qa
@@ -118,9 +118,10 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
   viewmodel, and the muzzle fallback. Do not duplicate the pose math.
 - `grip_offset` is a per-weapon model-space socket and is **not** mirrored for
   left-handed players. Only the global `vr_weapon_offset_right` is mirrored.
-- `grip_rot` is optional. When absent, the legacy Euler
-  `pitch_adjust`/`yaw_adjust`/`roll_adjust` path must remain numerically
-  identical.
+- Shipped profiles carry no Euler compensation (`pitch_adjust` = 0 for all 16).
+  The legacy Euler path remains only as a fallback for third-party mods
+  without bore anchors; do not reintroduce per-weapon pitch tuning to hide a
+  bad bore anchor.
 - The crossbow `grip` bone is the front/foregrip. The main grip comes from the
   right-hand bone; keep both sockets distinct.
 - The anchor uses the viewmodel grip bone aligned to the palm (grip pose);
@@ -212,19 +213,19 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 - Skills: `.opencode/skills/quest` (generic Quest I/O) and
   `.opencode/skills/xash-vr-quest` (project HIL loop).
 - MCP servers: `repowise` for symbol impact, `graphify` for the AST graph, and
-  `blender` for the hand/asset pipeline. The clangd MCP server is not installed;
-  do not add it until `../mcp-tools/clangd-mcp-server/dist/index.js` exists.
+  `blender` for the hand/asset pipeline.
 - Prefer the project skills and commands over ad-hoc command sequences. Use the
   `reviewer` subagent for read-only review, `quest-tester` for HIL work, and
   `gate-runner` for a single gate from `GATES.md`.
 
-## 12.1 Gate Workflow
+## 12.2 Gate Workflow
 
 - One implementer per stage; validators are read-only.
 - Run only the command in the gate row. Do not add an ad-hoc proxy check and
   call it the gate.
-- A gate result is `PASS`, `FAIL` or `INCONCLUSIVE`. A visual or risky gate is
-  also `ADVANCE`, `REWORK` or `BLOCK` by the maintainer.
+- A gate result is `PASS`, `FAIL`, `INCONCLUSIVE` or `FINDING`. A `FINDING` is a
+  diagnostic, not a pass. A visual or risky gate also needs a non-PENDING
+  `human_decision` (`ADVANCE`, `REWORK` or `BLOCK`) from the maintainer.
 - If the same stage fails twice, stop and report instead of thrashing.
 - Do not mark a gate passed from an older run. Check the manifest commit.
 
@@ -255,7 +256,8 @@ scripts/check_mdl_roundtrip.sh assets/valve_vr/models/v_crossbow.mdl
 
 ## 14. Session Economy
 
-- Start from `Documentation/vr/STATUS.md`; do not re-read the whole repository.
+- Start from `Documentation/vr/STATUS.md` and `PLAN.md` for stages; do not re-read
+  the whole repository.
   Use repowise and graphify queries instead.
 - One stage per session; end with a short handoff (done, pending, files touched).
 - Stop and report after the same stage fails twice.

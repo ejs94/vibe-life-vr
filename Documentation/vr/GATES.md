@@ -63,8 +63,10 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `A7` | Interaction | active | `./scripts/test_manual_reload.sh` | `out/qa/A7/latest` | monado | `gate-runner` |
 | `A8` | Assets | active | `python3 scripts/check_viewmodel_names.py` | `out/qa/A8/latest` | monado | `gate-runner` |
 | `A9` | Assets | review | `python3 scripts/check_weapon_bore.py` | `out/qa/A9/latest` | monado | `gate-runner` |
+| `B1` | Assets | active | `python3 scripts/check_weapon_bore.py --fail-on-off-axis` | `out/qa/B1/latest` | monado | `gate-runner` |
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
 | `R1` | Engine | active | `./scripts/run_regression_battery.sh` | `out/qa/R1/latest` | monado | `gate-runner` |
+| `T1` | Tests | active | `python3 scripts/check_assertion_integrity.py --script scripts/test_simulated_monado.sh --log out/qa/M1/latest/monado_unittest_engine.log --captures out/qa/M1/latest` | `out/qa/T1/latest` | monado | `gate-runner` |
 | `Q1` | Quest | pending | `./scripts/test_quest_auto.sh 25 crossfire` | `out/qa/Q1/latest` | quest | `quest-tester` |
 | `W0` | Weapons | active | `./scripts/test_native_weapon_fallback.sh` | `out/qa/W0/latest` | monado | `gate-runner` |
 | `W1` | Weapons | review | `blender --background --factory-startup --python scripts/calibrate_weapon_coordinates.py -- --out out/qa/W1/latest` | `out/qa/W1/latest` | monado | human |

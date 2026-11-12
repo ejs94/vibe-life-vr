@@ -315,3 +315,24 @@ Consequences:
 - Do not re-tune `pitch_adjust` to hide a bad anchor: fix the asset or add a
   per-model anchor override.
 
+## D-025: Test integrity is a gate, not a convention
+
+**Status:** accepted 2026-11-11
+
+- `M1`'s 49 assertions were mostly log greps and could pass on a truncated or
+  crashed run; engine exit code and the suite sentinel are now required.
+- `T1` mutates the evidence and requires the assertions to flip, so a green
+  suite cannot hide a tautological check.
+- `A9`-style diagnostics record a FINDING, not a PASS; `B1` converts the bore
+  finding into a real failing gate.
+
+## D-026: Per-weapon bore_axis override
+
+**Status:** accepted 2026-11-11
+
+- The 7 off-axis native weapons get a model-space `bore_axis` in
+  `vr_weapons.json`; the renderer resolves its sign from the muzzle-minus-grip
+  bone vector.
+- The 3 aligned weapons keep the legacy pair path.
+- `B1` verifies the overrides; HIL visual confirmation is still required.
+

@@ -11,7 +11,7 @@ available and must not be broken.
 | W1 coordinate calibration | **PASS — human approved 2026-11-01** |
 | Native Glock mesh | **SHIPPED — Half-Life: VR (SD) Glock adopted as the native base** |
 | Native arsenal | **15/15 copied and routed**; `v_satchel_radio` verified statically |
-| Aim direction | **FIXED 2026-11-10** — model bore anchors drive renderer and firing line |
+| Aim direction | shared axis in place; bore axis still open (`B1`) |
 | HEV glove on both hands | **SHIPPED** — `v_hand.mdl` rebuilt from the HL:VR HEV glove |
 
 W0 proves the engine can select a native model and fall back to legacy when the
@@ -22,7 +22,7 @@ sight, and yellow is the hammer.
 Native weapon production was frozen on 2026-11-01 after the source-derived
 blockout reproduced MMOD mesh defects. It was reopened on 2026-11-06 and
 resolved the same day by adopting a complete third-party asset instead of
-sculpting one; see [`STATUS.md`](STATUS.md#native-base-adopted-2026-11-06).
+sculpting one; see [`STATUS.md`](STATUS.md#current-state).
 
 ## Shipped base: Half-Life: VR (SD)
 
@@ -53,10 +53,10 @@ Verified in-engine on 2026-11-06:
 
 ### Bases measured and rejected
 
-Both alternatives come from the same MMOD lineage and were measured with the
-project's `A1` audit at the same settings:
+Both alternatives come from the same MMOD lineage and were measured with
+`scripts/check_weapon_bore.py` (gate `B1`) at the same settings:
 
-| Asset | Triangles (body) | Boundary edges | Non-manifold | Winding | `A1` score |
+| Asset | Triangles (body) | Boundary edges | Non-manifold | Winding | `B1` score |
 |---|---:|---:|---:|---:|---:|
 | MMOD decompile | 294 | 63 | 3 | 4 | 9.67/35 |
 | Blue Shift VR derivative | 473 | 57 | 9 | 0 | 30.00/35 |
