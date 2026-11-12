@@ -26,19 +26,22 @@ state; `GATES.md` lists gate commands.
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
 
-## Stage 1 bore axis (simulator aligned; HIL open)
+## Stage 1 bore axis (BLOCKED on VR-ready assets)
 
-- `ref/gl_vr/gl_studio.c` `R_VR_RotateViewmodelToPalm` derives the bore at
-  runtime from the world-space grip-bone -> muzzle-bone vector; there is no
-  model-space axis, no Blender/MDL/OpenXR axis conversion, and no per-weapon
-  override.
-- `engine/platform/openxr/xr_input.c` keeps the raw aim angles for
-  `models/native/` weapons, so the authoritative firing line is unchanged.
-- The `muzzle_pos -> muzzle_pos2` pair is a lateral muzzle-flash quad, not the
-  barrel; nothing aligns to it.
-- `M1` assertion 52 rejects a vertical green tracer in the weapon captures that
-  the earlier log greps could not see.
-- Exit: `M1`/`R1`/`W0` green plus two-handed HIL confirmation.
+- D-031: `vr_anchor_rotation` is OFF. `R_VR_RotateViewmodelToPalm` is retained
+  only as an A/B switch; forcing any proxy bone vector onto the aim ray rotated
+  the model 33-94deg and detached the baked hand. The viewmodel follows the
+  controller pose, as `VRHelper::UpdateViewEnt` does in the reference mods.
+- Engine-side alignment is CLOSED as an approach. The reference mods do not
+  compute a bore axis: they author the model and its attachments together, then
+  copy the controller pose. We adopted third-party SD assets that were never
+  authored for VR.
+- **Stage 1 is now an ASSET stage, not an engine stage.** `F1` holds the
+  per-class fallback manifest (`assets/valve_vr/models/vr_fallback.json`),
+  currently `PROPOSED` with all candidates `validated: false`.
+- Exit criterion: one labelled fixed-camera comparison sheet per weapon class
+  with maintainer `ADVANCE`, followed by a fresh `V3`/`R2` PASS at that commit.
+  Until then `V3`, `R2` and M1 assertion 53 are expected to FAIL.
 
 ## Stage 2 pitch_adjust removal (DONE data + muzzle precedence)
 
@@ -93,13 +96,12 @@ verifies the rig curl axis directly from the MDL rest bones.
 - Engine: `M1`, `R1`, `T1`
 - Quest: `Q1`
 - Weapons: `W0`, `W1`
-## HIL gate (maintainer criterion)
+## HIL is blocked (maintainer criterion)
 
-The maintainer will not test the build on the Quest 3 while the simulator
-shows misaligned aim/laser/barrel/hands AND the tests pass. At the current
-commit `V3` (6/6 measurable weapons, 3 no-barrel `N/A`, 0 `UNKNOWN`), `R2`
-(roll 0/45/90/180) and M1 assertion 53 are green, so the simulator criterion
-is met. A fresh run at the current commit plus a labelled comparison sheet
-with maintainer `ADVANCE` are still required before HIL. Never mark these
-green from an older run and never relax the 8-degree / `in_front=1`
-thresholds to hide a defect.
+The maintainer will not test on the Quest 3 while the simulator shows
+misaligned aim/laser/barrel/hands AND the tests pass. The earlier green `V3`/
+`R2` were false positives by construction; D-031 removed the compensating
+rotation and the gates are now red. **Quest 3 HIL is blocked** until `F1`
+carries an approved VR-ready fallback per weapon class and a fresh `V3`/`R2`
+at that commit is green. Never relax the 8-degree / `in_front=1` thresholds,
+and never mark a gate PASS from an older run.

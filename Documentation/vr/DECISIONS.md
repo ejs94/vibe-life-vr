@@ -421,3 +421,38 @@ The project does not consume `XR_EXT_hand_tracking` yet.
 - `R2` proves the alignment holds at wrist roll 0/45/90/180, the pose sweep
   the playbook showed exposes 10.70/19.85/28.21 degrees of hidden
   Euler-trap error. Thresholds were never loosened.
+
+## D-031: Stop compensating; the asset must be authored for VR
+
+**Status:** accepted 2026-11-12. Supersedes D-027 and D-030.
+
+- The labelled sheet `out/qa/V2/bore_fix_comparison.png` shows the MP5
+  inclined ~40 degrees, the baked hand detached from the grip, and the laser
+  leaving diagonally. The "AFTER" legend claiming a red laser leaving the
+  barrel was wrong on both the colour and the claim.
+- `R_VR_RotateViewmodelToPalm` rotated EVERY bone by 33-94 degrees (measured
+  `[VR_BORE]`: Glock 52.3, MP5 69.4, shotgun 54.7, RPG 73.7, tripmine 94.3)
+  to force a proxy vector onto the aim ray. That is what detached the hand.
+  `vr_anchor_rotation` now defaults to 0; the function remains only as an A/B
+  switch for asset preparation.
+- `V3` and `R2` were tautological: they measured `attachment[0]-attachment[2]`,
+  the exact vector the renderer forced onto the aim ray. Their green results
+  were false positives. With the rotation OFF they measure the raw asset and
+  are expected to FAIL. M1 assertion 53 stays in place and stays red.
+- No proxy is the visible barrel: `grip->muzzle` is a wrist-to-tip diagonal,
+  `muzzle->hud` an internal rig anchor, `muzzle_pos->muzzle_pos2` the flash
+  quad, `$hbox` a body cross-section, and `mdldec` mesh vertices a different
+  coordinate space. Measuring the HL:VR originals showed only 2/17 have
+  `par ~= muzzle->hud`, so the earlier "swap SD for originals" advice was
+  also unfounded.
+- The reference mods do not solve this with math: `VRHelper::UpdateViewEnt`
+  (`xash3d-vr-ports/Half-Life-VR/src/cl_dll/VRHelper.cpp:1282-1297`) copies
+  the controller pose and their models are authored with the barrel on that
+  basis. `REFERENCE_PORTS.md:425-429` already concluded there is no bore
+  solution to copy, only the decoupling. This is the same wall reached before.
+- **Direction:** `F1` is a readiness manifest of per-weapon-class VR-ready
+  fallback candidates, `PROPOSED`, all `validated: false`,
+  `human_decision: PENDING`. For Bronze/Silver mods, render a VR-ready
+  fallback by weapon class while the mod keeps its own damage, fire rate,
+  animations, sounds and ballistics. Do not adopt any candidate until a
+  labelled fixed-camera sheet earns maintainer `ADVANCE`.

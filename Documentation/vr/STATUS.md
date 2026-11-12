@@ -52,7 +52,7 @@ current counts and gate freshness.
 
 | Item | Result |
 |---|---|
-| Monado unit suite (`M1`) | 53/53 PASS (engine exit 0, sentinel, non-blank captures, `V3` acceptance) |
+| Monado unit suite (`M1`) | **FAIL (expected)**: 52/53; assertion 53 = asset readiness |
 | Regression battery (`R1`) | 19/19 PASS |
 | Documentation (`D1`) | PASS |
 | Evidence hygiene (`H1`) | PASS (2026-11-11) |
@@ -64,24 +64,29 @@ current counts and gate freshness.
 | Hands (`A4`) | PASS 2026-11-11 (baked vs standalone comparison sheets) |
 | Grip seat (`A5`) | PASS 2026-11-11 (3 models, worst 0.000 against `M1` 20261110_005848) |
 | Bore diagnostic (`A9`) | FINDING: the pair is lateral on 7/10 weapons; `FINDING` is not a pass |
-| Bore alignment (runtime) | PASS: `V3` 6/6 measurable weapons at 0.0deg, 3 no-barrel `N/A`; `R2` roll 0/45/90/180 all 0.0deg |
+| Bore alignment (runtime) | **FAIL (expected)**: `V3`/`R2` measure raw asset geometry; D-031 disabled the compensating bone rotation |
 | Test integrity (`T1`) | PASS: 43/48 baseline assertions ROBUST (89.6%) under log mutation |
-| Acceptance gate (`V3`) | PASS at current commit: 6 aligned, 0 FAIL, 0 UNKNOWN, 3 N/A |
-| Quest (`Q1`) | PASS 2026-11-07 at an older commit; a fresh HIL run is now unblocked but is the maintainer's decision |
+| Acceptance gate (`V3`) | **FAIL (expected)**: assets are not VR-ready; see blocker 1 and `F1` |
+| Quest (`Q1`) | PASS 2026-11-07 at an older commit; **HIL blocked while `V3`/`R2` are red** |
 
 The overlay trap still applies: update both `out/valve/models` and
 `out/valve_vr/models`, and confirm in the log which file was loaded.
 
 ## Active blockers
 
-1. **Bore axis: aligned in the simulator, HIL still pending.** `S0.5`
-   proved the SD assets are byte-identical to HL:VR SD and that swapping the
-   MP5 original only improved 18.6deg -> 10.0deg, so the engine layer was
-   required. The renderer now aligns the AUTHORED two-point basis
-   (`muzzle_pos` -> `hud_pos`) to the aim direction; `grip -> muzzle` was a
-   wrist-to-tip diagonal and the `muzzle_pos2` pair is a flash quad. `V3` is
-   green at this commit and `R2` holds under roll. A two-handed headset check
-   is still required before claiming appearance.
+1. **Weapon assets are not VR-ready (OPEN, primary blocker).** The labelled
+   sheet `out/qa/V2/bore_fix_comparison.png` shows the MP5 inclined ~40deg,
+   the baked hand detached from the grip, and the laser leaving diagonally.
+   `S0.5` proved the shipped MDLs are byte-identical to HL:VR SD and that
+   swapping the MP5 original only improved 18.6deg -> 10.0deg. D-031 disabled
+   the compensating bone rotation (`vr_anchor_rotation` now 0): it twisted
+   every bone 33-94deg to force a proxy vector onto the aim ray, which is not
+   the visible barrel. `grip -> muzzle` is a wrist-to-tip diagonal,
+   `muzzle -> hud` is an internal rig anchor, `muzzle_pos2` is the flash quad,
+   `$hbox` is a body cross-section, and `mdldec` mesh vertices are in a
+   different coordinate space. **No engine math repairs an asset authored for
+   flat-screen play.** Exit: adopt VR-ready viewmodels per weapon class (`F1`)
+   with maintainer-approved comparison sheets.
 2. **The hand rig is not mapped yet.** The OpenVR hand skeleton is a naming
    guide (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux
    bones), NOT a runtime dependency: the Quest 3 target is OpenXR-only. The
@@ -91,11 +96,12 @@ The overlay trap still applies: update both `out/valve/models` and
    sweeping every finger down towards -Z.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
-5. **Simulator acceptance: CLOSED at this commit.** `V3` 6/6 PASS and `R2`
-   4/4 PASS. `vr_hide_arms 2` debug phases are excluded from telemetry, and
-   no-barrel weapons are `N/A`, so the gate no longer reports false failures.
-   The thresholds were not loosened. Do not mark either gate PASS from an
-   older run.
+5. **Simulator acceptance: OPEN and RED.** The earlier `V3`/`R2` greens were
+   tautological: the renderer forced the exact vector the gate measured onto
+   the aim ray. With D-031 that rotation is OFF, so the gates now measure the
+   raw asset and fail. Thresholds were NOT loosened. `vr_hide_arms 2` debug
+   phases and no-barrel `N/A` remain excluded. Do not mark either gate PASS
+   from an older run; Quest 3 HIL stays blocked.
 4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
    suite sentinel, log events (no OR-to-PNG fallbacks) and non-blank captures;
    `T1` mutates the log and requires assertions to flip. `D1` checks gate
@@ -170,7 +176,7 @@ any stage without blocking the others. `UNKNOWN` is never a pass.
 
 | gamedir | tier | state | V3 | R2 | next |
 |---|---|---|---|---|---|
-| `valve` | gold | `S3` | PASS | PASS | labelled comparison sheet + HIL |
+| `valve` | gold | `S1` | **FAIL** | **FAIL** | adopt VR-ready viewmodels per class (`F1`) |
 | `gearbox` | silver | `S0` | pending | pending | model inventory |
 | `bshift` | silver | `S1` | pending | pending | fix `v_9mmar.mdl` -> `v_9mmAR.mdl` case mismatch found by `P1`; 16/16 bore bases measured |
 | `cstrike` | silver | `S0` | pending | pending | no-pair fallback test |
