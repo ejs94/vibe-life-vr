@@ -1650,41 +1650,32 @@ static void R_StudioApplyFingerCurling( cl_entity_t *e, int numbones, mstudiobon
 
 			float qx = q[i][0], qy = q[i][1], qz = q[i][2], qw = q[i][3];
 
-			if( e == &s_offhandEnt || e == &s_primaryHandEnt )
+			static cvar_t *vr_thumb_curl_axis = NULL;
+			if( !vr_thumb_curl_axis )
+				vr_thumb_curl_axis = gEngfuncs.pfnGetCvarPointer( "vr_thumb_curl_axis" );
+
+			if( is_thumb && ( e == &s_offhandEnt || e == &s_primaryHandEnt ) &&
+				( !vr_thumb_curl_axis || vr_thumb_curl_axis->value > 0.5f ))
 			{
-				static cvar_t *vr_thumb_curl_axis = NULL;
-				if( !vr_thumb_curl_axis )
-					vr_thumb_curl_axis = gEngfuncs.pfnGetCvarPointer( "vr_thumb_curl_axis" );
+				// The thumb crosses the palm, so its curl sign is mirrored for
+				// the left hand. It still rotates about the bone's local Z.
+				float thumb_half = is_left ? half_a : -half_a;
+				float ts = sinf( thumb_half );
+				float tc = cosf( thumb_half );
 
-				if( is_thumb && ( !vr_thumb_curl_axis || vr_thumb_curl_axis->value > 0.5f ))
-				{
-					// The thumb needs its own axis. Rotating the Rimrook
-					// thumb around the same local Y as the fingers lifts it
-					// away from the palm; local Z on the thumb chain brings it
-					// across the palm. Mirror the sign for the left hand.
-					float thumb_half = is_left ? half_a : -half_a;
-					float ts = sinf( thumb_half );
-					float tc = cosf( thumb_half );
-
-					q[i][0] = qx * tc + qy * ts;
-					q[i][1] = qy * tc - qx * ts;
-					q[i][2] = qz * tc + qw * ts;
-					q[i][3] = qw * tc - qz * ts;
-				}
-				else
-				{
-					// Rimrook two-hand rig: the finger bones' local Y axis is
-					// the curl axis. Local Z is the palm normal (rotating around
-					// it bends the fingers sideways instead of closing the fist).
-					q[i][0] = qx * c - qz * s;
-					q[i][1] = qw * s + qy * c;
-					q[i][2] = qx * s + qz * c;
-					q[i][3] = qw * c - qy * s;
-				}
+				q[i][0] = qx * tc + qy * ts;
+				q[i][1] = qy * tc - qx * ts;
+				q[i][2] = qz * tc + qw * ts;
+				q[i][3] = qw * tc - qz * ts;
 			}
 			else
 			{
-				// Valve viewmodel rigs curl around the bone's local Z axis.
+				// Curl around the bone's local Z axis. The standalone
+				// v_hand.mdl is a Bip01/Valve rig: measuring its rest bones
+				// gives |dot(local Z, curl axis)| = 1.00 and local Y = 0.017.
+				// The old "Rimrook local Y" branch rotated every finger in the
+				// X/Z plane instead of closing the fist, which is why all five
+				// fingers swept straight down towards -Z together.
 				// Post-multiply quaternion q[i] by delta_q = (0, 0, s, c).
 				q[i][0] = qx * c + qy * s;
 				q[i][1] = qy * c - qx * s;
