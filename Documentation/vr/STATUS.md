@@ -45,7 +45,7 @@ current counts and gate freshness.
 - [x] Native arsenal (15 viewmodels) routed
 - [x] HEV glove on both hands (`v_hand.mdl`)
 - [x] Shot direction follows the visible barrel (runtime grip->muzzle axis; HIL validation pending)
-- [ ] Hand matches the OpenVR 31-bone skeleton
+- [ ] Hand rig mapped to the OpenVR 31-bone enum (guide only; input is OpenXR)
 - [ ] Manual reload driven by 6DoF hands
 
 ## Current state
@@ -76,10 +76,13 @@ The overlay trap still applies: update both `out/valve/models` and
 1. **Bore axis: code fixed, HIL still pending.** The runtime grip->muzzle axis
    removed the ~90deg Glock twist and the vertical shot tracer. A two-handed
    headset check is still required; do not claim appearance from Monado.
-2. **The hand is not a VR skeleton.** The target is the OpenVR hand skeleton
-   (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux bones).
-   The shipped `v_hand.mdl` has 31 bones but a different layout (arm chain plus
-   5 fingers x 3); a name/index mapping is needed before any re-skin.
+2. **The hand rig is not mapped yet.** The OpenVR hand skeleton is a naming
+   guide (31 bones, `Root`, `Wrist`, `Thumb0-3`, four fingers `0-4`, five aux
+   bones), NOT a runtime dependency: the Quest 3 target is OpenXR-only. The
+   shipped `v_hand.mdl` has a Bip01 layout with a different index order; a
+   name/index mapping is needed before any re-skin. Gate `S1` verifies the rig
+   finger curl axis is local Z, so procedural curl closes the fist instead of
+   sweeping every finger down towards -Z.
 3. **Quest freshness.** `Q1` passed on 2026-11-07 at an older commit. Monado is
    the default local gate; never infer a Quest pass from Monado.
 4. **Test integrity, closed.** `M1` now requires a clean engine exit, the
@@ -97,9 +100,9 @@ The overlay trap still applies: update both `out/valve/models` and
    shipped profiles are zero; the Euler adjust is now only a fallback for mods
    without bore anchors. The optional hand/aim transform cleanup remains.
    Exit: `M1`/`R1`/`A5`/`A6`/`W0` green.
-3. **Stage 3, hand skeleton map.** Map the shipped 31-bone rig onto the OpenVR
-   enum without a re-skin. Exit: `A3` passes and an `A4` comparison sheet is
-   approved.
+3. **Stage 3, hand skeleton map.** Map the shipped rig onto the OpenVR enum
+   (guide only) without a re-skin; consume poses via OpenXR. Exit: `S1`, `A3`
+   pass and an `A4` comparison sheet is approved.
 4. **Stage 4, spatial reload.** Add the magwell, ejection and slide sockets and
    replace the staged B presses. Exit: `A7` passes with the new sockets.
 5. Re-run `W0`, `M1` and `R1` after each stage; one labelled comparison sheet

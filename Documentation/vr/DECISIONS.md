@@ -354,3 +354,19 @@ Consequences:
 - `M1` assertion 52 rejects a vertical green tracer in the weapon captures. The
   earlier 49 log-grep assertions could not detect a bullet firing straight up.
 
+
+## D-028: The rig curl axis is measured from the MDL, and OpenVR is only a guide
+
+**Status:** accepted 2026-11-11
+
+- `v_hand.mdl` is a Bip01/Valve rig. Measuring its rest bones gives
+  `|dot(local Z, curl axis)| = 0.9998` and `local Y = 0.0175`. The old
+  "Rimrook local Y" branch swept all five fingers towards -Z instead of
+  closing the fist; the renderer now curls every rig about local Z.
+- Gate `S1` measures that axis directly from the MDL. `--legacy-y` is a
+  negative control that must fail, so recompiling the MDL with a different
+  axis convention cannot silently regress.
+- The OpenVR 31-bone skeleton is a semantic guide for names and indices,
+  not a runtime dependency. The target is the Meta Quest 3 on OpenXR;
+  skeletal input must be consumed through OpenXR, never through an OpenVR
+  runtime.

@@ -22,7 +22,7 @@ state; `GATES.md` lists gate commands.
 | Blocker | Evidence | Gate | Exit criterion |
 |---|---|---|---|
 | Bore axis | `A9`: 7/10 off-axis (asset pair only) | `A9` (FINDING) + `M1` assertion 52 | runtime grip->muzzle axis + 2-hand HIL |
-| OpenVR 31-bone hand skeleton | `v_hand.mdl` layout differs | `A3`/`A4` | name/index map, no re-skin |
+| Hand skeleton semantics | `v_hand.mdl` layout differs | `S1`/`A3`/`A4` | rig axis + name map, no re-skin; OpenVR enum is a guide only |
 | Quest freshness | `Q1` 2026-11-07 | `Q1` | fresh run on maintainer request |
 | Test integrity | `M1` log greps | `T1` | negative control passes |
 
@@ -46,7 +46,13 @@ state; `GATES.md` lists gate commands.
 - Optional hand/aim cleanup in `xr_input.c` (~1896-2070) remains.
 - Exit: `M1`/`R1`/`A5`/`A6`/`W0` green.
 
-## Stage 3 hand skeleton map
+## Stage 3 hand skeleton map (OpenVR enum as a guide; runtime is OpenXR)
+
+The OpenVR 31-bone enum is a SEMANTIC GUIDE for bone names and indices, not a
+runtime dependency. The target device is the Meta Quest 3, whose input path
+is OpenXR only. Do not add OpenVR runtime code; map the shipped rig onto the
+enum for naming, and consume skeletal poses through OpenXR. Gate `S1`
+verifies the rig curl axis directly from the MDL rest bones.
 
 - 31 bones, name/index mapping, no re-skin.
 - Rename IK stages `IK1`/`IK2` to avoid the `H1` collision.
