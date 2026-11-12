@@ -62,7 +62,7 @@ def parse_active_gates(text: str) -> list[str]:
             continue
         gate = cells[0].strip("`")
         status = cells[2]
-        if status in {"active", "pending"}:
+        if status in {"active", "pending", "review"}:
             gates.append(gate)
     return gates
 
@@ -113,7 +113,7 @@ def main() -> int:
     for name, items in sections.items():
         print(format_section(name, items))
 
-    counts = {"PASS": 0, "FAIL": 0, "STALE": 0, "RUNNING": 0, "INCONCLUSIVE": 0, "UNKNOWN": 0}
+    counts = {"PASS": 0, "FAIL": 0, "STALE": 0, "RUNNING": 0, "INCONCLUSIVE": 0, "FINDING": 0, "UNKNOWN": 0}
     for gate in active_gates:
         state = states.get(gate, "PENDING")
         counts[state] = counts.get(state, 0) + 1
@@ -123,6 +123,7 @@ def main() -> int:
         "Gates: "
         f"{counts.get('PASS', 0)} PASS, "
         f"{counts.get('FAIL', 0)} FAIL, "
+        f"{counts.get('FINDING', 0)} FINDING, "
         f"{counts.get('INCONCLUSIVE', 0)} INCONCLUSIVE, "
         f"{counts.get('STALE', 0)} STALE, "
         f"{counts.get('PENDING', 0)} PENDING"
@@ -150,7 +151,13 @@ def main() -> int:
         if stale_active:
             print("Warning: stale active gates: " + ", ".join(stale_active))
 
-    if args.strict and (counts.get("FAIL", 0) or counts.get("STALE", 0)):
+    VISUAL_GATES = {"A4", "W1", "V1"}
+    for gate in VISUAL_GATES:
+        manifest = manifests.get(gate)
+        if manifest is not None and manifest.get("human_decision") == "PENDING":
+            print(f"Warning: visual gate {gate} has no human decision")
+
+    if args.strict and (counts.get("FAIL", 0) or counts.get("STALE", 0) or counts.get("FINDING", 0)):
         return 1
     return 0
 

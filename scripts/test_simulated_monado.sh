@@ -21,6 +21,17 @@
 #  15. Clean engine deallocation and exit.
 # ==============================================================================
 
+# ==============================================================================
+# False-positive guards
+#   - The engine exit code is validated: a timeout (124) or any nonzero exit
+#     fails the gate unless ALLOW_TIMEOUT=1 explicitly permits a 124.
+#   - A truncated run is rejected: the suite sentinel must be present.
+#   - Assertions require log events; none falls back to "file exists".
+#   - Captures must be non-blank (stddev >= 12); a duplicate frame is only a
+#     WARN, since two test phases can legitimately render the same static scene.
+#   - Assertion 13 is a deliberate negative control for the unbound X/Y layout.
+# ==============================================================================
+
 set -euo pipefail
 
 REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -125,17 +136,21 @@ TEST_LOG="${OUTPUT_DIR}/monado_unittest_engine.log"
 log_title "PHASE 1: Executing ${RUN_MODE} (${TIMEOUT_SECS}s Timeout)"
 log_info "Command: ${RUN_CMD}"
 
+ALLOW_TIMEOUT="${ALLOW_TIMEOUT:-0}"
+
 set +e
 timeout "${TIMEOUT_SECS}s" ${RUN_CMD} > "$TEST_LOG" 2>&1
 RUN_EXIT=$?
 set -e
 
-if [ "$RUN_EXIT" -eq 124 ]; then
-    log_info "Engine bounded run concluded via timeout (${TIMEOUT_SECS}s)."
-elif [ "$RUN_EXIT" -eq 0 ]; then
+if [ "$RUN_EXIT" -eq 0 ]; then
     log_ok "Engine session completed and exited cleanly (code 0)."
+elif [ "$RUN_EXIT" -eq 124 ] && [ "$ALLOW_TIMEOUT" = "1" ]; then
+    log_warn "Engine bounded run concluded via timeout (${TIMEOUT_SECS}s); ALLOW_TIMEOUT=1 permits it, but a clean exit is preferred."
+elif [ "$RUN_EXIT" -eq 124 ]; then
+    log_warn "Engine bounded run concluded via timeout (${TIMEOUT_SECS}s); clean exit (code 0) required."
 else
-    log_warn "Engine exited with code: $RUN_EXIT"
+    log_warn "Engine exited with code: $RUN_EXIT; clean exit (code 0) required."
 fi
 
 if [ -f "qconsole.log" ]; then
@@ -177,9 +192,54 @@ assert_test() {
     fi
 }
 
+# The suite prints this sentinel only after every phase ran; its absence means
+# the engine was truncated, so a crash-free grep alone is not enough.
+suite_completed() {
+    grep -q "ALL MONADO UNIT TEST PHASES COMPLETED" "$TEST_LOG"
+}
+
+# check_weapon_captures.py expects a contact-sheet layout (w_*_right.png plus
+# contact_sheet.png) and is incompatible with the M1 unit_*.png captures, so
+# the non-blank/unique checks are inlined here with the same thresholds.
+captures_nonblank() {
+    python3 -c '
+import sys
+from pathlib import Path
+from PIL import Image, ImageStat
+
+run = Path(sys.argv[1])
+pngs = sorted(run.glob("*.png"))
+if not pngs:
+    sys.exit(1)
+for path in pngs:
+    stddev = sum(ImageStat.Stat(Image.open(path).convert("RGB")).stddev) / 3.0
+    if stddev < 12.0:
+        sys.exit(1)
+sys.exit(0)
+' "$OUTPUT_DIR"
+}
+
+# Informational only: identical frames are possible when two phases render the
+# same static scene. Never fail the gate on this; assertion 16/17 now require
+# their own log events, so a duplicate PNG cannot stand in for behaviour.
+capture_duplicates() {
+    python3 -c '
+import hashlib
+import sys
+from pathlib import Path
+
+seen = {}
+for path in sorted(Path(sys.argv[1]).glob("*.png")):
+    seen.setdefault(hashlib.sha256(path.read_bytes()).hexdigest(), []).append(path.name)
+for names in seen.values():
+    if len(names) > 1:
+        print("duplicate captures: " + ", ".join(names))
+' "$OUTPUT_DIR"
+}
+
 # --- Core OpenXR & Stereo Frame Pipeline ---
 assert_test 1  "OpenXR Runtime Handshake & Dual Stereo Swapchains" \
-    'grep -q "OpenXR: xrBeginSession started successfully!" "$TEST_LOG" || grep -q "instance created" "$TEST_LOG"'
+    'grep -q "xrBeginSession started successfully!" "$TEST_LOG" && grep -q "XR_CreateSwapchains: Stereo swapchains created successfully!" "$TEST_LOG" && [ -s "$TEST_LOG" ]'
 
 assert_test 2  "Core VR CVars Registered and Accessible" \
     'grep -q "vr_smoothturn" "$TEST_LOG" && grep -q "vr_lasersight" "$TEST_LOG" && grep -q "vr_physical_crouch" "$TEST_LOG"'
@@ -216,8 +276,11 @@ assert_test 11 "VR Input Layout: Primary Grip + Trigger -> Alt-Fire" \
 assert_test 12 "VR Input Layout: Right A Button -> Jump" \
     'grep -q "HL2VR Action: Jump triggered" "$TEST_LOG"'
 
+# Positive negative-control: the suite declares the X/Y unbound phase, the cfg
+# carries no legacy use binding, and the log must not contain the legacy use
+# event. This is an absence check, not a tautology.
 assert_test 13 "VR Input Layout: X/Y Unbound (No Legacy Use Button)" \
-    '! grep -q "HL2VR Action: Use / Interact triggered" "$TEST_LOG" && ! grep -q "Secondary / Alt-Fire triggered" "$TEST_LOG"'
+    'grep -q "Confirming X/Y are unbound" "${REPO_DIR}/scripts/monado_unit_tests.cfg" && ! grep -qE "^[[:space:]]*bind[[:space:]].*\+use" "${REPO_DIR}/scripts/monado_unit_tests.cfg" && ! grep -q "Use / Interact triggered" "$TEST_LOG"'
 
 # --- Gold Benchmark Remediations ---
 assert_test 14 "Physical Roomscale Crouch: Squat Drop (>= 28cm) Engages IN_DUCK" \
@@ -227,26 +290,28 @@ assert_test 15 "Physical Roomscale Crouch: Standing Up Releases IN_DUCK Hull" \
     'grep -q "Physical Roomscale Crouch RELEASED" "$TEST_LOG"'
 
 assert_test 16 "6DoF Tripmine Placement Trace Aligned with Hand Controller" \
-    'grep -q "6DoF Tripmine placed at" "$TEST_LOG" || [ -f "${OUTPUT_DIR}/unit_14_tripmine_placed.png" ]'
+    'grep -q "\[MONADO UNIT TEST\] Tripmine 6DoF Placement" "$TEST_LOG" && grep -q "\[VR\] DUMPED OpenXR Eye 0 to unit_14_tripmine_placed.ppm" "$TEST_LOG" && [ -f "${OUTPUT_DIR}/unit_14_tripmine_placed.png" ]'
 
 assert_test 17 "6DoF Snark Toss with Controller Velocity Momentum" \
-    'grep -q "6DoF Snark tossed with velocity" "$TEST_LOG" || [ -f "${OUTPUT_DIR}/unit_15_snark_tossed.png" ]'
+    'grep -q "6DoF Snark tossed with velocity" "$TEST_LOG" && [ -f "${OUTPUT_DIR}/unit_15_snark_tossed.png" ]'
 
 # --- Weapon Systems, Hands & Spatial Audio ---
 assert_test 18 "Server-Side 6DoF Weapon Ballistics across Arsenal" \
     '[ -f "${OUTPUT_DIR}/unit_09_mp5_muzzle.png" ] && [ -f "${OUTPUT_DIR}/unit_12_rpg_muzzle.png" ]'
 
+# WEAK: the current [VR_GRIP] telemetry does not carry twohanded=1, so this
+# grep only proves the cvar is registered, not that stabilization ran.
 assert_test 19 "Two-Handed Weapon Grip Stabilization Mode (vr_twohanded)" \
-    '[ -f "${OUTPUT_DIR}/unit_16_twohanded.png" ] || grep -q "twohanded" "$TEST_LOG"'
+    'grep -qE "\[VR_GRIP\].*twohanded=1" "$TEST_LOG" || grep -q "twohanded" "$TEST_LOG"'
 
 assert_test 20 "Dynamic Articulated Skeletal 3D Hands & Finger Curling" \
-    'grep -q "VR_HANDS_DBG" "$TEST_LOG" && grep -q "bones curled" "$TEST_LOG" || [ -f "${OUTPUT_DIR}/unit_17_finger_curling.png" ]'
+    'grep -q "VR_HANDS_DBG" "$TEST_LOG" && grep -q "bones curled" "$TEST_LOG" && [ -f "${OUTPUT_DIR}/unit_17_finger_curling.png" ]'
 
 assert_test 21 "3D Binaural HRTF Spatial Audio & 6DoF Listener Tracking" \
     'grep -q "VR_AUDIO_DBG" "$TEST_LOG" && grep -q "hrtf=1" "$TEST_LOG"'
 
 assert_test 22 "3D Bullet Impact Debug Visualization System (vr_debug_impacts)" \
-    'grep -q "Debug bullet impacts cleared" "$TEST_LOG" || grep -q "vr_clear_impacts" "$TEST_LOG"'
+    'grep -q "Debug bullet impacts cleared" "$TEST_LOG"'
 
 assert_test 23 "Declarative Weapon Profiles Calibration Manifest (vr_weapons.json)" \
     'grep -q "VR_WEAPON_PROFILES" "$TEST_LOG"'
@@ -284,8 +349,11 @@ assert_test 33 "Crossbow PiP Scope Activates and Deactivates" \
 assert_test 34 "Ladder Client-Prediction Publishes VR Flag (vuser4[1])" \
     'grep -q "\\[VR_LADDER\\] client prediction is_vr=1" "$TEST_LOG"'
 
+# Runtime telemetry proxy: with vr_hide_arms 2 active, the crossbow's authored
+# hands and offhand geometry are still reported, and the hide_arms filter line
+# documents that only the viewmodel entity is stripped. No source-file grep.
 assert_test 35 "Crossbow Bow Limbs Not Hidden by vr_hide_arms" \
-    '! grep -q "\"shoulders\"" "${REPO_DIR}/ref/gl_vr/gl_studio.c"'
+    'grep -q "\[VR_HAND_STATE\] model=models/native/v_crossbow\.mdl baked_primary=1 baked_offhand=1 offhand_only=0" "$TEST_LOG" && grep -q "\[VR_HANDS\] vr_hide_arms 2 strips an authored baked hand" "$TEST_LOG"'
 
 assert_test 36 "Controller Menu Button Opens Pause Menu Quad" \
     'grep -q "\\[VR_MENU\\] toggle requested" "$TEST_LOG" && grep -q "\\[VR_MENU\\] scene skipped; using quad menu path" "$TEST_LOG" && grep -q "\\[VR_MENU\\] submitting quad menu frame" "$TEST_LOG"'
@@ -294,7 +362,7 @@ assert_test 37 "Menu Quad Faces Player at 90 Degree Heading (anchor theta)" \
     'grep -q "\\[VR_MENU\\] anchor .*theta=90.0" "$TEST_LOG"'
 
 assert_test 38 "Clean Simulation Execution & Zero Memory / Process Crash" \
-    '! grep -E -q "Segmentation fault|SIGSEGV|Aborted \(core dumped\)" "$TEST_LOG"'
+    '[ "$RUN_EXIT" -eq 0 ] && suite_completed && ! grep -E -q "Segmentation fault|SIGSEGV|Aborted \(core dumped\)" "$TEST_LOG"'
 
 # ------------------------------------------------------------------------------
 # Sprint B: unified weapon pose (XR_GetWeaponPose) regression gates
@@ -332,6 +400,17 @@ assert_test 48 "Hand Conversion: OpenXR Pitch/Yaw/Roll Map to GoldSrc Axes" \
 assert_test 49 "Weapon Pose: Aim Orientation Wins Over a 35 Degree Grip Tilt" \
     'python3 "${SCRIPT_DIR}/check_aim_pose.py" "$TEST_LOG"'
 
+# --- Capture hygiene: reject blank or duplicate evidence frames ---
+assert_test 50 "Captures are non-blank (no black eye dumps)" 'captures_nonblank'
+
+assert_test 51 "All scheduled eye dumps captured" \
+    '[ "$CAPTURED_IMAGES" -ge 20 ]'
+
+dups="$(capture_duplicates)"
+if [ -n "$dups" ]; then
+    log_warn "$dups (informational; log events are required separately)"
+fi
+
 # 7. Optional Quest Launcher UI Verification
 if [ "${TARGET_ARG}" = "all" ] || [ "${TARGET_ARG}" = "--with-launcher" ] || [ "${TARGET_ARG}" = "full" ]; then
     log_title "PHASE 3: Executing Meta Quest APK Launcher UI Verification"
@@ -349,13 +428,16 @@ echo "Captured Visual Artifacts: ${CAPTURED_IMAGES} PNGs"
 echo "Evidence Directory: ${OUTPUT_DIR}"
 echo "=========================================================="
 
-if [ "$FAILED_TESTS" -eq 0 ]; then
+if [ "$FAILED_TESTS" -eq 0 ] && { [ "$RUN_EXIT" -eq 0 ] || { [ "$RUN_EXIT" -eq 124 ] && [ "$ALLOW_TIMEOUT" = "1" ]; }; }; then
     QA_STATUS="PASS"
     QA_EXIT=0
     log_ok "ALL ${TOTAL_TESTS}/${TOTAL_TESTS} MONADO VR UNIT TESTS PASSED (100% GREEN)!"
 else
     QA_STATUS="FAIL"
     QA_EXIT=1
+    if [ "$FAILED_TESTS" -eq 0 ]; then
+        log_err "Engine exit code ${RUN_EXIT} is not clean; PASS requires RUN_EXIT=0 (ALLOW_TIMEOUT=1 permits 124)."
+    fi
     log_err "${FAILED_TESTS} UNIT TEST(S) FAILED. Review log at: ${TEST_LOG}"
 fi
 
@@ -364,5 +446,5 @@ python3 "${QA_SCRIPT}" finish \
     --exit-code "$QA_EXIT" \
     --status "$QA_STATUS" \
     --device monado \
-    --note "Monado unit suite: ${PASSED_TESTS}/${TOTAL_TESTS} passed"
+    --note "Monado unit suite: ${PASSED_TESTS}/${TOTAL_TESTS} passed, engine exit ${RUN_EXIT}, ${CAPTURED_IMAGES} captures"
 exit "$QA_EXIT"
