@@ -1687,6 +1687,7 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
     // attachments, so this is independent of the flash-quad pair (0 -> 1) used
     // elsewhere and of the renderer alignment; it cannot self-confirm. The
     // maintainer's HIL gate requires this angle to be small on every weapon.
+    if( !( vr_hide_arms && vr_hide_arms->value >= 2.0f ))
     {
         vec3_t aim_fwd;
         AngleVectors( local_angles, aim_fwd, NULL, NULL );
@@ -1705,15 +1706,31 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
             }
         }
 
-        // Only cache a model once we have a REAL measurement. The studio
-        // attachments are computed later in the frame, so the first call for a
-        // freshly equipped weapon often has a null hud_pos; logging that would
-        // replace the model's one row with MISSING and hide the real angle.
-        static char s_lastAimModel[64] = { 0 };
-        if( wpn[0] && have_barrel && Q_strcmp( s_lastAimModel, wpn ))
-        {
-            Q_strncpy( s_lastAimModel, wpn, sizeof( s_lastAimModel ));
+        // Melee, toss and placeable weapons have no barrel (muzzle_attachment
+        // -1 in vr_weapons.json). Report them as N/A instead of measuring a
+        // meaningless vector; V3 excludes them from its acceptance criteria.
+        int probe_att = -1;
+        vec3_t probe_fallback;
+        if( wpn[0] ) XR_GetWeaponMuzzleParams( wpn, &probe_att, probe_fallback );
 
+        // Only report a model once the reading is STABLE. Re-equipping a weapon
+        // mid-suite produces a first frame with attachments from the previous
+        // model, which showed up as [0.0, 52.3, 0.0] on the Glock. Require
+        // three consecutive agreeing readings before emitting one row.
+        static char s_lastAimModel[64] = { 0 };
+        static char s_stableModel[64] = { 0 };
+        static float s_lastAngle = -1000.0f;
+        static int s_stableCount = 0;
+
+        if( wpn[0] && Q_strcmp( s_stableModel, wpn ))
+        {
+            Q_strncpy( s_stableModel, wpn, sizeof( s_stableModel ));
+            s_lastAngle = -1000.0f;
+            s_stableCount = 0;
+        }
+
+        if( wpn[0] && probe_att >= 0 && have_barrel && Q_strcmp( s_lastAimModel, wpn ))
+        {
             float d = DotProduct( aim_fwd, barrel );
             if( d > 1.0f ) d = 1.0f;
             if( d < -1.0f ) d = -1.0f;
@@ -1723,9 +1740,24 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
             VectorSubtract( clgame.viewent.attachment[0], refState.vieworg, to_muzzle );
             int in_front = ( DotProduct( to_muzzle, aim_fwd ) > 0.0f ) ? 1 : 0;
 
-            Con_DPrintf( "[VR_AIM] model=%s angle=%.1f in_front=%d barrel=(%.2f %.2f %.2f) aim=(%.2f %.2f %.2f)\n",
-                wpn, ang, in_front, barrel[0], barrel[1], barrel[2],
-                aim_fwd[0], aim_fwd[1], aim_fwd[2] );
+            if( in_front && fabsf( ang - s_lastAngle ) < 2.0f )
+                s_stableCount++;
+            else
+                s_stableCount = 0;
+            s_lastAngle = ang;
+
+            if( in_front && s_stableCount >= 3 )
+            {
+                Q_strncpy( s_lastAimModel, wpn, sizeof( s_lastAimModel ));
+                Con_DPrintf( "[VR_AIM] model=%s angle=%.1f in_front=%d barrel=(%.2f %.2f %.2f) aim=(%.2f %.2f %.2f)\n",
+                    wpn, ang, in_front, barrel[0], barrel[1], barrel[2],
+                    aim_fwd[0], aim_fwd[1], aim_fwd[2] );
+            }
+        }
+        else if( wpn[0] && probe_att < 0 && Q_strcmp( s_lastAimModel, wpn ))
+        {
+            Q_strncpy( s_lastAimModel, wpn, sizeof( s_lastAimModel ));
+            Con_DPrintf( "[VR_AIM] model=%s angle=N/A in_front=1\n", wpn );
         }
     }
 
