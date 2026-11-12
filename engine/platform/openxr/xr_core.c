@@ -241,11 +241,24 @@ void XR_AddDebugBulletImpact( const float *start, const float *end, const float 
     if( !vr_debug_impacts || vr_debug_impacts->value <= 0.0f )
         return;
 
+    // Preserve the caller-supplied origin as evidence before it is overwritten
+    // below: the raw argument is the reported_start for shot-origin review.
+    vec3_t reported_start = { 0.0f, 0.0f, 0.0f };
+    qboolean has_reported_start = ( start != NULL );
+    if( has_reported_start )
+        VectorCopy( start, reported_start );
+
     vec3_t true_muzzle;
     if( XR_GetPrimaryHandMuzzleWorldPosition( true_muzzle ) )
     {
         // Player bullet traces in VR always originate strictly from the physical weapon muzzle
         start = true_muzzle;
+    }
+
+    if( !start )
+    {
+        static vec3_t s_zero_start = { 0.0f, 0.0f, 0.0f };
+        start = s_zero_start;
     }
 
     // Suppress duplicate impact registration within a single frame (e.g. predicted client trace + server impact)
@@ -290,8 +303,10 @@ void XR_AddDebugBulletImpact( const float *start, const float *end, const float 
     g_vrDebugImpacts[idx].shot_id = g_vrTotalShotsFired;
 
     float dist = VectorDistance( start, end );
-    Con_Printf( "^2[VR_IMPACT_DBG] Shot #%d start=(%.1f, %.1f, %.1f) hit at (%.1f, %.1f, %.1f) dist=%.1f normal=(%.2f, %.2f, %.2f)\n",
-        g_vrTotalShotsFired, start[0], start[1], start[2], end[0], end[1], end[2], dist,
+    Con_Printf( "^2[VR_IMPACT_DBG] Shot #%d reported_start=(%.1f, %.1f, %.1f) start=(%.1f, %.1f, %.1f) hit at (%.1f, %.1f, %.1f) dist=%.1f normal=(%.2f, %.2f, %.2f)\n",
+        g_vrTotalShotsFired,
+        reported_start[0], reported_start[1], reported_start[2],
+        start[0], start[1], start[2], end[0], end[1], end[2], dist,
         g_vrDebugImpacts[idx].normal[0], g_vrDebugImpacts[idx].normal[1], g_vrDebugImpacts[idx].normal[2] );
 }
 

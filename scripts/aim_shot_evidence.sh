@@ -63,6 +63,24 @@ mkdir -p "${RUN_DIR}"
         echo "wait 8"
         echo "-attack"
         echo "wait 20"
+        # Second, non-identity pose pass: a non-zero hand pitch/yaw/roll and
+        # offset exercise rotation/scale/socket composition so transform bugs
+        # cannot cancel out the way they do in the identity pose.
+        echo "vr_test_hand_pitch 25"
+        echo "vr_test_hand_yaw 20"
+        echo "vr_test_hand_roll 0"
+        echo 'vr_test_hand_offset "0 0 6"'
+        echo "wait 60"
+        echo "echo SHOT_PROBE_TILT weapon=${weapon}"
+        echo "+attack"
+        echo "wait 8"
+        echo "-attack"
+        echo "wait 20"
+        # Reset to identity after the tilt probe.
+        echo "vr_test_hand_pitch 0"
+        echo "vr_test_hand_yaw 0"
+        echo "vr_test_hand_roll 0"
+        echo 'vr_test_hand_offset "0 0 0"'
         echo "vr_dumpeye shot_${model}.ppm"
         echo "wait 30"
     done
