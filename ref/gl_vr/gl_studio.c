@@ -1945,31 +1945,33 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 
 	matrix3x4 *bt = g_studio.bonestransform;
 
-	// Locate the muzzle bone. muzzle_pos2 is deliberately NOT used: it is the
-	// lateral muzzle-flash quad corner, not the barrel. Aligning the pair to
-	// the aim direction twists the whole viewmodel by ~90 degrees on most
-	// native rigs, which is what made the Glock and SMG point sideways/up.
-	int muzzle = -1;
+	// Locate the two AUTHORED bore points in the studio bone hierarchy:
+	// attachment 0 "muzzle_pos" (barrel tip) and attachment 2 "hud_pos" /
+	// "HUD_pos" (rear barrel anchor). This is the two-point authored basis
+	// from the modding contract, not a hitbox, not a mesh PCA and not the
+	// muzzle_pos -> muzzle_pos2 flash-quad pair (which is lateral).
+	// grip -> muzzle is a wrist-to-tip DIAGONAL and was the reason the laser
+	// still left the barrel at ~20-80 degrees after the previous attempt.
+	int muzzle = -1, rear = -1;
 	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
 	{
-		if( !Q_strcmp( pbones[i].name, "muzzle_pos" ))
-		{
+		if( muzzle < 0 && !Q_strcmp( pbones[i].name, "muzzle_pos" ))
 			muzzle = i;
-			break;
-		}
+		else if( rear < 0 && ( !Q_strcmp( pbones[i].name, "hud_pos" ) ||
+			!Q_strcmp( pbones[i].name, "HUD_pos" )))
+			rear = i;
 	}
 	if( muzzle < 0 )
 		return;
 
-	// Runtime bore axis, measured directly in the studio bone hierarchy:
-	// grip bone -> muzzle bone. Both are world-space bone translations here,
-	// so no model-space/OpenXR/Blender axis conversion is involved and the
-	// same code works for every authored rig. The bullet leaves the muzzle,
-	// so this is also the direction the firing line must follow.
+	// A mod without the rear anchor falls back to the wrist bone and is
+	// reported as UNKNOWN by V3; it must never be silently declared aligned.
+	int pivot = ( rear >= 0 ) ? rear : grip;
+
 	vec3_t barrel;
-	barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
-	barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
-	barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
+	barrel[0] = bt[muzzle][0][3] - bt[pivot][0][3];
+	barrel[1] = bt[muzzle][1][3] - bt[pivot][1][3];
+	barrel[2] = bt[muzzle][2][3] - bt[pivot][2][3];
 	{
 		float barrel_len = VectorLength( barrel );
 		if( barrel_len < 1.0f )
@@ -2001,6 +2003,19 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 		if( axis_len < 1e-4f )
 			return;
 		VectorScale( axis, 1.0f / axis_len, axis );
+	}
+
+	// Report which authored bore pair the renderer used. V3 treats a wrist
+	// fallback as UNKNOWN, never as a PASS, so a mod without the rear anchor
+	// cannot be silently declared aligned.
+	{
+		static char s_lastBoreModel[64] = { 0 };
+		if( Q_strcmp( s_lastBoreModel, e->model->name ))
+		{
+			Q_strncpy( s_lastBoreModel, e->model->name, sizeof( s_lastBoreModel ));
+			gEngfuncs.Con_DPrintf( "[VR_BORE] model=%s pair=%s correction=%.1fdeg\n",
+				e->model->name, ( rear >= 0 ) ? "muzzle-hud" : "muzzle-grip-UNKNOWN", angle );
+		}
 	}
 
 	// Skip tiny corrections to avoid jitter.
