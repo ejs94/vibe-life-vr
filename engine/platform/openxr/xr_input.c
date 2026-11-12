@@ -1659,34 +1659,17 @@ qboolean XR_GetPrimaryHandMuzzleTransform( vec3_t out_muzzle_offset, vec3_t out_
         XR_GetWeaponPitchAdjust( wpn, &w_pitch, &w_yaw, &w_roll );
     }
 
-    // Model-space bore override: 7 off-axis weapons carry an undirected bore_axis
-    // in vr_weapons.json. When present, the renderer aligns that axis to the aim
-    // direction and the firing line must keep the raw aim angles.
-    vec3_t bore_axis;
-    qboolean have_bore = XR_GetWeaponBoreAxis( wpn, bore_axis );
+    // D-027: the authoritative firing line is the raw aim pose, always.
+    // muzzle_pos -> muzzle_pos2 is the lateral muzzle-flash quad, not the
+    // barrel; deriving the shot from it made bullets leave sideways/up and
+    // depended on clgame.viewent.model->name being populated at that exact
+    // frame. The renderer aligns the runtime grip -> muzzle bone vector to
+    // this same aim direction, so the visible barrel and the bullet agree.
+    // The legacy Euler calibration stays only as a fallback for third-party
+    // mods that are not routed through the native VR viewmodel path.
+    qboolean native_model = ( wpn[0] && !Q_strnicmp( wpn, "models/native/", 14 ));
 
-    // Model-owned bore anchors win; the Euler adjust is only a legacy fallback for mods without anchors.
-    if( have_bore )
-    {
-        // When a model-space bore override exists, the renderer aligns that axis to the aim direction; the pair is only the muzzle-flash anchor, so the firing line stays on the raw aim angles.
-    }
-    else if( clgame.viewent.model &&
-        !VectorIsNull( clgame.viewent.attachment[0] ) &&
-        !VectorIsNull( clgame.viewent.attachment[1] ) )
-    {
-        // Single source of truth: when the model exposes both bore anchors, the
-        // fired direction is the same world-space axis the renderer aligned
-        // (muzzle_pos -> muzzle_pos2). This removes the per-weapon hand
-        // calibration for every gun that carries the anchors.
-        vec3_t bore;
-        VectorSubtract( clgame.viewent.attachment[1], clgame.viewent.attachment[0], bore );
-        if( VectorLength( bore ) > 1.0f )
-        {
-            VectorNormalize( bore );
-            VectorAngles( bore, local_angles );
-        }
-    }
-    else
+    if( !native_model )
     {
         local_angles[0] += w_pitch;
         local_angles[1] = anglemod( local_angles[1] + w_yaw );

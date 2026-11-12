@@ -1954,52 +1954,31 @@ static void R_VR_RotateViewmodelToPalm( cl_entity_t *e )
 
 	matrix3x4 *bt = g_studio.bonestransform;
 
-	// Muzzle bones and the model-authored bore axis.
-	int muzzle = -1, muzzle2 = -1;
+	// Locate the muzzle bone. muzzle_pos2 is deliberately NOT used: it is the
+	// lateral muzzle-flash quad corner, not the barrel. Aligning the pair to
+	// the aim direction twists the whole viewmodel by ~90 degrees on most
+	// native rigs, which is what made the Glock and SMG point sideways/up.
+	int muzzle = -1;
 	for( int i = 0; i < m_pStudioHeader->numbones; i++ )
 	{
-		if( muzzle < 0 && !Q_strcmp( pbones[i].name, "muzzle_pos" ))
+		if( !Q_strcmp( pbones[i].name, "muzzle_pos" ))
+		{
 			muzzle = i;
-		else if( muzzle2 < 0 && !Q_strcmp( pbones[i].name, "muzzle_pos2" ))
-			muzzle2 = i;
+			break;
+		}
 	}
 	if( muzzle < 0 )
 		return;
 
-	// The model defines the bore as muzzle_pos -> muzzle_pos2, the same pair
-	// the reference mod uses for ballistics. Fall back to the grip only when
-	// the model has no muzzle_pos2.
+	// Runtime bore axis, measured directly in the studio bone hierarchy:
+	// grip bone -> muzzle bone. Both are world-space bone translations here,
+	// so no model-space/OpenXR/Blender axis conversion is involved and the
+	// same code works for every authored rig. The bullet leaves the muzzle,
+	// so this is also the direction the firing line must follow.
 	vec3_t barrel;
-	{
-		vec3_t axis;
-		qboolean have_bore = XR_GetWeaponBoreAxis( e->model->name, axis );
-		if( have_bore && VectorLength( axis ) > 0.001f )
-		{
-			// The manifest axis is undirected: orient it toward the muzzle so the
-			// barrel tip, not the grip, ends up along the aim direction.
-			vec3_t to_muzzle;
-			to_muzzle[0] = bt[muzzle][0][3] - bt[grip][0][3];
-			to_muzzle[1] = bt[muzzle][1][3] - bt[grip][1][3];
-			to_muzzle[2] = bt[muzzle][2][3] - bt[grip][2][3];
-			if( DotProduct( axis, to_muzzle ) < 0.0f ) VectorNegate( axis, axis );
-			VectorCopy( axis, barrel );
-		}
-		else
-		{
-			if( muzzle2 >= 0 )
-			{
-				barrel[0] = bt[muzzle2][0][3] - bt[muzzle][0][3];
-				barrel[1] = bt[muzzle2][1][3] - bt[muzzle][1][3];
-				barrel[2] = bt[muzzle2][2][3] - bt[muzzle][2][3];
-			}
-			else
-			{
-				barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
-				barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
-				barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
-			}
-		}
-	}
+	barrel[0] = bt[muzzle][0][3] - bt[grip][0][3];
+	barrel[1] = bt[muzzle][1][3] - bt[grip][1][3];
+	barrel[2] = bt[muzzle][2][3] - bt[grip][2][3];
 	{
 		float barrel_len = VectorLength( barrel );
 		if( barrel_len < 1.0f )
