@@ -172,6 +172,16 @@ any stage without blocking the others. `UNKNOWN` is never a pass.
 |---|---|---|---|---|---|
 | `valve` | gold | `S3` | PASS | PASS | labelled comparison sheet + HIL |
 | `gearbox` | silver | `S0` | pending | pending | model inventory |
-| `bshift` | silver | `S0` | pending | pending | model inventory |
+| `bshift` | silver | `S1` | pending | pending | fix `v_9mmar.mdl` -> `v_9mmAR.mdl` case mismatch found by `P1`; 16/16 bore bases measured |
 | `cstrike` | silver | `S0` | pending | pending | no-pair fallback test |
 | `hunger` | bronze | `S0` | UNKNOWN | pending | graceful degradation |
+
+### Intake findings
+
+- `P1` on the Blue-Shift-VR payload (16 viewmodels): FAIL — `v_9mmar.mdl`
+  is bundled with the wrong case; the HLSDK requests `v_9mmAR.mdl`, so
+  the vanilla model loads on case-sensitive filesystems. This is the
+  same overlay trap documented for `valve`, now generalised per gamedir.
+- `P2` measured the authored two-point bore basis on **16/16** of those
+  models with no code change (4 HIGH, 11 MEDIUM, 1 LOW): the contract is
+  reusable across mods, not specific to the shipped `valve` assets.

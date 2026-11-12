@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -31,6 +32,22 @@ OVERLAY_DIR = REPO_DIR / "assets" / "valve_vr" / "models"
 # The native route resolves models/native/<legacy-basename>.mdl, so a native
 # file is subject to the same exact-case rule as the overlay it replaces.
 OVERLAY_DIRS = [OVERLAY_DIR, OVERLAY_DIR / "native"]
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--overlay-dir", default=None,
+                   help="Inventory a different gamedir's viewmodel folder "
+                        "instead of assets/valve_vr/models (P1 mod intake)")
+    p.add_argument("--no-native-subdir", action="store_true",
+                   help="Do not also scan <overlay-dir>/native")
+    return p.parse_args()
+
+
+ARGS = parse_args()
+if ARGS.overlay_dir:
+    OVERLAY_DIR = Path(ARGS.overlay_dir)
+    OVERLAY_DIRS = [OVERLAY_DIR] if ARGS.no_native_subdir else [OVERLAY_DIR, OVERLAY_DIR / "native"]
 
 MODEL_RE = re.compile(r"models/v_[A-Za-z0-9_]+\.mdl", re.I)
 
@@ -67,7 +84,10 @@ def main() -> int:
     warnings: list[str] = []
 
     for directory, names in bundled_by_dir.items():
-        folder = directory.relative_to(REPO_DIR).as_posix()
+        try:
+            folder = directory.relative_to(REPO_DIR).as_posix()
+        except ValueError:
+            folder = directory.as_posix()
         for name in sorted(names):
             if name in requested:
                 continue

@@ -65,6 +65,7 @@ The helper updates `out/qa/<gate>/latest` and `out/qa/INDEX.md`.
 | `A9` | Assets | review | `python3 scripts/check_weapon_bore.py` | `out/qa/A9/latest` | monado | `gate-runner` |
 | `B1` | Assets | retired | — | — | monado | `gate-runner` |
 | `S1` | Assets | active | `python3 scripts/check_hand_curl_axis.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S1/latest` | monado | `gate-runner` |
+| `P1` | Assets | active | `python3 scripts/check_viewmodel_names.py` | `out/qa/P1/latest` | monado | `gate-runner` |
 | `P2` | Assets | active | `python3 scripts/measure_bore_basis.py --dir assets/valve_vr/models/native --json out/qa/P2/bore_ground_truth.json` | `out/qa/P2/latest` | monado | `gate-runner` |
 | `S2` | Assets | active | `python3 scripts/check_hand_skeleton_map.py --model assets/valve_vr/models/v_hand.mdl` | `out/qa/S2/latest` | monado | `gate-runner` |
 | `M1` | Engine | active | `./scripts/test_simulated_monado.sh` | `out/qa/M1/latest` | monado | `gate-runner` |
@@ -134,3 +135,10 @@ maintainer approval. Green automated checks do not prove appearance.
   bone positions only. Mesh vertices from `mdldec` are in a DIFFERENT
   coordinate space and must not be used for PCA. LOW-confidence bases are
   reported as `UNKNOWN` by `V3`, never as a pass.
+
+- `P1` is the mod-intake inventory gate. Pass `--overlay-dir <gamedir>/models`
+  (and `--no-native-subdir` when the mod has no `native/` folder) to
+  inventory another Xash3D mod against the HLSDK-requested viewmodel
+  names. A case mismatch means the bundled model is silently ignored on
+  case-sensitive filesystems. Intake findings belong in the mod's row of
+  `STATUS.md` `## Mod port status`; they do not change the `valve` gates.
